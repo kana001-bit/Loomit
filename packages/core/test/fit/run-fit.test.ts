@@ -1,0 +1,202 @@
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { describe, expect, it } from "vitest";
+
+import { loadProfileFile } from "../../src/profile/loadProfile.js";
+import { loadProject, resolveParts } from "../../src/index.js";
+import { runFit } from "../../src/fit/runFit.js";
+import type { ResolvedProject, ResolvedProjectPart } from "../../src/index.js";
+
+const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../fixtures");
+
+describe("runFit", () => {
+  it("reports ok ease for available basic body measurements", async () => {
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const profile = await loadProfileFixture("my-size.yml");
+    const report = runFit(resolvedProject, profile);
+
+    expect(report).toEqual({
+      status: "ok",
+      diagnostics: [],
+      measurements: [
+        {
+          id: "bust",
+          status: "ok",
+          bodyMeasurementCm: 84,
+          garmentMeasurementCm: 96,
+          easeCm: 12,
+          source: {
+            partRole: "body",
+            measurement: "measurements.finished.bust_width_mm"
+          },
+          diagnostics: []
+        },
+        {
+          id: "waist",
+          status: "ok",
+          bodyMeasurementCm: 66,
+          garmentMeasurementCm: 74,
+          easeCm: 8,
+          source: {
+            partRole: "body",
+            measurement: "measurements.finished.waist_width_mm"
+          },
+          diagnostics: []
+        },
+        {
+          id: "hip",
+          status: "ok",
+          bodyMeasurementCm: 92,
+          garmentMeasurementCm: 100,
+          easeCm: 8,
+          source: {
+            partRole: "body",
+            measurement: "measurements.finished.hip_width_mm"
+          },
+          diagnostics: []
+        }
+      ]
+    });
+  });
+
+  it("reports negative bust ease as an error", async () => {
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const profile = await loadProfileFixture("my-size.yml");
+    const report = runFit(withBodyBustWidth(resolvedProject, 410), profile);
+
+    expect(report.status).toBe("error");
+    expect(report.measurements[0]).toEqual({
+      id: "bust",
+      status: "error",
+      bodyMeasurementCm: 84,
+      garmentMeasurementCm: 82,
+      easeCm: -2,
+      source: {
+        partRole: "body",
+        measurement: "measurements.finished.bust_width_mm"
+      },
+      diagnostics: [
+        {
+          severity: "error",
+          code: "FIT_EASE_NEGATIVE",
+          message: "Garment finished bust is smaller than the body bust measurement.",
+          target: "body.measurements.finished.bust_width_mm",
+          suggestion: ["Body bust is 84cm, garment bust is 82cm, ease is -2cm."]
+        }
+      ]
+    });
+  });
+
+  it("reports low positive bust ease as a warning", async () => {
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const profile = await loadProfileFixture("my-size.yml");
+    const report = runFit(withBodyBustWidth(resolvedProject, 440), profile);
+
+    expect(report.status).toBe("warning");
+    expect(report.measurements[0]?.diagnostics).toEqual([
+      {
+        severity: "warning",
+        code: "FIT_EASE_LOW",
+        message: "Garment finished bust ease is low.",
+        target: "body.measurements.finished.bust_width_mm",
+        suggestion: [
+          "Body bust is 84cm, garment bust is 88cm, ease is 4cm; suggested minimum is 6cm."
+        ]
+      }
+    ]);
+  });
+
+  it("reports low waist ease with waist-specific source information", async () => {
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const profile = await loadProfileFixture("my-size.yml");
+    const report = runFit(
+      withBodyFinishedMeasurements(resolvedProject, { waist_width_mm: 340 }),
+      profile
+    );
+
+    expect(report.status).toBe("warning");
+    expect(report.measurements.find((measurement) => measurement.id === "waist")).toEqual({
+      id: "waist",
+      status: "warning",
+      bodyMeasurementCm: 66,
+      garmentMeasurementCm: 68,
+      easeCm: 2,
+      source: {
+        partRole: "body",
+        measurement: "measurements.finished.waist_width_mm"
+      },
+      diagnostics: [
+        {
+          severity: "warning",
+          code: "FIT_EASE_LOW",
+          message: "Garment finished waist ease is low.",
+          target: "body.measurements.finished.waist_width_mm",
+          suggestion: [
+            "Body waist is 66cm, garment waist is 68cm, ease is 2cm; suggested minimum is 4cm."
+          ]
+        }
+      ]
+    });
+  });
+});
+
+async function loadResolvedFixture(fixtureName: string): Promise<ResolvedProject> {
+  const loadedProject = expectLoaded(await loadProject(join(fixturesRoot, fixtureName)));
+  return expectLoaded(await resolveParts(loadedProject));
+}
+
+async function loadProfileFixture(fixtureName: string) {
+  return expectLoaded(await loadProfileFile(join(fixturesRoot, "profiles", fixtureName)));
+}
+
+function expectLoaded<T>(result: { readonly ok: true; readonly value: T } | { readonly ok: false }): T {
+  if (!result.ok) {
+    throw new Error("Expected file to load.");
+  }
+
+  return result.value;
+}
+
+function withBodyBustWidth(project: ResolvedProject, bustWidthMm: number): ResolvedProject {
+  return withBodyFinishedMeasurements(project, {
+    bust_width_mm: bustWidthMm
+  });
+}
+
+function withBodyFinishedMeasurements(
+  project: ResolvedProject,
+  measurements: Readonly<Record<string, number>>
+): ResolvedProject {
+  const body = getResolvedPart(project, "body");
+
+  return {
+    ...project,
+    parts: {
+      ...project.parts,
+      body: {
+        ...body,
+        part: {
+          ...body.part,
+          measurements: {
+            ...body.part.measurements,
+            finished: {
+              ...body.part.measurements?.finished,
+              ...measurements
+            }
+          }
+        }
+      }
+    }
+  };
+}
+
+function getResolvedPart(project: ResolvedProject, role: string): ResolvedProjectPart {
+  const part = project.parts[role];
+
+  if (part === undefined) {
+    throw new Error(`Expected resolved part for role "${role}".`);
+  }
+
+  return part;
+}

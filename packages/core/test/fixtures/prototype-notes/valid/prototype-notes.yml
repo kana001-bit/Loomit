@@ -1,0 +1,21 @@
+schema: loomit.prototype_notes.v0
+notes:
+  - id: note-2026-06-28-armhole
+    date: 2026-06-28
+    result: failed
+    issue: armhole tight when raising arms
+    observation:
+      - bodice lifts when arms are raised
+      - sleeve cap feels restrictive
+    suggested_change:
+      - lower sleeve cap
+      - increase armhole ease
+    creates_test_case: arm-raise
+    applies_to:
+      - fitted-armhole
+      - non-stretch-fabric
+    leftover_fabric:
+      reusable_for:
+        - collar
+        - cuff
+      remaining_size: 30cm x 40cm

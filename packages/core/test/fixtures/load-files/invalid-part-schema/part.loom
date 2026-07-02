@@ -1,0 +1,7 @@
+schema: loomit.part.v0
+name: puff-sleeve
+variant: v3
+type: sleeve
+requires:
+  body.armhole: ">=4"
+

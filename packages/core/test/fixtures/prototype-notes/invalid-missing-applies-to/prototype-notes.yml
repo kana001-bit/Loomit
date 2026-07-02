@@ -1,0 +1,7 @@
+schema: loomit.prototype_notes.v0
+notes:
+  - id: note-2026-06-28-armhole
+    date: 2026-06-28
+    result: failed
+    issue: armhole tight when raising arms
+    creates_test_case: arm-raise

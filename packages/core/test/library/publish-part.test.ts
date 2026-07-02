@@ -1,0 +1,224 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { describe, expect, it } from "vitest";
+
+import { addLibraryPartToProject } from "../../src/library/addLibraryPartToProject.js";
+import { listLibraryParts } from "../../src/library/listLibraryParts.js";
+import { loadLibraryMetaFile } from "../../src/library/loadLibraryMeta.js";
+import { publishPart } from "../../src/library/publishPart.js";
+import { createProject } from "../../src/project/createProject.js";
+
+const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../fixtures");
+
+describe("publishPart", () => {
+  it("copies a part directory into the library with metadata", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-library-"));
+    const libraryRoot = join(tempRoot, "library");
+
+    try {
+      const result = await publishPart({
+        partPath: join(fixturesRoot, "valid-blouse/parts/sleeve"),
+        libraryRoot,
+        publishedAt: "2026-07-02T00:00:00.000Z"
+      });
+
+      expect(result.ok).toBe(true);
+      expect(result.ok ? result.value.meta : undefined).toEqual({
+        schema: "loomit.library_meta.v0",
+        name: "basic-sleeve",
+        type: "sleeve",
+        source_project: join(fixturesRoot, "valid-blouse"),
+        source_part: "parts\\sleeve",
+        published_at: "2026-07-02T00:00:00.000Z",
+        status: "published"
+      });
+      expect(
+        await readFile(join(libraryRoot, "sleeves/basic-sleeve/part.loom"), "utf8")
+      ).toContain("name: basic-sleeve");
+
+      const metaResult = await loadLibraryMetaFile(
+        join(libraryRoot, "sleeves/basic-sleeve/meta.yml")
+      );
+
+      expect(metaResult.ok).toBe(true);
+      expect(metaResult.ok ? metaResult.value.name : "").toBe("basic-sleeve");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("does not overwrite an existing library entry", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-library-"));
+    const libraryRoot = join(tempRoot, "library");
+    const partPath = join(fixturesRoot, "valid-blouse/parts/sleeve");
+
+    try {
+      const firstResult = await publishPart({
+        partPath,
+        libraryRoot
+      });
+
+      if (!firstResult.ok) {
+        throw new Error("Expected first publish to succeed.");
+      }
+
+      const secondResult = await publishPart({
+        partPath,
+        libraryRoot
+      });
+
+      expect(secondResult.ok).toBe(false);
+      expect(secondResult.ok ? [] : secondResult.diagnostics).toEqual([
+        {
+          severity: "error",
+          code: "LIBRARY_PART_ALREADY_EXISTS",
+          message: "A library part with this name already exists.",
+          target: join(libraryRoot, "sleeves/basic-sleeve"),
+          suggestion: ["Choose another publish name, or remove the existing library entry."]
+        }
+      ]);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("listLibraryParts", () => {
+  it("lists published library parts", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-library-"));
+    const libraryRoot = join(tempRoot, "library");
+
+    try {
+      const publishResult = await publishPart({
+        partPath: join(fixturesRoot, "valid-blouse/parts/sleeve"),
+        libraryRoot,
+        publishedAt: "2026-07-02T00:00:00.000Z"
+      });
+
+      if (!publishResult.ok) {
+        throw new Error("Expected publish to succeed.");
+      }
+
+      const listResult = await listLibraryParts({
+        libraryRoot,
+        type: "sleeve"
+      });
+
+      expect(listResult.ok).toBe(true);
+      expect(listResult.ok ? listResult.value.map((entry) => entry.meta.name) : []).toEqual([
+        "basic-sleeve"
+      ]);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("addLibraryPartToProject", () => {
+  it("copies a library part into a project and updates loomit.yml", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-library-"));
+    const libraryRoot = join(tempRoot, "library");
+    const projectRoot = join(tempRoot, "project");
+
+    try {
+      const projectResult = await createProject({
+        targetPath: projectRoot,
+        garment: "blouse"
+      });
+
+      if (!projectResult.ok) {
+        throw new Error("Expected project to be created.");
+      }
+
+      const publishResult = await publishPart({
+        partPath: join(fixturesRoot, "valid-blouse/parts/sleeve"),
+        libraryRoot,
+        publishedAt: "2026-07-02T00:00:00.000Z"
+      });
+
+      if (!publishResult.ok) {
+        throw new Error("Expected publish to succeed.");
+      }
+
+      const addResult = await addLibraryPartToProject({
+        libraryRoot,
+        projectPath: projectRoot,
+        type: "sleeve",
+        name: "basic-sleeve"
+      });
+
+      expect(addResult.ok).toBe(true);
+      expect(addResult.ok ? addResult.value.project.parts.sleeve : "").toBe(
+        "./parts/sleeve/basic-sleeve/part.loom"
+      );
+      expect(await readFile(join(projectRoot, "parts/sleeve/basic-sleeve/part.loom"), "utf8"))
+        .toContain("name: basic-sleeve");
+      expect(await readFile(join(projectRoot, "loomit.yml"), "utf8")).toContain(
+        "sleeve: ./parts/sleeve/basic-sleeve/part.loom"
+      );
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("does not replace an existing project role by default", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-library-"));
+    const libraryRoot = join(tempRoot, "library");
+    const projectRoot = join(tempRoot, "project");
+
+    try {
+      const projectResult = await createProject({
+        targetPath: projectRoot,
+        garment: "blouse"
+      });
+
+      if (!projectResult.ok) {
+        throw new Error("Expected project to be created.");
+      }
+
+      const publishResult = await publishPart({
+        partPath: join(fixturesRoot, "valid-blouse/parts/sleeve"),
+        libraryRoot
+      });
+
+      if (!publishResult.ok) {
+        throw new Error("Expected publish to succeed.");
+      }
+
+      const firstAddResult = await addLibraryPartToProject({
+        libraryRoot,
+        projectPath: projectRoot,
+        type: "sleeve",
+        name: "basic-sleeve"
+      });
+
+      if (!firstAddResult.ok) {
+        throw new Error("Expected first add to succeed.");
+      }
+
+      const secondAddResult = await addLibraryPartToProject({
+        libraryRoot,
+        projectPath: projectRoot,
+        type: "sleeve",
+        name: "basic-sleeve",
+        localName: "another-sleeve"
+      });
+
+      expect(secondAddResult.ok).toBe(false);
+      expect(secondAddResult.ok ? [] : secondAddResult.diagnostics).toEqual([
+        {
+          severity: "error",
+          code: "PROJECT_PART_ROLE_ALREADY_EXISTS",
+          message: 'Project already has a part for role "sleeve".',
+          target: "parts.sleeve",
+          suggestion: ["Pass --replace to update the project role to the imported library part."]
+        }
+      ]);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+});

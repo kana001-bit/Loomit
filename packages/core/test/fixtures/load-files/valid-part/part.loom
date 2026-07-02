@@ -1,0 +1,24 @@
+schema: loomit.part.v0
+name: puff-sleeve
+variant: v3
+type: sleeve
+status: active
+files:
+  source: source.val
+  preview: preview.svg
+measurements:
+  finished:
+    bicep_width_mm: 320
+connectors:
+  armhole:
+    type: armhole
+    length_mm: 469
+    tolerance_mm: 3
+requires:
+  body.armhole.length_mm:
+    min: 466
+    max: 472
+tags:
+  - puff
+  - gathered
+

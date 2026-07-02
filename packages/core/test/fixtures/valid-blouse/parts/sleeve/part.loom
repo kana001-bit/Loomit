@@ -1,0 +1,25 @@
+schema: loomit.part.v0
+name: basic-sleeve
+variant: blouse-base
+type: sleeve
+status: active
+files:
+  source: sleeve.val
+  preview: sleeve.svg
+measurements:
+  finished:
+    sleeve_length_mm: 540
+connectors:
+  armhole:
+    type: armhole
+    length_mm: 470
+    tolerance_mm: 3
+    path_ref: svg:path#sleeve-armhole
+requires:
+  body.armhole.length_mm:
+    min: 467
+    max: 473
+tags:
+  - blouse
+  - fitted-armhole
+

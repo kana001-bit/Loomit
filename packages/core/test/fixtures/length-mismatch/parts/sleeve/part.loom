@@ -1,0 +1,19 @@
+schema: loomit.part.v0
+name: basic-sleeve
+variant: too-long-cap
+type: sleeve
+status: active
+connectors:
+  armhole:
+    type: armhole
+    length_mm: 480
+    tolerance_mm: 3
+    path_ref: svg:path#sleeve-armhole
+requires:
+  body.armhole.length_mm:
+    min: 477
+    max: 483
+tags:
+  - blouse
+  - fitted-armhole
+

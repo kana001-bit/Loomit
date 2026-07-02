@@ -1,0 +1,11 @@
+schema: loomit.profile.v0
+name: my-size
+base_size: 9A
+measurements:
+  height_cm: 160
+  bust_cm: 84
+  waist_cm: 66
+  hip_cm: 92
+  shoulder_width_cm: 38
+  arm_length_cm: 54
+  upper_arm_cm: 27

@@ -1,0 +1,5 @@
+schema: loomit.project.v0
+name: my-blouse-001
+garment: blouse
+parts: {}
+unexpected: field

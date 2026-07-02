@@ -1,0 +1,10 @@
+schema: loomit.project.v0
+name: my-blouse-001
+garment: blouse
+parts:
+  body: ./parts/body/part.loom
+  sleeve: ./parts/sleeve/part.loom
+profiles:
+  default: ./profiles/my-size.yml
+outputs:
+  dir: ./output

@@ -1,0 +1,4 @@
+schema: loomit.profile.v0
+name: invalid
+measurements:
+  bust_cm: -1
