@@ -3,6 +3,16 @@ import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import type { DiagnosticReport } from "../diagnostics/report.js";
 import type { ResolvedProject } from "../project/resolveParts.js";
 import type { PrototypeNotes } from "../schema/prototype-notes.schema.js";
+import {
+  createTestSuggestionRuleRegistry,
+  runTestSuggestionRules
+} from "./suggestionRules.js";
+import type {
+  TestSuggestionCandidate,
+  TestSuggestionRule,
+  TestSuggestionRuleRegistry
+} from "./suggestionRules.js";
+import type { ExclusiveRuleOptions } from "../ruleOptions.js";
 
 export type TestSuggestionLevel = "recommended" | "optional" | "skipped";
 export type TestSuggestionSource = "rule" | "prototype-note" | "project-test-suite";
@@ -20,13 +30,9 @@ export interface TestSuggestionReport extends DiagnosticReport {
   readonly skipped: readonly TestSuggestion[];
 }
 
-interface SuggestTestsOptions {
+export type SuggestTestsOptions = {
   readonly prototypeNotes?: PrototypeNotes;
-}
-
-interface MutableSuggestion extends TestSuggestion {
-  readonly level: TestSuggestionLevel;
-}
+} & ExclusiveRuleOptions<TestSuggestionRuleRegistry, TestSuggestionRule>;
 
 const levelRank: Record<TestSuggestionLevel, number> = {
   skipped: 0,
@@ -45,11 +51,15 @@ export function suggestTests(
   options: SuggestTestsOptions = {}
 ): TestSuggestionReport {
   const tags = collectProjectTags(resolvedProject);
-  const suggestions = [
-    ...suggestRuleBasedTests(resolvedProject, tags),
-    ...suggestPrototypeNoteTests(tags, options.prototypeNotes),
-    ...suggestProjectTestSuite(resolvedProject)
-  ];
+  const registry = options.registry ?? createTestSuggestionRuleRegistry(options.rules);
+  const suggestions = runTestSuggestionRules(
+    {
+      resolvedProject,
+      tags,
+      ...(options.prototypeNotes === undefined ? {} : { prototypeNotes: options.prototypeNotes })
+    },
+    registry
+  );
   const mergedSuggestions = applyIgnoredTests(
     mergeSuggestions(suggestions),
     resolvedProject.project.test_suite?.ignored ?? {}
@@ -78,75 +88,6 @@ export function createTestSuggestionReport(input: {
   };
 }
 
-function suggestRuleBasedTests(
-  resolvedProject: ResolvedProject,
-  tags: ReadonlySet<string>
-): readonly MutableSuggestion[] {
-  const hasSleeve = resolvedProject.parts.sleeve !== undefined;
-
-  if (resolvedProject.project.garment === "blouse" && hasSleeve && tags.has("fitted-armhole")) {
-    return [
-      {
-        level: "recommended",
-        scenario: "arm-raise",
-        reason: "blouse + sleeve + fitted-armhole should check shoulder and arm movement.",
-        source: "rule"
-      }
-    ];
-  }
-
-  if (resolvedProject.project.garment === "blouse" && hasSleeve) {
-    return [
-      {
-        level: "optional",
-        scenario: "arm-raise",
-        reason: "blouse with sleeves may need a basic arm movement check.",
-        source: "rule"
-      }
-    ];
-  }
-
-  return [];
-}
-
-function suggestPrototypeNoteTests(
-  tags: ReadonlySet<string>,
-  prototypeNotes: PrototypeNotes | undefined
-): readonly MutableSuggestion[] {
-  if (prototypeNotes === undefined) {
-    return [];
-  }
-
-  return prototypeNotes.notes.flatMap((note) => {
-    if (note.creates_test_case === undefined || note.applies_to === undefined) {
-      return [];
-    }
-
-    if (!note.applies_to.every((tag) => tags.has(tag))) {
-      return [];
-    }
-
-    return [
-      {
-        level: "recommended",
-        scenario: note.creates_test_case,
-        reason: `Prototype note "${note.id}" matched tags: ${note.applies_to.join(", ")}.`,
-        source: "prototype-note",
-        noteId: note.id
-      }
-    ];
-  });
-}
-
-function suggestProjectTestSuite(resolvedProject: ResolvedProject): readonly MutableSuggestion[] {
-  return (resolvedProject.project.test_suite?.required ?? []).map((scenario) => ({
-    level: "recommended",
-    scenario,
-    reason: "Required by project test_suite.",
-    source: "project-test-suite"
-  }));
-}
-
 function collectProjectTags(resolvedProject: ResolvedProject): ReadonlySet<string> {
   return new Set([
     resolvedProject.project.garment,
@@ -159,9 +100,9 @@ function collectProjectTags(resolvedProject: ResolvedProject): ReadonlySet<strin
 }
 
 function mergeSuggestions(
-  suggestions: readonly MutableSuggestion[]
-): readonly MutableSuggestion[] {
-  const byScenario = new Map<string, MutableSuggestion>();
+  suggestions: readonly TestSuggestionCandidate[]
+): readonly TestSuggestionCandidate[] {
+  const byScenario = new Map<string, TestSuggestionCandidate>();
 
   for (const suggestion of suggestions) {
     const existingSuggestion = byScenario.get(suggestion.scenario);
@@ -180,8 +121,8 @@ function mergeSuggestions(
 }
 
 function shouldReplaceSuggestion(
-  existingSuggestion: MutableSuggestion,
-  nextSuggestion: MutableSuggestion
+  existingSuggestion: TestSuggestionCandidate,
+  nextSuggestion: TestSuggestionCandidate
 ): boolean {
   const existingLevelRank = levelRank[existingSuggestion.level];
   const nextLevelRank = levelRank[nextSuggestion.level];
@@ -194,9 +135,9 @@ function shouldReplaceSuggestion(
 }
 
 function applyIgnoredTests(
-  suggestions: readonly MutableSuggestion[],
+  suggestions: readonly TestSuggestionCandidate[],
   ignored: NonNullable<ResolvedProject["project"]["test_suite"]>["ignored"]
-): readonly MutableSuggestion[] {
+): readonly TestSuggestionCandidate[] {
   const ignoredSuggestions = Object.entries(ignored ?? {}).map(([scenario, ignoredTest]) => ({
     level: "skipped" as const,
     scenario,
@@ -209,7 +150,7 @@ function applyIgnoredTests(
 }
 
 function filterSuggestionLevel(
-  suggestions: readonly MutableSuggestion[],
+  suggestions: readonly TestSuggestionCandidate[],
   level: TestSuggestionLevel
 ): readonly TestSuggestion[] {
   return suggestions
@@ -217,7 +158,7 @@ function filterSuggestionLevel(
     .map(toTestSuggestion);
 }
 
-function toTestSuggestion(suggestion: MutableSuggestion): TestSuggestion {
+function toTestSuggestion(suggestion: TestSuggestionCandidate): TestSuggestion {
   return {
     scenario: suggestion.scenario,
     reason: suggestion.reason,
