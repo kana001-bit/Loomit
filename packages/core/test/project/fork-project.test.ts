@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -60,6 +60,70 @@ describe("forkProject", () => {
       expect(await readFile(join(targetPath, "parts/body/part.loom"), "utf8")).toBe(
         "example body file\n"
       );
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("does not copy the source output directory into the fork", async () => {
+    // 守る仕様: 生成物(output/)は再生成可能なので fork の対象にしない。stale/large な output を持ち込まない。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-fork-"));
+    const sourcePath = join(tempRoot, "source-blouse");
+    const targetPath = join(tempRoot, "target-blouse");
+
+    try {
+      const source = await createProject({ targetPath: sourcePath });
+
+      if (!source.ok) {
+        throw new Error("Expected source project to be created.");
+      }
+
+      await writeFile(join(sourcePath, "output/stale.txt"), "stale build output\n", "utf8");
+      await mkdir(join(sourcePath, "parts/body"));
+      await writeFile(join(sourcePath, "parts/body/part.loom"), "example body file\n", "utf8");
+
+      const result = await forkProject({ sourcePath, targetPath });
+
+      expect(result.ok).toBe(true);
+      const targetEntries = await readdir(targetPath);
+      expect(targetEntries).not.toContain("output");
+      // The rest of the project (durable state) is still forked.
+      expect(await readFile(join(targetPath, "parts/body/part.loom"), "utf8")).toBe(
+        "example body file\n"
+      );
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses to fork a project whose outputs.dir overlaps durable state", async () => {
+    // 守る仕様: outputs.dir が durable scaffold(例: ./parts)を指す source は、fork の output 除外が
+    // part files を巻き込むため、fork は成功させず schema validation で明確に失敗させる。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-fork-"));
+    const sourcePath = join(tempRoot, "source-blouse");
+    const targetPath = join(tempRoot, "target-blouse");
+
+    try {
+      await mkdir(join(sourcePath, "parts/body"), { recursive: true });
+      await writeFile(
+        join(sourcePath, "loomit.yml"),
+        [
+          "schema: loomit.project.v0",
+          "name: source-blouse",
+          "garment: blouse",
+          "parts:",
+          "  body: ./parts/body/part.loom",
+          "outputs:",
+          "  dir: ./parts"
+        ].join("\n"),
+        "utf8"
+      );
+      await writeFile(join(sourcePath, "parts/body/part.loom"), "example body file\n", "utf8");
+
+      const result = await forkProject({ sourcePath, targetPath });
+
+      expect(result.ok).toBe(false);
+      expect(result.ok ? "" : result.diagnostics[0]?.code).toBe("PROJECT_SCHEMA_INVALID");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }

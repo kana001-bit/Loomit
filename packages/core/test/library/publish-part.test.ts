@@ -50,6 +50,25 @@ describe("publishPart", () => {
     }
   });
 
+  it("rejects a publish name that escapes the library root", async () => {
+    // 守る仕様: --name は library root 配下のディレクトリ名に限る。`..` で外へ出る名前は書き込み前に拒否する。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-library-"));
+    const libraryRoot = join(tempRoot, "library");
+
+    try {
+      const result = await publishPart({
+        partPath: join(fixturesRoot, "valid-blouse/parts/sleeve"),
+        libraryRoot,
+        name: "../../escaped"
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.ok ? "" : result.diagnostics[0]?.code).toBe("LIBRARY_PART_NAME_ESCAPES_ROOT");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   it("does not overwrite an existing library entry", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-library-"));
     const libraryRoot = join(tempRoot, "library");
@@ -159,6 +178,44 @@ describe("addLibraryPartToProject", () => {
       expect(await readFile(join(projectRoot, "loomit.yml"), "utf8")).toContain(
         "sleeve: ./parts/sleeve/basic-sleeve/part.loom"
       );
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a role that is not a safe path segment", async () => {
+    // 守る仕様: --role/--as は loomit.yml の role key と相対パスとして保存される。segment を逸脱する値
+    // (例: "nested/role")は書き込み前に拒否し、schema が読めない project file を生成させない。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-library-"));
+    const libraryRoot = join(tempRoot, "library");
+    const projectRoot = join(tempRoot, "project");
+
+    try {
+      const projectResult = await createProject({ targetPath: projectRoot, garment: "blouse" });
+
+      if (!projectResult.ok) {
+        throw new Error("Expected project to be created.");
+      }
+
+      const publishResult = await publishPart({
+        partPath: join(fixturesRoot, "valid-blouse/parts/sleeve"),
+        libraryRoot
+      });
+
+      if (!publishResult.ok) {
+        throw new Error("Expected publish to succeed.");
+      }
+
+      const addResult = await addLibraryPartToProject({
+        libraryRoot,
+        projectPath: projectRoot,
+        type: "sleeve",
+        name: "basic-sleeve",
+        role: "nested/role"
+      });
+
+      expect(addResult.ok).toBe(false);
+      expect(addResult.ok ? "" : addResult.diagnostics[0]?.code).toBe("PROJECT_PART_SEGMENT_INVALID");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }

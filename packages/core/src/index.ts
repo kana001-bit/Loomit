@@ -42,8 +42,12 @@ export {
   runFitRules
 } from "./fit/rules.js";
 export type { FitRule, FitRuleRegistry } from "./fit/rules.js";
+export { describeFsError } from "./filesystem/fsError.js";
+export type { FsErrorContext } from "./filesystem/fsError.js";
 export { parseYamlText } from "./filesystem/parseYamlText.js";
+export { isPathWithin, isSafePathSegment } from "./filesystem/pathWithin.js";
 export { readText } from "./filesystem/readText.js";
+export { writeFileAtomic } from "./filesystem/writeFileAtomic.js";
 export type { LoadFileResult } from "./filesystem/loadFileResult.js";
 export { addLibraryPartToProject } from "./library/addLibraryPartToProject.js";
 export type {

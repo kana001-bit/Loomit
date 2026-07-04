@@ -1,8 +1,11 @@
-import { access, cp, mkdir, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { access, cp, mkdir, rm, stat } from "node:fs/promises";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { stringify } from "yaml";
 
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
+import { describeFsError } from "../filesystem/fsError.js";
+import { isPathWithin, isSafePathSegment } from "../filesystem/pathWithin.js";
+import { writeFileAtomic } from "../filesystem/writeFileAtomic.js";
 import type { LoadFileResult } from "../filesystem/loadFileResult.js";
 import { loadPartFile } from "../parts/loadPartFile.js";
 import { findProjectRoot } from "../project/findProjectRoot.js";
@@ -47,14 +50,33 @@ export async function publishPart(
 
   const part = partResult.value;
   const publishName = options.name ?? part.name;
+  const libraryRoot = resolve(options.libraryRoot);
   const targetPartDirectory = resolve(
-    options.libraryRoot,
+    libraryRoot,
     getLibraryTypeDirectory(part.type),
     publishName
   );
   const metaFilePath = join(targetPartDirectory, "meta.yml");
 
-  if (isSameOrChildPath(sourceResult.value.partDirectory, targetPartDirectory)) {
+  // publish 名はディレクトリ segment 兼 library エントリ名になる。part.name は空でない文字列という
+  // だけなので、"nested/name" や "../evil" が library root を抜け出したり読めないエントリを作ったり
+  // しないよう、安全な単一 segment を要求する。
+  if (!isSafePathSegment(publishName)) {
+    return {
+      ok: false,
+      diagnostics: [
+        createDiagnostic({
+          severity: "error",
+          code: "LIBRARY_PART_NAME_ESCAPES_ROOT",
+          message: "The publish name must be a single path segment.",
+          target: publishName,
+          suggestion: ["Use a plain name without path separators, \"..\", or an absolute path."]
+        })
+      ]
+    };
+  }
+
+  if (isPathWithin(sourceResult.value.partDirectory, targetPartDirectory)) {
     return {
       ok: false,
       diagnostics: [
@@ -98,13 +120,16 @@ export async function publishPart(
       force: false,
       errorOnExist: true
     });
-    await writeFile(metaFilePath, stringify(meta), "utf8");
-  } catch {
+    await writeFileAtomic(metaFilePath, stringify(meta));
+  } catch (error) {
+    // コピー済みの part を巻き戻し、meta 書き込み失敗で meta.yml の無い library エントリを残さない。
+    // target はこの呼び出しの前には存在しなかった(上でガード済み)。
+    await rm(targetPartDirectory, { recursive: true, force: true }).catch(() => undefined);
+
     return {
       ok: false,
       diagnostics: [
-        createDiagnostic({
-          severity: "error",
+        describeFsError(error, {
           code: "LIBRARY_PUBLISH_FAILED",
           message: "Could not publish the part to the library.",
           target: targetPartDirectory,
@@ -198,11 +223,6 @@ function getLibraryTypeDirectory(type: string): string {
   }
 
   return `${type}s`;
-}
-
-function isSameOrChildPath(parentPath: string, candidatePath: string): boolean {
-  const relativePath = relative(parentPath, candidatePath);
-  return relativePath === "" || (!relativePath.startsWith("..") && !isAbsolute(relativePath));
 }
 
 async function pathExists(path: string): Promise<boolean> {

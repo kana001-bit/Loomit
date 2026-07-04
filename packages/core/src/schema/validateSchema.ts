@@ -11,7 +11,7 @@ interface ValidateSchemaOptions {
 
 export function validateSchema<T>(
   schema: z.ZodType<T>,
-  // Intentionally unknown: external YAML input is validated by the provided Zod schema before use.
+  // 意図的に unknown: 外部の YAML 入力は、使う前に渡された Zod schema で検証する。
   input: unknown,
   options: ValidateSchemaOptions
 ): LoadFileResult<T> {

@@ -8,7 +8,7 @@ interface ParseYamlTextOptions {
   readonly target: string;
 }
 
-// Intentionally returns unknown: external YAML input must be validated by a schema loader before use.
+// 意図的に unknown を返す: 外部の YAML 入力は、使う前に schema loader で検証する必要がある。
 export function parseYamlText(
   source: string,
   options: ParseYamlTextOptions
@@ -34,7 +34,7 @@ export function parseYamlText(
     };
   }
 
-  // Intentionally unknown: parsed YAML is external input and is validated by Zod immediately after parsing.
+  // 意図的に unknown: parse した YAML は外部入力で、parse 直後に Zod で検証する。
   const value: unknown = document.toJSON();
 
   return {
