@@ -1,7 +1,10 @@
 import { z } from "zod";
 
-const relativePathSchema = z.string().min(1);
-const projectPartRoleSchema = z.string().min(1);
+import { outputDirSchema, pathSegmentSchema, relativePathSchema } from "./paths.js";
+
+// project role はディレクトリ segment(parts/<role>/..., output/parts/<role>)として使うため、
+// ".." を持ちうる任意文字列ではなく、安全な単一 segment でなければならない。
+const projectPartRoleSchema = pathSegmentSchema;
 
 export const projectSchema = z
   .object({
@@ -26,7 +29,7 @@ export const projectSchema = z
       .optional(),
     outputs: z
       .object({
-        dir: relativePathSchema
+        dir: outputDirSchema
       })
       .strict()
       .optional()

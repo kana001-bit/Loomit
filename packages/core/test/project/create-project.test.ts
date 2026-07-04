@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -63,6 +63,27 @@ describe("createProject", () => {
         "parts",
         "profiles"
       ]);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps pre-existing directories when scaffold creation fails partway", async () => {
+    // 守る仕様: init は既存ディレクトリ内で走る。scaffold 作成が途中で失敗しても、この呼び出しが
+    // 作っていない既存ディレクトリ(と中身)を rollback で削除しない。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-create-"));
+
+    try {
+      await mkdir(join(tempRoot, "notes"));
+      await writeFile(join(tempRoot, "notes/keep.txt"), "keep me\n", "utf8");
+      // profiles をファイルとして置くと mkdir(profiles) が失敗し、scaffold 作成が途中で止まる。
+      await writeFile(join(tempRoot, "profiles"), "not a directory\n", "utf8");
+
+      const result = await createProject({ targetPath: tempRoot });
+
+      expect(result.ok).toBe(false);
+      // この呼び出しが作っていない既存 notes と中身はそのまま残る。
+      expect(await readdir(join(tempRoot, "notes"))).toContain("keep.txt");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }
