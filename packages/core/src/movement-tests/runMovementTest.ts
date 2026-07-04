@@ -1,9 +1,15 @@
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
-import { createDiagnosticReport, getStatusForDiagnostics } from "../diagnostics/report.js";
+import { createDiagnosticReport } from "../diagnostics/report.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import type { DiagnosticReport, ReportStatus } from "../diagnostics/report.js";
 import type { ResolvedProject } from "../project/resolveParts.js";
 import type { PrototypeNotes } from "../schema/prototype-notes.schema.js";
+import {
+  createMovementTestRuleRegistry,
+  runMovementTestRules
+} from "./rules.js";
+import type { MovementTestRule, MovementTestRuleRegistry } from "./rules.js";
+import type { ExclusiveRuleOptions } from "../ruleOptions.js";
 
 export type MovementTestCheckSource = "rule" | "prototype-note";
 
@@ -20,9 +26,9 @@ export interface MovementTestReport extends DiagnosticReport {
   readonly checks: readonly MovementTestCheck[];
 }
 
-interface RunMovementTestOptions {
+export type RunMovementTestOptions = {
   readonly prototypeNotes?: PrototypeNotes;
-}
+} & ExclusiveRuleOptions<MovementTestRuleRegistry, MovementTestRule>;
 
 export function runMovementTest(
   resolvedProject: ResolvedProject,
@@ -45,10 +51,16 @@ export function runMovementTest(
   }
 
   const tags = collectProjectTags(resolvedProject);
-  const checks = [
-    checkArmRaiseFittedArmhole(resolvedProject, tags),
-    ...checkPrototypeNotes(scenario, tags, options.prototypeNotes)
-  ].filter((check): check is MovementTestCheck => check !== undefined);
+  const registry = options.registry ?? createMovementTestRuleRegistry(options.rules);
+  const checks = runMovementTestRules(
+    {
+      resolvedProject,
+      scenario,
+      tags,
+      ...(options.prototypeNotes === undefined ? {} : { prototypeNotes: options.prototypeNotes })
+    },
+    registry
+  );
 
   return createMovementTestReport({
     scenario,
@@ -72,75 +84,6 @@ export function createMovementTestReport(input: {
     scenario: input.scenario,
     checks
   };
-}
-
-function checkArmRaiseFittedArmhole(
-  resolvedProject: ResolvedProject,
-  tags: ReadonlySet<string>
-): MovementTestCheck | undefined {
-  const hasSleeve = resolvedProject.parts.sleeve !== undefined;
-
-  if (resolvedProject.project.garment !== "blouse" || !hasSleeve || !tags.has("fitted-armhole")) {
-    return undefined;
-  }
-
-  const diagnostics = [
-    createDiagnostic({
-      severity: "warning",
-      code: "ARM_RAISE_FITTED_ARMHOLE_RISK",
-      message: "Fitted armholes on sleeved blouses should be checked with an arm raise test.",
-      target: "arm-raise",
-      suggestion: ["Try raising both arms and check whether the bodice lifts or the sleeve cap restricts movement."]
-    })
-  ];
-
-  return {
-    id: "arm-raise.fitted-armhole",
-    status: getStatusForDiagnostics(diagnostics),
-    reason: "blouse + sleeve + fitted-armhole can restrict shoulder and arm movement.",
-    source: "rule",
-    diagnostics
-  };
-}
-
-function checkPrototypeNotes(
-  scenario: string,
-  tags: ReadonlySet<string>,
-  prototypeNotes: PrototypeNotes | undefined
-): readonly MovementTestCheck[] {
-  if (prototypeNotes === undefined) {
-    return [];
-  }
-
-  return prototypeNotes.notes.flatMap((note) => {
-    if (
-      note.creates_test_case !== scenario ||
-      note.applies_to === undefined ||
-      !note.applies_to.every((tag) => tags.has(tag))
-    ) {
-      return [];
-    }
-
-    const diagnostics = [
-      createDiagnostic({
-        severity: "warning",
-        code: "MOVEMENT_TEST_PROTOTYPE_NOTE_RISK",
-        message: `Previous prototype note "${note.id}" matched this movement test.`,
-        target: note.id,
-        suggestion: [note.issue]
-      })
-    ];
-
-    return [
-      {
-        id: `${scenario}.prototype-note.${note.id}`,
-        status: getStatusForDiagnostics(diagnostics),
-        reason: `Prototype note "${note.id}" matched tags: ${note.applies_to.join(", ")}.`,
-        source: "prototype-note" as const,
-        diagnostics
-      }
-    ];
-  });
 }
 
 function collectProjectTags(resolvedProject: ResolvedProject): ReadonlySet<string> {

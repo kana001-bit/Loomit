@@ -4,9 +4,9 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { loadProfileFile } from "../../src/profile/loadProfile.js";
-import { loadProject, resolveParts } from "../../src/index.js";
+import { getStatusForDiagnostics, loadProject, resolveParts } from "../../src/index.js";
 import { runFit } from "../../src/fit/runFit.js";
-import type { ResolvedProject, ResolvedProjectPart } from "../../src/index.js";
+import type { FitRule, ResolvedProject, ResolvedProjectPart } from "../../src/index.js";
 
 const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../fixtures");
 
@@ -134,6 +134,69 @@ describe("runFit", () => {
           target: "body.measurements.finished.waist_width_mm",
           suggestion: [
             "Body waist is 66cm, garment waist is 68cm, ease is 2cm; suggested minimum is 4cm."
+          ]
+        }
+      ]
+    });
+  });
+
+  it("can run supplied fit rules instead of the default ease rule", async () => {
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const profile = await loadProfileFixture("my-size.yml");
+    const customRule: FitRule = {
+      id: "custom-neck-to-wrist",
+      description: "Checks a custom length preference.",
+      check: () => {
+        const diagnostics = [
+          {
+            severity: "warning" as const,
+            code: "FIT_CUSTOM_LENGTH_NOTE",
+            message: "Custom length preference should be reviewed.",
+            target: "profile.preferences.length"
+          }
+        ];
+
+        return [
+          {
+            id: "custom-length",
+            status: getStatusForDiagnostics(diagnostics),
+            bodyMeasurementCm: 72,
+            garmentMeasurementCm: 76,
+            easeCm: 4,
+            source: {
+              partRole: "body",
+              measurement: "measurements.finished.custom_length_mm"
+            },
+            diagnostics
+          }
+        ];
+      }
+    };
+    const report = runFit(resolvedProject, profile, {
+      rules: [customRule]
+    });
+
+    expect(report).toEqual({
+      status: "warning",
+      diagnostics: [],
+      measurements: [
+        {
+          id: "custom-length",
+          status: "warning",
+          bodyMeasurementCm: 72,
+          garmentMeasurementCm: 76,
+          easeCm: 4,
+          source: {
+            partRole: "body",
+            measurement: "measurements.finished.custom_length_mm"
+          },
+          diagnostics: [
+            {
+              severity: "warning",
+              code: "FIT_CUSTOM_LENGTH_NOTE",
+              message: "Custom length preference should be reviewed.",
+              target: "profile.preferences.length"
+            }
           ]
         }
       ]

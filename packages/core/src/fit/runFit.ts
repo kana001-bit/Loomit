@@ -1,130 +1,24 @@
-import { createDiagnostic } from "../diagnostics/diagnostic.js";
-import { getStatusForDiagnostics } from "../diagnostics/report.js";
 import { createFitReport } from "./fitReport.js";
-import type { Diagnostic } from "../diagnostics/diagnostic.js";
-import type { FitMeasurementResult, FitReport } from "./fitReport.js";
+import {
+  createFitRuleRegistry,
+  runFitRules
+} from "./rules.js";
+import type { FitReport } from "./fitReport.js";
+import type { FitRule, FitRuleRegistry } from "./rules.js";
 import type { ResolvedProject } from "../project/resolveParts.js";
-import type { Profile, ProfileMeasurements } from "../schema/profile.schema.js";
+import type { Profile } from "../schema/profile.schema.js";
+import type { ExclusiveRuleOptions } from "../ruleOptions.js";
 
-interface FitMeasurementRule {
-  readonly id: string;
-  readonly bodyMeasurementKey: keyof ProfileMeasurements;
-  readonly partRole: string;
-  readonly finishedMeasurementKey: string;
-  readonly minimumEaseCm: number;
-  readonly label: string;
-}
+export type RunFitOptions = ExclusiveRuleOptions<FitRuleRegistry, FitRule>;
 
-const fitMeasurementRules: readonly FitMeasurementRule[] = [
-  {
-    id: "bust",
-    bodyMeasurementKey: "bust_cm",
-    partRole: "body",
-    finishedMeasurementKey: "bust_width_mm",
-    minimumEaseCm: 6,
-    label: "bust"
-  },
-  {
-    id: "waist",
-    bodyMeasurementKey: "waist_cm",
-    partRole: "body",
-    finishedMeasurementKey: "waist_width_mm",
-    minimumEaseCm: 4,
-    label: "waist"
-  },
-  {
-    id: "hip",
-    bodyMeasurementKey: "hip_cm",
-    partRole: "body",
-    finishedMeasurementKey: "hip_width_mm",
-    minimumEaseCm: 4,
-    label: "hip"
-  }
-];
-
-export function runFit(project: ResolvedProject, profile: Profile): FitReport {
-  const measurements = fitMeasurementRules
-    .map((rule) => checkEase(project, profile, rule))
-    .filter((result): result is FitMeasurementResult => result !== undefined);
-
-  return createFitReport({
-    measurements
-  });
-}
-
-function checkEase(
+export function runFit(
   project: ResolvedProject,
   profile: Profile,
-  rule: FitMeasurementRule
-): FitMeasurementResult | undefined {
-  const bodyMeasurementCm = profile.measurements[rule.bodyMeasurementKey];
-  const part = project.parts[rule.partRole];
-  const garmentWidthMm = part?.part.measurements?.finished?.[rule.finishedMeasurementKey];
+  options: RunFitOptions = {}
+): FitReport {
+  const registry = options.registry ?? createFitRuleRegistry(options.rules);
 
-  if (bodyMeasurementCm === undefined || garmentWidthMm === undefined || part === undefined) {
-    return undefined;
-  }
-
-  const garmentMeasurementCm = (garmentWidthMm * 2) / 10;
-  const easeCm = roundToOneDecimal(garmentMeasurementCm - bodyMeasurementCm);
-  const diagnostics = createEaseDiagnostics(easeCm, rule, {
-    bodyMeasurementCm,
-    garmentMeasurementCm
+  return createFitReport({
+    measurements: runFitRules(project, profile, registry)
   });
-
-  return {
-    id: rule.id,
-    status: getStatusForDiagnostics(diagnostics),
-    bodyMeasurementCm,
-    garmentMeasurementCm,
-    easeCm,
-    source: {
-      partRole: part.role,
-      measurement: `measurements.finished.${rule.finishedMeasurementKey}`
-    },
-    diagnostics
-  };
-}
-
-function createEaseDiagnostics(
-  easeCm: number,
-  rule: FitMeasurementRule,
-  context: {
-    readonly bodyMeasurementCm: number;
-    readonly garmentMeasurementCm: number;
-  }
-): Diagnostic[] {
-  if (easeCm < 0) {
-    return [
-      createDiagnostic({
-        severity: "error",
-        code: "FIT_EASE_NEGATIVE",
-        message: `Garment finished ${rule.label} is smaller than the body ${rule.label} measurement.`,
-        target: `${rule.partRole}.measurements.finished.${rule.finishedMeasurementKey}`,
-        suggestion: [
-          `Body ${rule.label} is ${context.bodyMeasurementCm}cm, garment ${rule.label} is ${context.garmentMeasurementCm}cm, ease is ${easeCm}cm.`
-        ]
-      })
-    ];
-  }
-
-  if (easeCm < rule.minimumEaseCm) {
-    return [
-      createDiagnostic({
-        severity: "warning",
-        code: "FIT_EASE_LOW",
-        message: `Garment finished ${rule.label} ease is low.`,
-        target: `${rule.partRole}.measurements.finished.${rule.finishedMeasurementKey}`,
-        suggestion: [
-          `Body ${rule.label} is ${context.bodyMeasurementCm}cm, garment ${rule.label} is ${context.garmentMeasurementCm}cm, ease is ${easeCm}cm; suggested minimum is ${rule.minimumEaseCm}cm.`
-        ]
-      })
-    ];
-  }
-
-  return [];
-}
-
-function roundToOneDecimal(value: number): number {
-  return Math.round(value * 10) / 10;
 }

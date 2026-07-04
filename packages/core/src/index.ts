@@ -13,6 +13,18 @@ export {
 } from "./compatibility/checkReport.js";
 export type { CheckReport, CompatibilityResult } from "./compatibility/checkReport.js";
 export { runChecks } from "./compatibility/runChecks.js";
+export type { RunChecksOptions } from "./compatibility/runChecks.js";
+export {
+  connectorLengthRule,
+  createCompatibilityRuleRegistry,
+  defaultCompatibilityRules,
+  requirementRangeRule,
+  runCompatibilityRules
+} from "./compatibility/rules.js";
+export type {
+  CompatibilityRule,
+  CompatibilityRuleRegistry
+} from "./compatibility/rules.js";
 export { createDiagnostic, diagnosticSeverities } from "./diagnostics/diagnostic.js";
 export type { Diagnostic, DiagnosticSeverity } from "./diagnostics/diagnostic.js";
 export { createDoctorReport } from "./diagnostics/doctorReport.js";
@@ -22,6 +34,14 @@ export type { DiagnosticReport, ReportStatus } from "./diagnostics/report.js";
 export { createFitReport } from "./fit/fitReport.js";
 export type { FitMeasurementResult, FitReport } from "./fit/fitReport.js";
 export { runFit } from "./fit/runFit.js";
+export type { RunFitOptions } from "./fit/runFit.js";
+export {
+  basicEaseFitRule,
+  createFitRuleRegistry,
+  defaultFitRules,
+  runFitRules
+} from "./fit/rules.js";
+export type { FitRule, FitRuleRegistry } from "./fit/rules.js";
 export { parseYamlText } from "./filesystem/parseYamlText.js";
 export { readText } from "./filesystem/readText.js";
 export type { LoadFileResult } from "./filesystem/loadFileResult.js";
@@ -36,18 +56,46 @@ export { loadLibraryMetaFile } from "./library/loadLibraryMeta.js";
 export { publishPart } from "./library/publishPart.js";
 export type { PublishedPart, PublishPartOptions } from "./library/publishPart.js";
 export { createTestSuggestionReport, suggestTests } from "./movement-tests/suggestTests.js";
+export type { SuggestTestsOptions } from "./movement-tests/suggestTests.js";
 export type {
   TestSuggestion,
   TestSuggestionLevel,
   TestSuggestionReport,
   TestSuggestionSource
 } from "./movement-tests/suggestTests.js";
+export {
+  armRaiseSuggestionRule,
+  createTestSuggestionRuleRegistry,
+  defaultTestSuggestionRules,
+  projectTestSuiteSuggestionRule,
+  prototypeNoteSuggestionRule,
+  runTestSuggestionRules
+} from "./movement-tests/suggestionRules.js";
+export type {
+  TestSuggestionCandidate,
+  TestSuggestionRule,
+  TestSuggestionRuleContext,
+  TestSuggestionRuleRegistry
+} from "./movement-tests/suggestionRules.js";
 export { createMovementTestReport, runMovementTest } from "./movement-tests/runMovementTest.js";
+export type { RunMovementTestOptions } from "./movement-tests/runMovementTest.js";
 export type {
   MovementTestCheck,
   MovementTestCheckSource,
   MovementTestReport
 } from "./movement-tests/runMovementTest.js";
+export {
+  armRaiseFittedArmholeRule,
+  createMovementTestRuleRegistry,
+  defaultMovementTestRules,
+  prototypeNoteMovementTestRule,
+  runMovementTestRules
+} from "./movement-tests/rules.js";
+export type {
+  MovementTestRule,
+  MovementTestRuleContext,
+  MovementTestRuleRegistry
+} from "./movement-tests/rules.js";
 export { loadPartFile } from "./parts/loadPartFile.js";
 export { loadProfileFile } from "./profile/loadProfile.js";
 export { loadPrototypeNotesFile } from "./prototype-notes/loadPrototypeNotes.js";

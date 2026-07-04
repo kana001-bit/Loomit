@@ -8,6 +8,7 @@ import { loadProject } from "../../src/project/loadProject.js";
 import { resolveParts } from "../../src/project/resolveParts.js";
 import { suggestTests } from "../../src/movement-tests/suggestTests.js";
 import type { ResolvedProject } from "../../src/project/resolveParts.js";
+import type { TestSuggestionRule } from "../../src/movement-tests/suggestionRules.js";
 
 const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../fixtures");
 
@@ -70,6 +71,39 @@ describe("suggestTests", () => {
         source: "project-test-suite"
       }
     ]);
+  });
+
+  it("can run supplied suggestion rules instead of the default rules", async () => {
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const customRule: TestSuggestionRule = {
+      id: "custom-sit",
+      description: "Suggests a custom sitting test.",
+      suggest: (context) => [
+        {
+          level: "recommended",
+          scenario: "sit",
+          reason: `Custom suggestion for ${context.resolvedProject.project.name}.`,
+          source: "rule"
+        }
+      ]
+    };
+    const report = suggestTests(resolvedProject, {
+      rules: [customRule]
+    });
+
+    expect(report).toEqual({
+      status: "ok",
+      diagnostics: [],
+      recommended: [
+        {
+          scenario: "sit",
+          reason: "Custom suggestion for valid-blouse.",
+          source: "rule"
+        }
+      ],
+      optional: [],
+      skipped: []
+    });
   });
 });
 
