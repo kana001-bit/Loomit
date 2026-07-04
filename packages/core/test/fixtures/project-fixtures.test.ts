@@ -28,7 +28,8 @@ describe("project fixtures", () => {
   });
 
   it("prepares missing-sleeve to return a file-not-found diagnostic", async () => {
-    // 守る仕様: missing-sleeve fixture は参照先 part.loom が存在せず、後続の解決処理で file-not-found を再現できる。
+    // 守る仕様: missing-sleeve fixture は参照先 part.loom が存在せず、file-not-found を errno 由来の
+    // 具体的な理由(path not found)付き Diagnostic として再現できる。
     const projectPath = join(fixturesRoot, "missing-sleeve/loomit.yml");
     const project = expectLoaded(await loadProjectFile(projectPath));
     const missingPartPath = resolveProjectPartPath(projectPath, project, "sleeve");
@@ -40,9 +41,10 @@ describe("project fixtures", () => {
         {
           severity: "error",
           code: "FILE_READ_FAILED",
-          message: "ファイルを読み込めませんでした。 / Could not read the file.",
+          message:
+            "ファイルを読み込めませんでした。 / Could not read the file. (パスが見つかりません / path not found)",
           target: missingPartPath,
-          suggestion: ["パスとアクセス権限を確認してください。 / Check the path and permissions."]
+          suggestion: ["パスが正しいか確認してください。 / Check that the path is correct."]
         }
       ]
     });

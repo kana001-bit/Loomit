@@ -1,8 +1,11 @@
-import { access, cp, mkdir, writeFile } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { access, cp, mkdir, rm } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { stringify } from "yaml";
 
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
+import { describeFsError } from "../filesystem/fsError.js";
+import { isPathWithin, isSafePathSegment } from "../filesystem/pathWithin.js";
+import { writeFileAtomic } from "../filesystem/writeFileAtomic.js";
 import type { LoadFileResult } from "../filesystem/loadFileResult.js";
 import { loadPartFile } from "../parts/loadPartFile.js";
 import { loadProject } from "../project/loadProject.js";
@@ -41,11 +44,30 @@ export async function addLibraryPartToProject(
     return loadedProjectResult;
   }
 
+  const libraryRoot = resolve(options.libraryRoot);
   const libraryPartDirectory = resolve(
-    options.libraryRoot,
+    libraryRoot,
     getLibraryTypeDirectory(options.type),
     options.name
   );
+
+  // type/name は CLI 引数由来でディレクトリ segment として使う。ファイルに触る前に、library root の
+  // 外を読みにいくものを拒否する。
+  if (!isPathWithin(libraryRoot, libraryPartDirectory)) {
+    return {
+      ok: false,
+      diagnostics: [
+        createDiagnostic({
+          severity: "error",
+          code: "LIBRARY_ADD_SOURCE_ESCAPES_ROOT",
+          message: "The library part reference would read outside the library root.",
+          target: libraryPartDirectory,
+          suggestion: ["Use a plain type and name without path separators, \"..\", or an absolute path."]
+        })
+      ]
+    };
+  }
+
   const metaResult = await loadLibraryMetaFile(join(libraryPartDirectory, "meta.yml"));
 
   if (!metaResult.ok) {
@@ -61,6 +83,32 @@ export async function addLibraryPartToProject(
   const part = partResult.value;
   const role = options.role ?? part.type;
   const localName = options.localName ?? options.name;
+
+  // role と localName は loomit.yml に role key と project 相対パスとして書き込まれる。書き込み前に
+  // segment でない値(例: "nested/role" や "..")を拒否し、コマンドが成功しつつ schema が読めない
+  // project ファイルを生む状態を防ぐ。
+  for (const segment of [
+    { field: "role", value: role },
+    { field: "name", value: localName }
+  ]) {
+    if (!isSafePathSegment(segment.value)) {
+      return {
+        ok: false,
+        diagnostics: [
+          createDiagnostic({
+            severity: "error",
+            code: "PROJECT_PART_SEGMENT_INVALID",
+            message: `Project part ${segment.field} must be a single path segment.`,
+            target: segment.value,
+            suggestion: [
+              `Use a ${segment.field} without path separators, "..", or an absolute path.`
+            ]
+          })
+        ]
+      };
+    }
+  }
+
   const targetPartDirectory = resolve(
     loadedProjectResult.value.paths.projectRoot,
     "parts",
@@ -85,7 +133,24 @@ export async function addLibraryPartToProject(
     };
   }
 
-  if (isSameOrChildPath(libraryPartDirectory, targetPartDirectory)) {
+  // role/localName はディレクトリ segment として使う。import 先を project root 配下に保ち、そこから
+  // 抜け出す ".."・区切り文字・絶対パスを拒否する。
+  if (!isPathWithin(loadedProjectResult.value.paths.projectRoot, targetPartDirectory)) {
+    return {
+      ok: false,
+      diagnostics: [
+        createDiagnostic({
+          severity: "error",
+          code: "PROJECT_PART_TARGET_ESCAPES_ROOT",
+          message: "The import target would write outside the project root.",
+          target: targetPartDirectory,
+          suggestion: ["Use a plain role and --as name without path separators, \"..\", or an absolute path."]
+        })
+      ]
+    };
+  }
+
+  if (isPathWithin(libraryPartDirectory, targetPartDirectory)) {
     return {
       ok: false,
       diagnostics: [
@@ -132,13 +197,16 @@ export async function addLibraryPartToProject(
       force: false,
       errorOnExist: true
     });
-    await writeFile(loadedProjectResult.value.paths.projectFilePath, stringify(project), "utf8");
-  } catch {
+    await writeFileAtomic(loadedProjectResult.value.paths.projectFilePath, stringify(project));
+  } catch (error) {
+    // コピー済みの part を巻き戻し、loomit.yml 書き込み失敗で project ファイルが参照しない孤児の part
+    // ディレクトリを残さない。target はこの呼び出しの前には存在しなかった(上でガード済み)。
+    await rm(targetPartDirectory, { recursive: true, force: true }).catch(() => undefined);
+
     return {
       ok: false,
       diagnostics: [
-        createDiagnostic({
-          severity: "error",
+        describeFsError(error, {
           code: "LIBRARY_ADD_FAILED",
           message: "Could not add the library part to the project.",
           target: targetPartDirectory,
@@ -174,11 +242,6 @@ function getLibraryTypeDirectory(type: string): string {
   }
 
   return `${type}s`;
-}
-
-function isSameOrChildPath(parentPath: string, candidatePath: string): boolean {
-  const relativePath = relative(parentPath, candidatePath);
-  return relativePath === "" || (!relativePath.startsWith("..") && !isAbsolute(relativePath));
 }
 
 async function pathExists(path: string): Promise<boolean> {
