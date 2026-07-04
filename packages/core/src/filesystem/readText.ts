@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 
-import { createDiagnostic } from "../diagnostics/diagnostic.js";
+import { describeFsError } from "./fsError.js";
 import type { LoadFileResult } from "./loadFileResult.js";
 
 export async function readText(filePath: string): Promise<LoadFileResult<string>> {
@@ -12,12 +12,11 @@ export async function readText(filePath: string): Promise<LoadFileResult<string>
       value: text,
       diagnostics: []
     };
-  } catch {
+  } catch (error) {
     return {
       ok: false,
       diagnostics: [
-        createDiagnostic({
-          severity: "error",
+        describeFsError(error, {
           code: "FILE_READ_FAILED",
           message: "ファイルを読み込めませんでした。 / Could not read the file.",
           target: filePath,

@@ -1,8 +1,11 @@
-import { access, cp, writeFile } from "node:fs/promises";
-import { basename, isAbsolute, relative, resolve } from "node:path";
+import { access, cp, rm } from "node:fs/promises";
+import { basename, resolve } from "node:path";
 import { stringify } from "yaml";
 
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
+import { describeFsError } from "../filesystem/fsError.js";
+import { isPathWithin } from "../filesystem/pathWithin.js";
+import { writeFileAtomic } from "../filesystem/writeFileAtomic.js";
 import type { LoadFileResult } from "../filesystem/loadFileResult.js";
 import type { Project } from "../schema/project.schema.js";
 import { loadProject } from "./loadProject.js";
@@ -34,7 +37,7 @@ export async function forkProject(
   const targetProjectName = options.name ?? basename(targetProjectRoot);
   const targetProjectFilePath = resolve(targetProjectRoot, "loomit.yml");
 
-  if (isSameOrChildPath(sourceProjectRoot, targetProjectRoot)) {
+  if (isPathWithin(sourceProjectRoot, targetProjectRoot)) {
     return {
       ok: false,
       diagnostics: [
@@ -71,19 +74,31 @@ export async function forkProject(
     name: targetProjectName
   };
 
+  // build の生成物は再生成可能で durable state ではないため、fork は source の(古い/巨大かもしれない)
+  // output/ を新プロジェクトへ持ち込まない。
+  const sourceOutputDir = resolve(
+    sourceProjectRoot,
+    sourceResult.value.project.outputs?.dir ?? "./output"
+  );
+
   try {
     await cp(sourceProjectRoot, targetProjectRoot, {
       recursive: true,
       force: false,
-      errorOnExist: true
+      errorOnExist: true,
+      filter: (source) => !isPathWithin(sourceOutputDir, source)
     });
-    await writeFile(targetProjectFilePath, stringify(project), "utf8");
-  } catch {
+    await writeFileAtomic(targetProjectFilePath, stringify(project));
+  } catch (error) {
+    // 途中まで作られた fork を巻き戻し、書き込み失敗時に source 名のままのプロジェクトを残さない。
+    // target はこの呼び出しの前には存在しなかった(上でガード済み)ので、丸ごと削除する all-or-nothing
+    // な rollback で安全。
+    await rm(targetProjectRoot, { recursive: true, force: true }).catch(() => undefined);
+
     return {
       ok: false,
       diagnostics: [
-        createDiagnostic({
-          severity: "error",
+        describeFsError(error, {
           code: "PROJECT_FORK_FAILED",
           message: "Loomit プロジェクトを fork できませんでした。/ Could not fork the Loomit project.",
           target: targetProjectRoot,
@@ -103,11 +118,6 @@ export async function forkProject(
     },
     diagnostics: []
   };
-}
-
-function isSameOrChildPath(parentPath: string, candidatePath: string): boolean {
-  const relativePath = relative(parentPath, candidatePath);
-  return relativePath === "" || (!relativePath.startsWith("..") && !isAbsolute(relativePath));
 }
 
 async function pathExists(path: string): Promise<boolean> {

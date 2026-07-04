@@ -11,8 +11,11 @@
 1. `docs/architecture.md`
 2. `docs/technology-selection.md`
 3. `docs/implementation-guidelines.md`
-4. `docs/implementation-plan.md`
-5. `docs/memo.md`
+4. `docs/operational-constraints.md`
+5. `docs/implementation-plan.md`
+6. `docs/memo.md`
+
+ファイル I/O(書き込み・コピー・パス解決・エラー処理)に触るときは `docs/operational-constraints.md` を必ず読む。
 
 `docs/technical-plan.md` には旧設計の例が残っている可能性がある。特に `version: 3` や `requires: ">=4"` のような旧 schema 例を実装へコピーしない。
 
@@ -37,6 +40,13 @@
 - `requires` を version range として扱わない。
 - `length_mm` は仕上がり線上の寸法として扱う。
 - core は CLI / Studio に依存しない。
+- 正本ファイルの書き込みは temp→rename の共通ヘルパ経由にする。コマンド内で直接 `writeFile` しない。
+- 複数ファイル/ディレクトリを変更する操作は、失敗時のクリーンアップ順序か staging + 最終 rename を定義する。
+- ファイル内容・引数由来のパスは許可ルート配下に収める(`..` エスケープ・絶対パスは拒否)。パスセグメントに使う識別子は schema で制限する。
+- I/O エラーは errno(`EACCES`/`ENOSPC`/`EEXIST`/`ENOENT` 等)を見て Diagnostic を出し分ける。`catch {}` で握りつぶさない。
+- `cp(recursive)` のコピー範囲は明示する。生成物(`output/`)は fork/publish の対象にしない。
+- 同一 project への書き手は同時に1つを前提とする。破る機能(Studio 常駐・watch・並列)の前に project 単位の advisory lock を入れる。
+- `output/` は Loomit が管理する再生成領域として扱う。build は既知の出力のみ上書き/掃除する。
 
 ## Before Starting Work
 

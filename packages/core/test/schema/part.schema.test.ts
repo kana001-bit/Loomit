@@ -78,6 +78,46 @@ describe("part schema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("rejects file reference paths that escape the part directory", () => {
+    // 守る仕様: files.source/preview/print は part 相対に限る。悪意ある part.loom が絶対パスや
+    // `..` で part/project 外のファイルを build に読ませ output へコピーさせるのを防ぐ。
+    const parentEscape = partSchema.safeParse({
+      schema: "loomit.part.v0",
+      name: "puff-sleeve",
+      variant: "v3",
+      type: "sleeve",
+      files: {
+        source: "../../../secret"
+      }
+    });
+
+    const absolutePath = partSchema.safeParse({
+      schema: "loomit.part.v0",
+      name: "puff-sleeve",
+      variant: "v3",
+      type: "sleeve",
+      files: {
+        preview: "/etc/passwd"
+      }
+    });
+
+    expect(parentEscape.success).toBe(false);
+    expect(absolutePath.success).toBe(false);
+  });
+
+  it("rejects a part type that is not a safe path segment", () => {
+    // 守る仕様: type は library の types/<type>s/ ディレクトリ segment として使うので、`..` を含む
+    // type は拒否する。
+    const result = partSchema.safeParse({
+      schema: "loomit.part.v0",
+      name: "puff-sleeve",
+      variant: "v3",
+      type: "../../evil"
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it("rejects negative connector finished lengths", () => {
     // 守る仕様: connectors.*.length_mm は仕上がり線上の長さであり、負の寸法は許可しない。
     const result = partSchema.safeParse({

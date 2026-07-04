@@ -1,8 +1,10 @@
-import { access, mkdir, writeFile } from "node:fs/promises";
+import { access, mkdir, rm } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { stringify } from "yaml";
 
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
+import { describeFsError } from "../filesystem/fsError.js";
+import { writeFileAtomic } from "../filesystem/writeFileAtomic.js";
 import type { LoadFileResult } from "../filesystem/loadFileResult.js";
 import type { Project } from "../schema/project.schema.js";
 
@@ -28,9 +30,9 @@ export async function createProject(
   const projectName = options.name ?? basename(projectRoot);
   const projectFilePath = join(projectRoot, "loomit.yml");
 
-  // `loom init` initializes in place (git init style), so the target directory is
-  // expected to already exist. Guard on loomit.yml instead of the directory, so we
-  // never clobber an existing Loomit project.
+  // `loom init` は(git init のように)その場で初期化するため、対象ディレクトリは既に存在している
+  // 想定。ディレクトリではなく loomit.yml の有無で判定し、既存の Loomit プロジェクトを絶対に
+  // 上書きしない。
   if (await pathExists(projectFilePath)) {
     return {
       ok: false,
@@ -58,20 +60,35 @@ export async function createProject(
     }
   };
 
-  try {
-    await mkdir(projectRoot, { recursive: true });
+  // この呼び出しが実際に作成したディレクトリだけを記録する。init は既存ディレクトリ内でも走る
+  // (targetPath は事前に存在しうる)ため、失敗時は自分が作ったものだけを戻し、既存ディレクトリは
+  // 決して消さない。mkdir(recursive) は新規作成した最上位のパスを返し、既存なら undefined を返すので
+  // それで判定する(pathExists は access 失敗と「不在」を区別できず、既存を誤って削除する恐れがある)。
+  const createdDirectories: string[] = [];
 
-    for (const directory of scaffoldDirectories) {
-      await mkdir(join(projectRoot, directory), { recursive: true });
+  try {
+    for (const directory of [
+      projectRoot,
+      ...scaffoldDirectories.map((name) => join(projectRoot, name))
+    ]) {
+      const created = await mkdir(directory, { recursive: true });
+
+      if (created !== undefined) {
+        createdDirectories.push(created);
+      }
     }
 
-    await writeFile(projectFilePath, stringify(project), "utf8");
-  } catch {
+    await writeFileAtomic(projectFilePath, stringify(project));
+  } catch (error) {
+    // 自分が作ったものだけを深い順に削除し、失敗しても空の scaffold を残さない。
+    for (const directory of [...createdDirectories].reverse()) {
+      await rm(directory, { recursive: true, force: true }).catch(() => undefined);
+    }
+
     return {
       ok: false,
       diagnostics: [
-        createDiagnostic({
-          severity: "error",
+        describeFsError(error, {
           code: "PROJECT_CREATE_FAILED",
           message:
             "Loomit プロジェクトを作成できませんでした。/ Could not create the Loomit project.",
