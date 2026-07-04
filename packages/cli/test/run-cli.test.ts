@@ -112,6 +112,484 @@ describe("runCli", () => {
     expect(output.stderr).toEqual([]);
   });
 
+  it("runs diff with text output for changed dart parameters", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-diff-"));
+    const beforePath = join(tempRoot, "before.part.loom");
+    const afterPath = join(tempRoot, "after.part.loom");
+
+    try {
+      await writeFile(
+        beforePath,
+        [
+          "schema: loomit.part.v0",
+          "name: darted-body",
+          "variant: front-v1",
+          "type: body",
+          "darts:",
+          "  waist_front:",
+          "    apex_ref: val:point#bodice/Apex",
+          "    width_mm: 30",
+          "    intake_length_mm: 110",
+          "    legs:",
+          "      left_ref: val:point#bodice/Left",
+          "      right_ref: val:point#bodice/Right"
+        ].join("\n"),
+        "utf8"
+      );
+
+      await writeFile(
+        afterPath,
+        [
+          "schema: loomit.part.v0",
+          "name: darted-body",
+          "variant: front-v2",
+          "type: body",
+          "darts:",
+          "  waist_front:",
+          "    apex_ref: val:point#bodice/Apex",
+          "    width_mm: 35",
+          "    intake_length_mm: 120",
+          "    legs:",
+          "      left_ref: val:point#bodice/Left",
+          "      right_ref: val:point#bodice/RightMoved"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const output = createOutputCollector();
+      const exitCode = await runCli(["node", "loom", "diff", beforePath, afterPath], {
+        cwd: workspaceRoot,
+        io: output.io
+      });
+
+      const stdout = output.stdout.join("");
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Loomit diff: changed");
+      expect(stdout).toContain("[modified] dart waist_front");
+      expect(stdout).toContain("- width_mm: 30 -> 35");
+      expect(stdout).toContain("- intake_length_mm: 110 -> 120");
+      expect(stdout).toContain("- legs.right_ref: val:point#bodice/Right -> val:point#bodice/RightMoved");
+      expect(output.stderr).toEqual([]);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("runs diff with JSON output", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-diff-"));
+    const beforePath = join(tempRoot, "before.part.loom");
+    const afterPath = join(tempRoot, "after.part.loom");
+
+    try {
+      await writeFile(
+        beforePath,
+        [
+          "schema: loomit.part.v0",
+          "name: darted-body",
+          "variant: front-v1",
+          "type: body",
+          "darts:",
+          "  waist_front:",
+          "    apex_ref: val:point#bodice/Apex",
+          "    width_mm: 30",
+          "    legs:",
+          "      left_ref: val:point#bodice/Left",
+          "      right_ref: val:point#bodice/Right"
+        ].join("\n"),
+        "utf8"
+      );
+
+      await writeFile(
+        afterPath,
+        [
+          "schema: loomit.part.v0",
+          "name: darted-body",
+          "variant: front-v1",
+          "type: body",
+          "darts:",
+          "  bust_front:",
+          "    apex_ref: val:point#bodice/BustApex",
+          "    width_formula: bust_dart_width",
+          "    legs:",
+          "      left_ref: val:point#bodice/BustLeft",
+          "      right_ref: val:point#bodice/BustRight"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const output = createOutputCollector();
+      const exitCode = await runCli(
+        ["node", "loom", "diff", beforePath, afterPath, "--format", "json"],
+        {
+          cwd: workspaceRoot,
+          io: output.io
+        }
+      );
+
+      const report = JSON.parse(output.stdout.join("")) as {
+        readonly status: string;
+        readonly changes: readonly { readonly kind: string; readonly id: string }[];
+      };
+
+      expect(exitCode).toBe(0);
+      expect(report.status).toBe("changed");
+      expect(report.changes).toEqual([
+        expect.objectContaining({
+          kind: "added",
+          id: "bust_front"
+        }),
+        expect.objectContaining({
+          kind: "removed",
+          id: "waist_front"
+        })
+      ]);
+      expect(output.stderr).toEqual([]);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("prints diff help without requiring part paths", async () => {
+    // 守る仕様: loom diff --help は位置引数の検証より先にヘルプ表示へ進み、usage error にしない。
+    const output = createOutputCollector();
+    const exitCode = await runCli(["node", "loom", "diff", "--help"], {
+      cwd: workspaceRoot,
+      io: output.io
+    });
+
+    expect(exitCode).toBe(0);
+    expect(output.stdout.join("")).toContain("Usage: loom diff <from-part.loom> <to-part.loom>");
+    expect(output.stderr).toEqual([]);
+  });
+
+  it("runs diff for the same part role across two projects", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-project-diff-"));
+    const fromProject = join(tempRoot, "from-project");
+    const toProject = join(tempRoot, "to-project");
+
+    try {
+      await mkdir(join(fromProject, "parts/body"), { recursive: true });
+      await mkdir(join(toProject, "parts/body"), { recursive: true });
+      await mkdir(join(toProject, "notes"), { recursive: true });
+
+      await writeFile(
+        join(fromProject, "loomit.yml"),
+        [
+          "schema: loomit.project.v0",
+          "name: from-project",
+          "garment: blouse",
+          "parts:",
+          "  body: ./parts/body/part.loom"
+        ].join("\n"),
+        "utf8"
+      );
+      await writeFile(
+        join(toProject, "loomit.yml"),
+        [
+          "schema: loomit.project.v0",
+          "name: to-project",
+          "garment: blouse",
+          "parts:",
+          "  body: ./parts/body/part.loom"
+        ].join("\n"),
+        "utf8"
+      );
+
+      await writeFile(
+        join(fromProject, "parts/body/part.loom"),
+        [
+          "schema: loomit.part.v0",
+          "name: darted-body",
+          "variant: front-v1",
+          "type: body",
+          "tags:",
+          "  - fitted-armhole",
+          "  - non-stretch-fabric",
+          "darts:",
+          "  waist_front:",
+          "    apex_ref: val:point#bodice/Apex",
+          "    width_mm: 30",
+          "    legs:",
+          "      left_ref: val:point#bodice/Left",
+          "      right_ref: val:point#bodice/Right"
+        ].join("\n"),
+        "utf8"
+      );
+      await writeFile(
+        join(toProject, "parts/body/part.loom"),
+        [
+          "schema: loomit.part.v0",
+          "name: darted-body",
+          "variant: front-v2",
+          "type: body",
+          "tags:",
+          "  - fitted-armhole",
+          "  - non-stretch-fabric",
+          "darts:",
+          "  waist_front:",
+          "    apex_ref: val:point#bodice/Apex",
+          "    width_mm: 35",
+          "    legs:",
+          "      left_ref: val:point#bodice/Left",
+          "      right_ref: val:point#bodice/Right"
+        ].join("\n"),
+        "utf8"
+      );
+      await writeFile(
+        join(toProject, "notes/prototype-notes.yml"),
+        [
+          "schema: loomit.prototype_notes.v0",
+          "notes:",
+          "  - id: note-2026-06-28-armhole",
+          "    date: 2026-06-28",
+          "    result: failed",
+          "    issue: armhole tight when raising arms",
+          "    suggested_change:",
+          "      - increase armhole ease",
+          "    creates_test_case: arm-raise",
+          "    applies_to:",
+          "      - fitted-armhole",
+          "      - non-stretch-fabric"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const output = createOutputCollector();
+      const exitCode = await runCli(
+        ["node", "loom", "diff", fromProject, toProject, "--part", "body"],
+        {
+          cwd: workspaceRoot,
+          io: output.io
+        }
+      );
+
+      expect(exitCode).toBe(0);
+      expect(output.stdout.join("")).toContain("Loomit diff: changed");
+      expect(output.stdout.join("")).toContain("[modified] dart waist_front");
+      expect(output.stdout.join("")).toContain("- width_mm: 30 -> 35");
+      expect(output.stdout.join("")).toContain("Related Prototype Notes:");
+      expect(output.stdout.join("")).toContain("note-2026-06-28-armhole");
+      expect(output.stderr).toEqual([]);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("surfaces invalid prototype notes diagnostics in project diff output", async () => {
+    // 守る仕様: diff --part は壊れた notes/prototype-notes.yml を黙殺せず、loadPrototypeNotesFile の診断を report に含める。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-project-diff-notes-"));
+    const fromProject = join(tempRoot, "from-project");
+    const toProject = join(tempRoot, "to-project");
+
+    try {
+      await mkdir(join(fromProject, "parts/body"), { recursive: true });
+      await mkdir(join(toProject, "parts/body"), { recursive: true });
+      await mkdir(join(toProject, "notes"), { recursive: true });
+
+      await writeFile(
+        join(fromProject, "loomit.yml"),
+        [
+          "schema: loomit.project.v0",
+          "name: from-project",
+          "garment: blouse",
+          "parts:",
+          "  body: ./parts/body/part.loom"
+        ].join("\n"),
+        "utf8"
+      );
+      await writeFile(
+        join(toProject, "loomit.yml"),
+        [
+          "schema: loomit.project.v0",
+          "name: to-project",
+          "garment: blouse",
+          "parts:",
+          "  body: ./parts/body/part.loom"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const sharedPart = [
+        "schema: loomit.part.v0",
+        "name: darted-body",
+        "variant: front-v1",
+        "type: body",
+        "tags:",
+        "  - fitted-armhole"
+      ].join("\n");
+
+      await writeFile(join(fromProject, "parts/body/part.loom"), sharedPart, "utf8");
+      await writeFile(join(toProject, "parts/body/part.loom"), sharedPart, "utf8");
+      await writeFile(
+        join(toProject, "notes/prototype-notes.yml"),
+        [
+          "schema: loomit.prototype_notes.v0",
+          "notes:",
+          "  - id: note-invalid",
+          "    date: 2026-06-28",
+          "    result: failed",
+          "    issue: armhole tight when raising arms",
+          "    creates_test_case: arm-raise"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const output = createOutputCollector();
+      const exitCode = await runCli(
+        ["node", "loom", "diff", fromProject, toProject, "--part", "body", "--format", "json"],
+        {
+          cwd: workspaceRoot,
+          io: output.io
+        }
+      );
+
+      const report = JSON.parse(output.stdout.join("")) as {
+        readonly status: string;
+        readonly diagnostics: readonly { readonly code: string; readonly target?: string }[];
+      };
+
+      expect(exitCode).toBe(1);
+      expect(report.status).toBe("error");
+      expect(report.diagnostics).toContainEqual(
+        expect.objectContaining({
+          code: "PROTOTYPE_NOTES_SCHEMA_INVALID",
+          target: join(toProject, "notes/prototype-notes.yml")
+        })
+      );
+      expect(output.stderr).toEqual([]);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("errors when a --part project path does not exist instead of climbing to a parent project", async () => {
+    // 守る仕様: diff --part の存在しないプロジェクトパスは、親ディレクトリの別プロジェクトへ遡らずエラーにする。
+    // タイプミスした宛先が親プロジェクトに化けて「差分なし」と誤判定されるのを防ぐ。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-diff-missing-"));
+    const project = join(tempRoot, "project");
+    const missingChild = join(project, "missing-child");
+
+    try {
+      await mkdir(join(project, "parts/body"), { recursive: true });
+
+      await writeFile(
+        join(project, "loomit.yml"),
+        [
+          "schema: loomit.project.v0",
+          "name: project",
+          "garment: blouse",
+          "parts:",
+          "  body: ./parts/body/part.loom"
+        ].join("\n"),
+        "utf8"
+      );
+      await writeFile(
+        join(project, "parts/body/part.loom"),
+        [
+          "schema: loomit.part.v0",
+          "name: darted-body",
+          "variant: front-v1",
+          "type: body"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const output = createOutputCollector();
+      const exitCode = await runCli(
+        ["node", "loom", "diff", project, missingChild, "--part", "body", "--format", "json"],
+        {
+          cwd: workspaceRoot,
+          io: output.io
+        }
+      );
+
+      const report = JSON.parse(output.stdout.join("")) as {
+        readonly status: string;
+        readonly diagnostics: readonly { readonly code: string; readonly target?: string }[];
+      };
+
+      expect(exitCode).toBe(1);
+      expect(report.status).toBe("error");
+      expect(report.diagnostics).toContainEqual(
+        expect.objectContaining({
+          code: "PROJECT_PATH_NOT_FOUND",
+          target: missingChild
+        })
+      );
+      expect(output.stderr).toEqual([]);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("prints connector and requirement changes in diff output", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-diff-connectors-"));
+    const beforePath = join(tempRoot, "before.part.loom");
+    const afterPath = join(tempRoot, "after.part.loom");
+
+    try {
+      await writeFile(
+        beforePath,
+        [
+          "schema: loomit.part.v0",
+          "name: darted-body",
+          "variant: front-v1",
+          "type: body",
+          "connectors:",
+          "  armhole:",
+          "    type: armhole",
+          "    length_mm: 469",
+          "    tolerance_mm: 3",
+          "requires:",
+          "  sleeve.armhole.length_mm:",
+          "    min: 466",
+          "    max: 472"
+        ].join("\n"),
+        "utf8"
+      );
+
+      await writeFile(
+        afterPath,
+        [
+          "schema: loomit.part.v0",
+          "name: darted-body",
+          "variant: front-v2",
+          "type: body",
+          "connectors:",
+          "  armhole:",
+          "    type: armhole",
+          "    length_mm: 472",
+          "    tolerance_mm: 5",
+          "requires:",
+          "  sleeve.armhole.length_mm:",
+          "    min: 468",
+          "    max: 474"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const output = createOutputCollector();
+      const exitCode = await runCli(["node", "loom", "diff", beforePath, afterPath], {
+        cwd: workspaceRoot,
+        io: output.io
+      });
+
+      const stdout = output.stdout.join("");
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("[modified] connector armhole");
+      expect(stdout).toContain("- length_mm: 469 -> 472");
+      expect(stdout).toContain("- tolerance_mm: 3 -> 5");
+      expect(stdout).toContain("[modified] requirement sleeve.armhole.length_mm");
+      expect(stdout).toContain("- min: 466 -> 468");
+      expect(stdout).toContain("- max: 472 -> 474");
+      expect(output.stderr).toEqual([]);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   it("runs fit with text output for a valid project and profile", async () => {
     const output = createOutputCollector();
     const exitCode = await runCli(

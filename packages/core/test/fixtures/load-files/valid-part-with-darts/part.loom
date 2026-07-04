@@ -1,0 +1,28 @@
+schema: loomit.part.v0
+name: darted-body
+variant: front-v1
+type: body
+status: active
+files:
+  source: front.val
+  preview: front.svg
+measurements:
+  finished:
+    bust_width_mm: 480
+    waist_width_mm: 370
+darts:
+  waist_front:
+    apex_ref: val:point#waist_front_apex
+    width_mm: 30
+    intake_length_mm: 110
+    legs:
+      left_ref: val:point#waist_front_leg_left
+      right_ref: val:point#waist_front_leg_right
+connectors:
+  armhole:
+    type: armhole
+    length_mm: 469
+    tolerance_mm: 3
+tags:
+  - blouse
+  - darted-front

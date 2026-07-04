@@ -6,6 +6,24 @@ export const partStatusSchema = z.enum(["active", "deprecated"]);
 
 const finishedMeasurementSchema = z.number().finite().nonnegative();
 
+const dartLegRefsSchema = z
+  .object({
+    left_ref: z.string().min(1),
+    right_ref: z.string().min(1)
+  })
+  .strict();
+
+export const dartSchema = z
+  .object({
+    apex_ref: z.string().min(1),
+    width_mm: z.number().finite().positive().optional(),
+    width_formula: z.string().min(1).optional(),
+    intake_length_mm: z.number().finite().positive().optional(),
+    intake_length_formula: z.string().min(1).optional(),
+    legs: dartLegRefsSchema
+  })
+  .strict();
+
 const connectorRangeSchema = z
   .object({
     id: z.string().min(1),
@@ -26,7 +44,14 @@ export const connectorSchema = z
     length_mm: z.number().finite().nonnegative(),
     tolerance_mm: z.number().finite().nonnegative().optional(),
     path_ref: z.string().min(1).optional(),
-    ranges: z.array(connectorRangeSchema).optional()
+    // range id は connector 内で一意でなければならない。diff は id をキーに range を突き合わせるため、
+    // 重複を許すと先行 range が上書きされ、変更が黙って取りこぼされる。正本 schema で禁止する。
+    ranges: z
+      .array(connectorRangeSchema)
+      .refine((ranges) => new Set(ranges.map((range) => range.id)).size === ranges.length, {
+        message: "connector range ids must be unique"
+      })
+      .optional()
   })
   .strict();
 
@@ -77,6 +102,9 @@ export const partSchema = z
       })
       .strict()
       .optional(),
+    // 設計判断: darts は raw geometry ではなく、diff/branch で意味を持つ編集フィーチャの record。
+    // record key が stable identity で、各値は apex/legs 参照と主要パラメータだけを持つ。
+    darts: z.record(z.string().min(1), dartSchema).optional(),
     connectors: z.record(z.string().min(1), connectorSchema).optional(),
     // 設計判断: requires は寸法・タグ・素材などの直接条件を表し、version range ではない。
     requires: z.record(z.string().min(1), requirementSchema).optional(),
@@ -85,6 +113,7 @@ export const partSchema = z
   .strict();
 
 export type Connector = z.infer<typeof connectorSchema>;
+export type Dart = z.infer<typeof dartSchema>;
 export type Part = z.infer<typeof partSchema>;
 export type PartStatus = z.infer<typeof partStatusSchema>;
 export type Requirement = z.infer<typeof requirementSchema>;

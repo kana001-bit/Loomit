@@ -51,6 +51,29 @@ describe("part schema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts darts as id-keyed editing features", () => {
+    // 守る仕様: darts は raw geometry ではなく、id 付きの編集フィーチャとして part.loom に保持できる。
+    const result = partSchema.safeParse({
+      schema: "loomit.part.v0",
+      name: "darted-body",
+      variant: "front-v1",
+      type: "body",
+      darts: {
+        waist_front: {
+          apex_ref: "val:point#waist_front_apex",
+          width_mm: 30,
+          intake_length_mm: 110,
+          legs: {
+            left_ref: "val:point#waist_front_leg_left",
+            right_ref: "val:point#waist_front_leg_right"
+          }
+        }
+      }
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   it("rejects the old version field shape", () => {
     // 守る仕様: part.loom は旧設計の version 番号に依存せず、name + variant で識別する。
     const result = partSchema.safeParse({
@@ -129,6 +152,61 @@ describe("part schema", () => {
         armhole: {
           type: "armhole",
           length_mm: -1
+        }
+      }
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects duplicate connector range ids", () => {
+    // 守る仕様: range id は connector 内で一意。重複を許すと diff が id をキーに突き合わせる際に
+    // 先行 range を上書きし、変更を黙って取りこぼすため、正本 schema で禁止する。
+    const result = partSchema.safeParse({
+      schema: "loomit.part.v0",
+      name: "puff-sleeve",
+      variant: "v3",
+      type: "sleeve",
+      connectors: {
+        armhole: {
+          type: "armhole",
+          length_mm: 469,
+          ranges: [
+            {
+              id: "sleeve-cap-gather",
+              from: 0.1,
+              to: 0.3,
+              behavior: "gathered"
+            },
+            {
+              id: "sleeve-cap-gather",
+              from: 0.5,
+              to: 0.7,
+              behavior: "gathered"
+            }
+          ]
+        }
+      }
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects darts without both leg references", () => {
+    // 守る仕様: dart は stable identity に紐づく apex と左右の leg 参照を持ち、片側だけ欠けた形は許可しない。
+    const result = partSchema.safeParse({
+      schema: "loomit.part.v0",
+      name: "darted-body",
+      variant: "front-v1",
+      type: "body",
+      darts: {
+        waist_front: {
+          apex_ref: "val:point#waist_front_apex",
+          width_mm: 30,
+          intake_length_mm: 110,
+          legs: {
+            left_ref: "val:point#waist_front_leg_left"
+          }
         }
       }
     });
