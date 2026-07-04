@@ -1,5 +1,6 @@
 import { runBuildCommand } from "./commands/build.js";
 import { runCheckCommand } from "./commands/check.js";
+import { runDiffCommand } from "./commands/diff.js";
 import { runDoctorCommand } from "./commands/doctor.js";
 import { runFitCommand } from "./commands/fit.js";
 import { runForkCommand } from "./commands/fork.js";
@@ -42,6 +43,14 @@ export async function runCli(
 
   if (command === "check") {
     return runCheckCommand(args.slice(1), {
+      cwd,
+      stdout: io.stdout,
+      stderr: io.stderr
+    });
+  }
+
+  if (command === "diff") {
+    return runDiffCommand(args.slice(1), {
       cwd,
       stdout: io.stdout,
       stderr: io.stderr
@@ -131,6 +140,7 @@ export function formatMainHelp(): string {
     "Commands:",
     "  build  Collect referenced files into output and write a manifest.",
     "  check  Validate a Loomit project.",
+    "  diff   Compare two Loomit part files semantically.",
     "  doctor Explain Loomit project diagnostics.",
     "  fit    Compare a Loomit project against a body profile.",
     "  fork   Copy an existing Loomit project.",

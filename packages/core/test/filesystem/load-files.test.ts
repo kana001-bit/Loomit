@@ -24,6 +24,24 @@ describe("YAML file loading", () => {
     expect(result.ok ? result.value.variant : "").toBe("v3");
   });
 
+  it("loads a valid part YAML file with darts", async () => {
+    // 守る仕様: part.loom の darts は schema validation 後も editing feature として保持される。
+    const result = await loadPartFile(join(fixturesRoot, "valid-part-with-darts/part.loom"));
+
+    expect(result.ok).toBe(true);
+    expect(result.ok ? result.value.darts?.waist_front.width_mm : 0).toBe(30);
+  });
+
+  it("does not read source.val or project darts when loading a part file", async () => {
+    // 守る仕様: loadPartFile は read -> parse -> validate だけの純粋 loader で、source.val を読まない。
+    //           darts 射影は darts を消費する経路(loadProjectedPart / diff)の責務。
+    const result = await loadPartFile(join(fixturesRoot, "valid-part-projected-darts/part.loom"));
+
+    expect(result.ok).toBe(true);
+    expect(result.ok ? result.value.darts : {}).toBeUndefined();
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it("returns a diagnostic for project YAML parse errors", async () => {
     // 守る仕様: YAML の構文エラーは例外や生エラーではなく Diagnostic に変換する。
     const result = await loadProjectFile(join(fixturesRoot, "invalid-project-yaml/loomit.yml"));

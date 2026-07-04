@@ -2,6 +2,7 @@ import { access, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
+import { describeFsError, getErrno } from "../filesystem/fsError.js";
 import type { LoadFileResult } from "../filesystem/loadFileResult.js";
 
 const projectFileName = "loomit.yml";
@@ -11,12 +12,27 @@ export async function findProjectRoot(startPath: string): Promise<LoadFileResult
 
   while (true) {
     const projectFilePath = join(current, projectFileName);
+    const accessState = await getAccessState(projectFilePath);
 
-    if (await canAccess(projectFilePath)) {
+    if (accessState.kind === "ok") {
       return {
         ok: true,
         value: current,
         diagnostics: []
+      };
+    }
+
+    if (accessState.kind === "error") {
+      return {
+        ok: false,
+        diagnostics: [
+          describeFsError(accessState.error, {
+            code: "PROJECT_ROOT_ACCESS_FAILED",
+            message: "Could not access loomit.yml.",
+            target: projectFilePath,
+            suggestion: ["Check read permissions for loomit.yml and its parent directory."]
+          })
+        ]
       };
     }
 
@@ -59,11 +75,17 @@ async function getSearchStart(startPath: string): Promise<string> {
   return resolvedPath;
 }
 
-async function canAccess(filePath: string): Promise<boolean> {
+async function getAccessState(
+  filePath: string
+): Promise<
+  | { readonly kind: "ok" }
+  | { readonly kind: "missing" }
+  | { readonly kind: "error"; readonly error: unknown }
+> {
   try {
     await access(filePath);
-    return true;
-  } catch {
-    return false;
+    return { kind: "ok" };
+  } catch (error) {
+    return getErrno(error) === "ENOENT" ? { kind: "missing" } : { kind: "error", error };
   }
 }

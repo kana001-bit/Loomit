@@ -1,0 +1,19 @@
+schema: loomit.part.v0
+name: darted-shoulder
+variant: bodice-v1
+type: body
+status: active
+files:
+  source: source.val
+  preview: preview.svg
+measurements:
+  finished:
+    bust_width_mm: 480
+connectors:
+  armhole:
+    type: armhole
+    length_mm: 469
+    tolerance_mm: 3
+tags:
+  - blouse
+  - shoulder-dart
