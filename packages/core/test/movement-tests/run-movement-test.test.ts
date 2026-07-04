@@ -7,7 +7,9 @@ import { runMovementTest } from "../../src/movement-tests/runMovementTest.js";
 import { loadPrototypeNotesFile } from "../../src/prototype-notes/loadPrototypeNotes.js";
 import { loadProject } from "../../src/project/loadProject.js";
 import { resolveParts } from "../../src/project/resolveParts.js";
+import { getStatusForDiagnostics } from "../../src/diagnostics/report.js";
 import type { ResolvedProject } from "../../src/project/resolveParts.js";
+import type { MovementTestRule } from "../../src/movement-tests/rules.js";
 
 const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../fixtures");
 
@@ -109,6 +111,66 @@ describe("runMovementTest", () => {
       ],
       scenario: "squat",
       checks: []
+    });
+  });
+
+  it("can run supplied movement test rules instead of the default rules", async () => {
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const customRule: MovementTestRule = {
+      id: "arm-raise.custom-note",
+      description: "Checks a custom movement note.",
+      check: (context) => {
+        const diagnostics = [
+          {
+            severity: "warning" as const,
+            code: "MOVEMENT_TEST_CUSTOM_NOTE",
+            message: `Custom rule matched ${context.scenario}.`,
+            target: context.scenario
+          }
+        ];
+
+        return [
+          {
+            id: `${context.scenario}.custom-note`,
+            status: getStatusForDiagnostics(diagnostics),
+            reason: "Custom movement rule matched the project.",
+            source: "rule",
+            diagnostics
+          }
+        ];
+      }
+    };
+    const report = runMovementTest(resolvedProject, "arm-raise", {
+      rules: [customRule]
+    });
+
+    expect(report).toEqual({
+      status: "warning",
+      diagnostics: [
+        {
+          severity: "warning",
+          code: "MOVEMENT_TEST_CUSTOM_NOTE",
+          message: "Custom rule matched arm-raise.",
+          target: "arm-raise"
+        }
+      ],
+      scenario: "arm-raise",
+      checks: [
+        {
+          id: "arm-raise.custom-note",
+          status: "warning",
+          reason: "Custom movement rule matched the project.",
+          source: "rule",
+          diagnostics: [
+            {
+              severity: "warning",
+              code: "MOVEMENT_TEST_CUSTOM_NOTE",
+              message: "Custom rule matched arm-raise.",
+              target: "arm-raise"
+            }
+          ]
+        }
+      ]
     });
   });
 });

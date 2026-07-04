@@ -3,8 +3,13 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { loadProject, resolveParts, runChecks } from "../../src/index.js";
-import type { ResolvedProject, ResolvedProjectPart } from "../../src/index.js";
+import {
+  createCompatibilityResult,
+  loadProject,
+  resolveParts,
+  runChecks
+} from "../../src/index.js";
+import type { CompatibilityRule, ResolvedProject, ResolvedProjectPart } from "../../src/index.js";
 
 const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../fixtures");
 
@@ -218,6 +223,50 @@ describe("runChecks", () => {
           suggestion: [
             'Add connector "armhole" to part "sleeve", or update the requirement target.'
           ]
+        }
+      ]
+    });
+  });
+
+  it("can run a supplied compatibility rule registry instead of the default rules", async () => {
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const customRule: CompatibilityRule = {
+      id: "custom-project-name",
+      description: "Checks custom project naming constraints.",
+      check: (project) => [
+        createCompatibilityResult({
+          from: "project.name",
+          to: project.project.name,
+          rule: "custom-project-name",
+          actual: {
+            name: project.project.name
+          },
+          expected: {
+            prefix: "sample-"
+          }
+        })
+      ]
+    };
+    const report = runChecks(resolvedProject, {
+      rules: [customRule]
+    });
+
+    expect(report).toEqual({
+      status: "ok",
+      diagnostics: [],
+      compatibility: [
+        {
+          status: "ok",
+          from: "project.name",
+          to: "valid-blouse",
+          rule: "custom-project-name",
+          actual: {
+            name: "valid-blouse"
+          },
+          expected: {
+            prefix: "sample-"
+          },
+          diagnostics: []
         }
       ]
     });
