@@ -27,6 +27,14 @@ export type {
 } from "./compatibility/rules.js";
 export { createDiagnostic, diagnosticSeverities } from "./diagnostics/diagnostic.js";
 export type { Diagnostic, DiagnosticSeverity } from "./diagnostics/diagnostic.js";
+export { diffParts } from "./diff/partDiff.js";
+export type {
+  PartDiffChange,
+  PartDiffFieldChange,
+  PartDiffPrototypeNoteMatch,
+  PartDiffReport,
+  PartDiffStatus
+} from "./diff/partDiff.js";
 export { createDoctorReport } from "./diagnostics/doctorReport.js";
 export type { DoctorFinding, DoctorReport } from "./diagnostics/doctorReport.js";
 export { createDiagnosticReport, getStatusForDiagnostics } from "./diagnostics/report.js";
@@ -42,7 +50,7 @@ export {
   runFitRules
 } from "./fit/rules.js";
 export type { FitRule, FitRuleRegistry } from "./fit/rules.js";
-export { describeFsError } from "./filesystem/fsError.js";
+export { describeFsError, getErrno } from "./filesystem/fsError.js";
 export type { FsErrorContext } from "./filesystem/fsError.js";
 export { parseYamlText } from "./filesystem/parseYamlText.js";
 export { isPathWithin, isSafePathSegment } from "./filesystem/pathWithin.js";
@@ -101,6 +109,8 @@ export type {
   MovementTestRuleRegistry
 } from "./movement-tests/rules.js";
 export { loadPartFile } from "./parts/loadPartFile.js";
+export { loadProjectedPart } from "./parts/loadProjectedPart.js";
+export { projectDartsFromValFile, projectDartsFromValText, projectPartDartsFromSource } from "./parts/projectDartsFromVal.js";
 export { loadProfileFile } from "./profile/loadProfile.js";
 export { loadPrototypeNotesFile } from "./prototype-notes/loadPrototypeNotes.js";
 export { createProject } from "./project/createProject.js";
@@ -117,11 +127,12 @@ export type { ResolvedProject, ResolvedProjectPart } from "./project/resolvePart
 export type { ResolvedProjectPaths } from "./project/resolveProjectPaths.js";
 export {
   connectorSchema,
+  dartSchema,
   partSchema,
   partStatusSchema,
   requirementSchema
 } from "./schema/part.schema.js";
-export type { Connector, Part, PartStatus, Requirement } from "./schema/part.schema.js";
+export type { Connector, Dart, Part, PartStatus, Requirement } from "./schema/part.schema.js";
 export { projectSchema } from "./schema/project.schema.js";
 export type { Project } from "./schema/project.schema.js";
 export { libraryMetaSchema, libraryPartStatusSchema } from "./schema/library-meta.schema.js";

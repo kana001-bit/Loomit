@@ -18,7 +18,7 @@ interface ErrnoDetail {
 
 // Node のファイルシステムエラーは `.code` に errno の文字列(EACCES, ENOSPC, ...)を持つ。非標準の
 // throw 値でもマッパーが落ちないよう、防御的に読み取る。
-function getErrno(error: unknown): string | undefined {
+export function getErrno(error: unknown): string | undefined {
   if (error instanceof Error && "code" in error) {
     // 意図的に unknown: Error の .code は型が付かないため、下で string に絞り込む。
     const code: unknown = error.code;

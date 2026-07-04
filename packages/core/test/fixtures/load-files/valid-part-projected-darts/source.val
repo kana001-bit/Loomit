@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pattern>
+  <draw name="block">
+    <calculation>
+      <point id="21" name="ShoulderRight" type="single"/>
+      <point id="24" name="ShoulderLeft" type="endLine" length="dart_width_shoulder / 2"/>
+      <point id="27" name="ShoulderApex" type="alongLine" length="CurrentLength/2"/>
+    </calculation>
+    <modeling>
+      <point id="77" idObject="24" inUse="true" type="modeling"/>
+      <point id="78" idObject="27" inUse="true" type="modeling"/>
+      <point id="79" idObject="21" inUse="true" type="modeling"/>
+      <path id="80" inUse="true" name="dart" type="2">
+        <nodes>
+          <node idObject="77" type="NodePoint"/>
+          <node idObject="78" type="NodePoint"/>
+          <node idObject="79" type="NodePoint"/>
+        </nodes>
+      </path>
+    </modeling>
+  </draw>
+</pattern>

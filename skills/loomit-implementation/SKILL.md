@@ -7,18 +7,25 @@ description: Project-specific Loomit implementation guidance. Use when Codex or 
 
 Use this skill when working on Loomit implementation tasks. It keeps detailed project-specific rules out of the always-loaded `AGENT.md` while preserving the guardrails needed during coding.
 
-## Required Workflow
+## Minimal Workflow
 
-1. Read the relevant project docs before coding:
-   - `docs/architecture.md` for the v0 data model and architecture.
-   - `docs/implementation-plan.md` for the current slice and completion criteria.
-   - `docs/implementation-guidelines.md` for implementation rules.
-   - `docs/memo.md` for decisions about version/variant, fork, and prototype notes.
+1. Read only the docs needed for the current task.
 2. Do not use old schema examples from `docs/technical-plan.md` as implementation source. It may still contain legacy `version: 3` or `requires: ">=4"` examples.
-3. Identify the active implementation slice before editing code.
+3. If the task is part of a planned slice, identify the active slice before editing code.
 4. Implement only the smallest useful slice.
 5. Add or update tests with explicit `守る仕様:` comments.
-6. Before finishing, run the slice's required checks, or state why they could not be run.
+6. Before finishing, run the task's required checks, or state why they could not be run.
+
+## Task-Based Reading
+
+Open only the relevant docs:
+
+- `docs/implementation-plan.md`: when choosing a slice, following the roadmap, or checking completion criteria.
+- `docs/architecture.md`: when changing schema, domain model, reports, dimensions, or other source-of-truth structures.
+- `docs/memo.md`: when touching `variant`, `requires`, `prototype-notes.yml`, fork/publish semantics, or prior design decisions.
+- `docs/implementation-guidelines.md`: when confirming package boundaries, implementation conventions, or general coding rules.
+- `docs/operational-constraints.md`: when touching file writes, copies, path resolution, error classification, concurrency, or `output/`.
+- `docs/technology-selection.md`: when the task depends on tooling choices or cross-platform behavior.
 
 ## Reference Files
 
