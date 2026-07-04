@@ -5,6 +5,9 @@ import { validateSchema } from "../schema/validateSchema.js";
 import type { LoadFileResult } from "../filesystem/loadFileResult.js";
 import type { Part } from "../schema/part.schema.js";
 
+// loadPartFile は part.loom を read -> parse -> validate するだけの純粋 loader。
+// source.val からの darts 射影は check/build/fit には不要なので、この正本 load 経路には .val I/O を
+// 混ぜない。darts を消費する経路(diff 等)は loadProjectedPart を使う。
 export async function loadPartFile(filePath: string): Promise<LoadFileResult<Part>> {
   const readResult = await readText(filePath);
 
