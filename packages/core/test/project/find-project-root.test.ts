@@ -1,3 +1,4 @@
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,7 +22,9 @@ describe("findProjectRoot", () => {
   });
 
   it("stops and reports an access failure when loomit.yml is unreadable", async () => {
-    const projectRoot = "C:\\workspace\\project";
+    // 守る仕様: loomit.yml が権限エラーで読めないときは、探索を打ち切って PROJECT_ROOT_ACCESS_FAILED
+    // を返す(「見つからない」に化けさせない)。開始パスは OS 依存にせず、実行 OS の絶対パスを使う。
+    const projectRoot = join(tmpdir(), "loomit-find-root-project");
     const projectFilePath = join(projectRoot, "loomit.yml");
 
     mocks.stat.mockResolvedValue({

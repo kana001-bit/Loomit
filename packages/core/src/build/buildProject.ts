@@ -5,6 +5,7 @@ import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import { createDiagnosticReport } from "../diagnostics/report.js";
 import { describeFsError } from "../filesystem/fsError.js";
 import { isPathWithin } from "../filesystem/pathWithin.js";
+import { toPosixPath } from "../filesystem/toPosixPath.js";
 import { writeFileAtomic } from "../filesystem/writeFileAtomic.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import type { DiagnosticReport } from "../diagnostics/report.js";
@@ -192,8 +193,10 @@ function planPartAssets(
       role: resolvedPart.role,
       partName: resolvedPart.part.name,
       kind,
-      sourcePath: relative(projectRoot, absoluteSourcePath),
-      outputPath: relative(projectRoot, absoluteOutputPath),
+      // manifest.json は正本(durable)。保存・診断表示する相対パスは OS 非依存の POSIX 区切りにし、
+      // Windows で書いた manifest を macOS / Linux でもそのまま解釈できるようにする。
+      sourcePath: toPosixPath(relative(projectRoot, absoluteSourcePath)),
+      outputPath: toPosixPath(relative(projectRoot, absoluteOutputPath)),
       partDirectory,
       absoluteSourcePath,
       absoluteOutputPath

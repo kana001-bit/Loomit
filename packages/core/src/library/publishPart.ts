@@ -5,6 +5,7 @@ import { stringify } from "yaml";
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import { describeFsError } from "../filesystem/fsError.js";
 import { isPathWithin, isSafePathSegment } from "../filesystem/pathWithin.js";
+import { toPosixPath } from "../filesystem/toPosixPath.js";
 import { writeFileAtomic } from "../filesystem/writeFileAtomic.js";
 import type { LoadFileResult } from "../filesystem/loadFileResult.js";
 import { loadPartFile } from "../parts/loadPartFile.js";
@@ -203,8 +204,11 @@ async function createLibraryMeta(input: {
   const projectRootResult = await findProjectRoot(input.partDirectory);
   const sourceProject =
     projectRootResult.ok ? projectRootResult.value : undefined;
+  // source_part は meta.yml に保存する provenance。OS 非依存の POSIX 区切りに正規化する。
   const sourcePart =
-    projectRootResult.ok ? relative(projectRootResult.value, input.partDirectory) : undefined;
+    projectRootResult.ok
+      ? toPosixPath(relative(projectRootResult.value, input.partDirectory))
+      : undefined;
 
   return {
     schema: "loomit.library_meta.v0",
