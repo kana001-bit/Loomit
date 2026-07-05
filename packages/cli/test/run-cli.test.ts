@@ -230,6 +230,15 @@ describe("runCli", () => {
       const report = JSON.parse(output.stdout.join("")) as {
         readonly status: string;
         readonly changes: readonly { readonly kind: string; readonly id: string }[];
+        readonly recheckHints: {
+          readonly partRole: {
+            readonly from: string;
+            readonly to: string;
+            readonly changed: boolean;
+          };
+          readonly connectors: readonly unknown[];
+          readonly requirements: readonly string[];
+        };
       };
 
       expect(exitCode).toBe(0);
@@ -244,6 +253,15 @@ describe("runCli", () => {
           id: "waist_front"
         })
       ]);
+      expect(report.recheckHints).toEqual({
+        partRole: {
+          from: "body",
+          to: "body",
+          changed: false
+        },
+        connectors: [],
+        requirements: []
+      });
       expect(output.stderr).toEqual([]);
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
@@ -578,12 +596,112 @@ describe("runCli", () => {
       const stdout = output.stdout.join("");
 
       expect(exitCode).toBe(0);
+      expect(stdout).toContain("Recheck Hints:");
+      expect(stdout).toContain("part role: body");
+      expect(stdout).toContain("connectors:");
+      expect(stdout).toContain("- armhole (length, tolerance)");
+      expect(stdout).toContain("requirements:");
+      expect(stdout).toContain("- sleeve.armhole.length_mm");
       expect(stdout).toContain("[modified] connector armhole");
       expect(stdout).toContain("- length_mm: 469 -> 472");
       expect(stdout).toContain("- tolerance_mm: 3 -> 5");
       expect(stdout).toContain("[modified] requirement sleeve.armhole.length_mm");
       expect(stdout).toContain("- min: 466 -> 468");
       expect(stdout).toContain("- max: 472 -> 474");
+      expect(output.stderr).toEqual([]);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("includes recheck hints in diff JSON for connector and requirement changes", async () => {
+    // 守る仕様: diff JSON は Seamlint handoff 用に、connector の再確認種別と requirement id を recheckHints として返す。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-diff-connectors-json-"));
+    const beforePath = join(tempRoot, "before.part.loom");
+    const afterPath = join(tempRoot, "after.part.loom");
+
+    try {
+      await writeFile(
+        beforePath,
+        [
+          "schema: loomit.part.v0",
+          "name: darted-body",
+          "variant: front-v1",
+          "type: body",
+          "connectors:",
+          "  armhole:",
+          "    type: armhole",
+          "    length_mm: 469",
+          "    tolerance_mm: 3",
+          "    path_ref: svg:path#body-armhole",
+          "requires:",
+          "  sleeve.armhole.length_mm:",
+          "    min: 466",
+          "    max: 472"
+        ].join("\n"),
+        "utf8"
+      );
+
+      await writeFile(
+        afterPath,
+        [
+          "schema: loomit.part.v0",
+          "name: darted-body",
+          "variant: front-v2",
+          "type: body",
+          "connectors:",
+          "  armhole:",
+          "    type: armhole",
+          "    length_mm: 472",
+          "    tolerance_mm: 5",
+          "    path_ref: svg:path#body-armhole-updated",
+          "requires:",
+          "  sleeve.armhole.length_mm:",
+          "    min: 468",
+          "    max: 474"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const output = createOutputCollector();
+      const exitCode = await runCli(
+        ["node", "loom", "diff", beforePath, afterPath, "--format", "json"],
+        {
+          cwd: workspaceRoot,
+          io: output.io
+        }
+      );
+
+      const report = JSON.parse(output.stdout.join("")) as {
+        readonly recheckHints: {
+          readonly partRole: {
+            readonly from: string;
+            readonly to: string;
+            readonly changed: boolean;
+          };
+          readonly connectors: readonly {
+            readonly id: string;
+            readonly changeKinds: readonly string[];
+          }[];
+          readonly requirements: readonly string[];
+        };
+      };
+
+      expect(exitCode).toBe(0);
+      expect(report.recheckHints).toEqual({
+        partRole: {
+          from: "body",
+          to: "body",
+          changed: false
+        },
+        connectors: [
+          {
+            id: "armhole",
+            changeKinds: ["length", "tolerance", "path"]
+          }
+        ],
+        requirements: ["sleeve.armhole.length_mm"]
+      });
       expect(output.stderr).toEqual([]);
     } finally {
       await rm(tempRoot, { recursive: true, force: true });

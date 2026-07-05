@@ -399,6 +399,15 @@ function createPartLoadFailureReport(
       connectionRisk: "none",
       prototypeNoteSignal: "none"
     },
+    recheckHints: {
+      partRole: {
+        from: "unknown",
+        to: "unknown",
+        changed: false
+      },
+      connectors: [],
+      requirements: []
+    },
     diagnostics,
     from: {
       name: fromPath,

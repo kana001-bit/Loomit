@@ -26,6 +26,15 @@ describe("diffParts", () => {
     expect(report.changes).toEqual([]);
     expect(report.diagnostics).toEqual([]);
     expect(report.relatedNotes).toEqual([]);
+    expect(report.recheckHints).toEqual({
+      partRole: {
+        from: "body",
+        to: "body",
+        changed: false
+      },
+      connectors: [],
+      requirements: []
+    });
   });
 
   it("reports added, removed, and modified darts by stable id", () => {
@@ -329,6 +338,89 @@ describe("diffParts", () => {
     expect(report.relatedNotes).toEqual([]);
   });
 
+  it("extracts seamlint recheck hints from connector, requirement, and part-role changes", () => {
+    // 守る仕様: diff report は Seamlint handoff 用に、再確認すべき part role・connector の変更種別・requirement id を機械可読で返す。
+    const before = createBodyPart({
+      connectors: {
+        armhole: {
+          type: "armhole",
+          length_mm: 469,
+          tolerance_mm: 3,
+          path_ref: "svg:path#body-armhole",
+          ranges: [
+            {
+              id: "sleeve-cap-gather",
+              from: 0.18,
+              to: 0.72,
+              behavior: "gathered",
+              allowance_mm: 18
+            }
+          ]
+        }
+      },
+      requires: {
+        "sleeve.armhole.length_mm": {
+          min: 466,
+          max: 472
+        }
+      }
+    });
+    const after: Part = {
+      ...createBodyPart({
+        connectors: {
+          armhole: {
+            type: "armhole",
+            length_mm: 472,
+            tolerance_mm: 5,
+            path_ref: "svg:path#body-armhole-updated",
+            ranges: [
+              {
+                id: "sleeve-cap-gather",
+                from: 0.2,
+                to: 0.75,
+                behavior: "gathered",
+                allowance_mm: 20
+              },
+              {
+                id: "ease-window",
+                from: 0.76,
+                to: 0.84,
+                behavior: "ease"
+              }
+            ]
+          }
+        },
+        requires: {
+          "sleeve.armhole.length_mm": {
+            min: 468,
+            max: 474
+          },
+          "fabric.stretch": {
+            equals: false
+          }
+        }
+      }),
+      type: "sleeve"
+    };
+
+    const report = diffParts(before, after);
+
+    expect(report.recheckHints).toEqual({
+      partRole: {
+        from: "body",
+        to: "sleeve",
+        changed: true
+      },
+      connectors: [
+        {
+          id: "armhole",
+          changeKinds: ["length", "tolerance", "path", "gathered-range", "range"]
+        }
+      ],
+      requirements: ["fabric.stretch", "sleeve.armhole.length_mm"]
+    });
+  });
+
   it("surfaces input diagnostics and reflects them in status", () => {
     // 守る仕様: 前段(part load / darts 射影)で出た診断を diff レポートに載せ、status にも反映する。
     const part = createBodyPart({});
@@ -377,6 +469,11 @@ describe("diffParts", () => {
       }
     ]);
     expect(report.relatedNotes).toEqual([]);
+    expect(report.recheckHints.partRole).toEqual({
+      from: "body",
+      to: "sleeve",
+      changed: true
+    });
   });
 
   it("links matching prototype notes with tag and changed-feature reasons", () => {
