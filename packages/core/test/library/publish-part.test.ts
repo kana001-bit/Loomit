@@ -15,6 +15,8 @@ const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../fixtures"
 
 describe("publishPart", () => {
   it("copies a part directory into the library with metadata", async () => {
+    // 守る仕様: publish は part ディレクトリを library へコピーし meta.yml を書く。
+    // provenance の source_part は OS 非依存の POSIX 区切り("/")で保存する。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-library-"));
     const libraryRoot = join(tempRoot, "library");
 
@@ -31,7 +33,7 @@ describe("publishPart", () => {
         name: "basic-sleeve",
         type: "sleeve",
         source_project: join(fixturesRoot, "valid-blouse"),
-        source_part: "parts\\sleeve",
+        source_part: "parts/sleeve",
         published_at: "2026-07-02T00:00:00.000Z",
         status: "published"
       });

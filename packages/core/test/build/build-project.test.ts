@@ -11,6 +11,8 @@ import type { ResolvedProject } from "../../src/index.js";
 
 describe("buildProject", () => {
   it("copies referenced part files and writes a build manifest", async () => {
+    // 守る仕様: build は参照 part ファイルを output/ にコピーし、manifest.json を書き出す。
+    // manifest に載る相対パスは OS 非依存の POSIX 区切り("/")にする(Windows でも "/" になる)。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-build-"));
 
     try {
@@ -41,15 +43,15 @@ describe("buildProject", () => {
           role: "body",
           partName: "build-body",
           kind: "source",
-          sourcePath: "parts\\body\\body.val",
-          outputPath: "output\\parts\\body\\source\\body.val"
+          sourcePath: "parts/body/body.val",
+          outputPath: "output/parts/body/source/body.val"
         },
         {
           role: "body",
           partName: "build-body",
           kind: "preview",
-          sourcePath: "parts\\body\\body.svg",
-          outputPath: "output\\parts\\body\\preview\\body.svg"
+          sourcePath: "parts/body/body.svg",
+          outputPath: "output/parts/body/preview/body.svg"
         }
       ]);
     } finally {
@@ -138,6 +140,8 @@ describe("buildProject", () => {
   });
 
   it("returns diagnostics when a referenced build input is missing", async () => {
+    // 守る仕様: files.* が指すファイルが存在しない場合、build は書き込まず diagnostic を返す。
+    // diagnostic の target も OS 非依存の POSIX 区切りにする。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-build-"));
 
     try {
@@ -152,7 +156,7 @@ describe("buildProject", () => {
           severity: "error",
           code: "BUILD_INPUT_FILE_MISSING",
           message: "A part file referenced for build output does not exist.",
-          target: "parts\\body\\body.svg",
+          target: "parts/body/body.svg",
           suggestion: ["Add the preview file, or update part files.preview."]
         }
       ]);
