@@ -56,4 +56,4 @@ Command usage and worked examples are in the [Tutorials](docs/tutorials.md).
 
 ## License
 
-To be finalized before publication (MIT intended). A `LICENSE` file will be added at the repository root.
+[MIT](LICENSE) © 2026 kana001-bit

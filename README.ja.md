@@ -56,4 +56,4 @@ pnpm test
 
 ## License
 
-公開前に確定します（MIT を想定）。リポジトリ直下に `LICENSE` ファイルを追加します。
+[MIT](LICENSE) © 2026 kana001-bit
