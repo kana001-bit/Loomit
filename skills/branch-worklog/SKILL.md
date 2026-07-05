@@ -1,6 +1,6 @@
 ---
 name: branch-worklog
-description: Maintain branch-scoped worklog markdown files under docs/branch for cross-session planning and progress tracking. Use when Codex needs to create, bootstrap, or update the plan/status log for the current git branch; when work needs to survive handoff across sessions or agents; or when a branch needs a compact summary of goals, next steps, blockers, and validation history.
+description: Maintain branch-scoped worklog markdown files under docs/work/branch for cross-session planning and progress tracking. Use when Codex needs to create, bootstrap, or update the plan/status log for the current git branch; when work needs to survive handoff across sessions or agents; or when a branch needs a compact summary of goals, next steps, blockers, and validation history.
 ---
 
 # Branch Worklog
@@ -10,11 +10,11 @@ Use this skill to keep a durable, branch-local record that another session can r
 ## Workflow
 
 1. Read the current branch with `git branch --show-current`.
-2. Map that branch to `docs/branch/<branch>.md`.
-3. Keep `/` from the branch name as directories, so `feature/diff-decision-summary` becomes `docs/branch/feature/diff-decision-summary.md`.
+2. Map that branch to `docs/work/branch/<branch>.md`.
+3. Keep `/` from the branch name as directories, so `feature/diff-decision-summary` becomes `docs/work/branch/feature/diff-decision-summary.md`.
 4. Create any missing parent directories before writing the file.
 5. If the worklog does not exist yet, seed it from the most relevant existing docs:
-   - Prefer `docs/tasks/<branch-with-slashes-replaced-by-hyphens>.md` when it exists.
+   - Prefer `docs/work/tasks/<branch-with-slashes-replaced-by-hyphens>.md` when it exists.
    - Otherwise use the active user request and the directly related project docs.
 6. Update the worklog at the start of substantial work and again when the plan or status changes.
 7. Preserve history. Edit summary sections in place, but append dated entries in `## Progress Log` instead of rewriting old notes.
