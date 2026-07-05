@@ -31,10 +31,13 @@ export { diffParts } from "./diff/partDiff.js";
 export type {
   ConnectionRisk,
   PartDiffChange,
+  PartDiffConnectorRecheckHint,
+  PartDiffConnectorRecheckKind,
   PartDiffDecisionSummary,
   PartDiffFieldChange,
   PartDiffPrototypeNoteMatch,
   PartDiffPrototypeNoteReason,
+  PartDiffRecheckHints,
   PartDiffReport,
   PartDiffStatus,
   PrototypeNoteSignal,

@@ -20,6 +20,14 @@ export function formatDiffText(report: PartDiffReport): string {
     `  prototype notes:   ${report.decisionSummary.prototypeNoteSignal}`
   );
 
+  lines.push(
+    "",
+    "Recheck Hints:",
+    `  part role: ${formatPartRoleHint(report.recheckHints.partRole)}`,
+    ...formatConnectorHints(report.recheckHints.connectors),
+    ...formatRequirementHints(report.recheckHints.requirements)
+  );
+
   if (report.diagnostics.length > 0) {
     lines.push("", "Diagnostics:", ...formatDiagnosticsText(report.diagnostics));
   }
@@ -80,6 +88,35 @@ function formatNoteReasons(reasons: PartDiffReport["relatedNotes"][number]["reas
 
   // 理由が空になることは無い想定(最低でも applies-to-tags が入る)だが、念のため中立表現を置く。
   return parts.length > 0 ? parts.join("; ") : "related";
+}
+
+function formatPartRoleHint(partRole: PartDiffReport["recheckHints"]["partRole"]): string {
+  return partRole.changed ? `${partRole.from} -> ${partRole.to}` : partRole.from;
+}
+
+function formatConnectorHints(
+  connectors: PartDiffReport["recheckHints"]["connectors"]
+): readonly string[] {
+  if (connectors.length === 0) {
+    return ["  connectors: none"];
+  }
+
+  return [
+    "  connectors:",
+    ...connectors.map(
+      (connector) => `    - ${connector.id} (${connector.changeKinds.join(", ")})`
+    )
+  ];
+}
+
+function formatRequirementHints(
+  requirements: PartDiffReport["recheckHints"]["requirements"]
+): readonly string[] {
+  if (requirements.length === 0) {
+    return ["  requirements: none"];
+  }
+
+  return ["  requirements:", ...requirements.map((requirement) => `    - ${requirement}`)];
 }
 
 function formatValue(value: boolean | number | string | readonly string[] | undefined): string {
