@@ -24,6 +24,18 @@ export const dartSchema = z
   })
   .strict();
 
+export const notchSchema = z
+  .object({
+    // 設計判断: seam_ref は合印が載る縫い線への参照。notch は「この縫い線のここ」という合わせ目印であって、
+    // 幾何の座標そのものではない。
+    seam_ref: z.string().min(1),
+    // position は縫い線上の正規化位置(0=始点, 1=終点)。connector range の from/to と同じ約束にそろえる。
+    position: z.number().finite().min(0).max(1),
+    // type は合印の種類(single/double/slit 等)。任意。
+    type: z.string().min(1).optional()
+  })
+  .strict();
+
 const connectorRangeSchema = z
   .object({
     id: z.string().min(1),
@@ -105,6 +117,9 @@ export const partSchema = z
     // 設計判断: darts は raw geometry ではなく、diff/branch で意味を持つ編集フィーチャの record。
     // record key が stable identity で、各値は apex/legs 参照と主要パラメータだけを持つ。
     darts: z.record(z.string().min(1), dartSchema).optional(),
+    // 設計判断: notches は「縫い合わせの合印」= 接続整合の編集フィーチャ。darts(体積・シルエット)とは別軸で、
+    // record key が stable identity、各値は縫い線参照＋位置＋種別だけを持つ(幾何の点ではない)。
+    notches: z.record(z.string().min(1), notchSchema).optional(),
     connectors: z.record(z.string().min(1), connectorSchema).optional(),
     // 設計判断: requires は寸法・タグ・素材などの直接条件を表し、version range ではない。
     requires: z.record(z.string().min(1), requirementSchema).optional(),
@@ -114,6 +129,7 @@ export const partSchema = z
 
 export type Connector = z.infer<typeof connectorSchema>;
 export type Dart = z.infer<typeof dartSchema>;
+export type Notch = z.infer<typeof notchSchema>;
 export type Part = z.infer<typeof partSchema>;
 export type PartStatus = z.infer<typeof partStatusSchema>;
 export type Requirement = z.infer<typeof requirementSchema>;
