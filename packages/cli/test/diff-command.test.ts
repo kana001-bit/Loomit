@@ -1,3 +1,4 @@
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
@@ -43,7 +44,9 @@ describe("runDiffCommand", () => {
 
   it("surfaces notes read diagnostics when access fails for reasons other than missing files", async () => {
     // 守る仕様: diff --part は notes/prototype-notes.yml が存在するのに読めない場合、missing 扱いで黙殺せず read 診断を report に載せる。
-    const cwd = "C:\\workspace";
+    // cwd は OS 依存の絶対パス("C:\\...")にせず、実行 OS の絶対パスを使う。
+    // diff.ts は resolve(cwd, arg) でパスを組むため、POSIX でも絶対パスとして解決できる必要がある。
+    const cwd = join(tmpdir(), "loomit-diff-cwd");
     const fromProjectPath = join(cwd, "from-project");
     const toProjectPath = join(cwd, "to-project");
     const fromNotesPath = join(fromProjectPath, "notes", "prototype-notes.yml");
@@ -137,15 +140,6 @@ describe("runDiffCommand", () => {
           connectionRisk: "none",
           prototypeNoteSignal: "none"
         },
-        recheckHints: {
-          partRole: {
-            from: from.type,
-            to: to.type,
-            changed: from.type !== to.type
-          },
-          connectors: [],
-          requirements: []
-        },
         diagnostics: options?.inputDiagnostics ?? [],
         from: {
           name: from.name,
@@ -197,7 +191,9 @@ describe("runDiffCommand", () => {
   it("reports an access failure (not a missing-path typo) when a --part project path is unreadable", async () => {
     // 守る仕様: 存在チェックは ENOENT のみ「存在しない(タイポ)」扱いにし、権限拒否等は
     // PROJECT_PATH_NOT_FOUND ではなくアクセス失敗として案内する。loadOptionalPrototypeNotes と揃える。
-    const cwd = "C:\\workspace";
+    // cwd は OS 依存の絶対パス("C:\\...")にせず、実行 OS の絶対パスを使う。
+    // diff.ts は resolve(cwd, arg) でパスを組むため、POSIX でも絶対パスとして解決できる必要がある。
+    const cwd = join(tmpdir(), "loomit-diff-cwd");
     const toProjectPath = join(cwd, "to-project");
 
     mocks.access.mockImplementation(async (candidate: string) => {
@@ -248,7 +244,9 @@ describe("runDiffCommand", () => {
   it("renders related prototype note reasons and test case in text output for --part diffs", async () => {
     // 守る仕様: --part diff で prototype notes が読めたら、command の text 出力でも related note の
     // why/test case まで見えるようにする。
-    const cwd = "C:\\workspace";
+    // cwd は OS 依存の絶対パス("C:\\...")にせず、実行 OS の絶対パスを使う。
+    // diff.ts は resolve(cwd, arg) でパスを組むため、POSIX でも絶対パスとして解決できる必要がある。
+    const cwd = join(tmpdir(), "loomit-diff-cwd");
     const fromProjectPath = join(cwd, "from-project");
     const toProjectPath = join(cwd, "to-project");
     const fromPartPath = join(fromProjectPath, "parts", "body", "part.loom");
@@ -370,15 +368,6 @@ describe("runDiffCommand", () => {
             volumeChange: "reduced",
             connectionRisk: "none",
             prototypeNoteSignal: "related-notes-found"
-          },
-          recheckHints: {
-            partRole: {
-              from: from.type,
-              to: to.type,
-              changed: from.type !== to.type
-            },
-            connectors: [],
-            requirements: []
           },
           diagnostics: [],
           from: {
