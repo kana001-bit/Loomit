@@ -120,6 +120,11 @@ export type {
 export { loadPartFile } from "./parts/loadPartFile.js";
 export { loadProjectedPart } from "./parts/loadProjectedPart.js";
 export { projectDartsFromValFile, projectDartsFromValText, projectPartDartsFromSource } from "./parts/projectDartsFromVal.js";
+export {
+  projectNotchesFromValFile,
+  projectNotchesFromValText,
+  projectPartNotchesFromSource
+} from "./parts/projectNotchesFromVal.js";
 export { loadProfileFile } from "./profile/loadProfile.js";
 export { loadPrototypeNotesFile } from "./prototype-notes/loadPrototypeNotes.js";
 export { createProject } from "./project/createProject.js";
@@ -137,11 +142,12 @@ export type { ResolvedProjectPaths } from "./project/resolveProjectPaths.js";
 export {
   connectorSchema,
   dartSchema,
+  notchSchema,
   partSchema,
   partStatusSchema,
   requirementSchema
 } from "./schema/part.schema.js";
-export type { Connector, Dart, Part, PartStatus, Requirement } from "./schema/part.schema.js";
+export type { Connector, Dart, Notch, Part, PartStatus, Requirement } from "./schema/part.schema.js";
 export { projectSchema } from "./schema/project.schema.js";
 export type { Project } from "./schema/project.schema.js";
 export { libraryMetaSchema, libraryPartStatusSchema } from "./schema/library-meta.schema.js";

@@ -27,8 +27,26 @@ describe("loadProjectedPart", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("keeps inline darts and does not read source.val", async () => {
-    // 守る仕様: part.loom が darts を明示していれば射影せずそのまま使う。
+  it("projects notches from source.val when part.loom omits them", async () => {
+    // 守る仕様: notches を持たず files.source がある part は、source.val の seam passmark から read-only に射影する。
+    const result = await loadProjectedPart(
+      join(fixturesRoot, "valid-part-projected-notches/part.loom")
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.ok ? result.value.notches : {}).toEqual({
+      "val:block:notch:armhole:21": {
+        seam_ref: "val:seam#block/armhole",
+        position: 0.5,
+        type: "single"
+      }
+    });
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it("keeps inline darts without projecting darts from source.val", async () => {
+    // 守る仕様: part.loom が darts を明示していれば dart 射影はせずそのまま使う。
+    // (source.val=front.val は存在しないため notch 射影も silent に空で、diagnostics は出ない。)
     const result = await loadProjectedPart(join(fixturesRoot, "valid-part-with-darts/part.loom"));
 
     expect(result.ok).toBe(true);
