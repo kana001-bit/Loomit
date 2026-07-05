@@ -5,6 +5,24 @@ import type { Connector, Dart, Part, Requirement } from "../schema/part.schema.j
 
 export type PartDiffStatus = "same" | "changed" | "warning" | "error";
 
+// 設計判断: decision summary は「この試作ブランチを残すか捨てるか」を素早く判断するための要約シグナルであり、
+// 幾何レベルの厳密な変化量ではない。値は raw diff から導ける近似的な「気配」であって、正確な計測ではない。
+export type SilhouetteImpact = "none" | "low" | "medium" | "high";
+export type VolumeChange = "none" | "reduced" | "increased" | "mixed";
+export type ConnectionRisk = "none" | "review-needed";
+export type PrototypeNoteSignal = "none" | "related-notes-found";
+
+export interface PartDiffDecisionSummary {
+  // darts / gather の追加・寸法変更が、体に見える形をどれだけ動かしそうかの気配。
+  readonly silhouetteImpact: SilhouetteImpact;
+  // dart の width / intake が増えるとゆとりが減る(reduced)、減ると増える(increased)方向の気配。
+  readonly volumeChange: VolumeChange;
+  // connectors / requires が変わったら、縫い合わせ・適合の確認が要るという気配。
+  readonly connectionRisk: ConnectionRisk;
+  // この差分に関連する prototype note が見つかったかどうか。
+  readonly prototypeNoteSignal: PrototypeNoteSignal;
+}
+
 export interface PartDiffFieldChange {
   readonly field: string;
   readonly before?: boolean | number | string | readonly string[];
@@ -75,6 +93,7 @@ export type PartDiffChange =
 
 export interface PartDiffReport {
   readonly status: PartDiffStatus;
+  readonly decisionSummary: PartDiffDecisionSummary;
   readonly diagnostics: readonly Diagnostic[];
   readonly from: Pick<Part, "name" | "variant" | "type">;
   readonly to: Pick<Part, "name" | "variant" | "type">;
@@ -110,9 +129,12 @@ export function diffParts(
     ...diffRequirements(from.requires ?? {}, to.requires ?? {})
   ];
   const relatedNotes = findRelatedPrototypeNotes(from, to, options.prototypeNotes);
+  const decisionSummary = buildDecisionSummary(changes, relatedNotes);
 
   return {
     status: getPartDiffStatus(diagnostics, changes),
+    // 判断に効く要約を status の直後・詳細より前に置く。JSON でも後続ツールが最初に読める順にする。
+    decisionSummary,
     diagnostics,
     from: {
       name: from.name,
@@ -543,4 +565,177 @@ function findRelatedPrototypeNotes(
       }
     ];
   });
+}
+
+const silhouetteImpactRank: Readonly<Record<SilhouetteImpact, number>> = {
+  none: 0,
+  low: 1,
+  medium: 2,
+  high: 3
+};
+
+const silhouetteImpactByRank: readonly SilhouetteImpact[] = ["none", "low", "medium", "high"];
+
+// dart の成形量(布をつまむ量)を左右するフィールド。ここが動くと volume/silhouette の気配が上がる。
+const dartShapingAmountFields: ReadonlySet<string> = new Set([
+  "width_mm",
+  "width_formula",
+  "intake_length_mm",
+  "intake_length_formula"
+]);
+
+function buildDecisionSummary(
+  changes: readonly PartDiffChange[],
+  relatedNotes: readonly PartDiffPrototypeNoteMatch[]
+): PartDiffDecisionSummary {
+  return {
+    silhouetteImpact: getSilhouetteImpact(changes),
+    volumeChange: getVolumeChange(changes),
+    connectionRisk: getConnectionRisk(changes),
+    prototypeNoteSignal: relatedNotes.length > 0 ? "related-notes-found" : "none"
+  };
+}
+
+// darts と gather range の変化を、体に見える形の変化として集約する。add/remove を最も強い気配とみなす。
+function getSilhouetteImpact(changes: readonly PartDiffChange[]): SilhouetteImpact {
+  let rank = 0;
+
+  for (const change of changes) {
+    rank = Math.max(rank, silhouetteImpactRank[silhouetteImpactOf(change)]);
+  }
+
+  // rank は 0..3 のいずれかなので必ず引ける。noUncheckedIndexedAccess のため fallback を置く。
+  return silhouetteImpactByRank[rank] ?? "none";
+}
+
+function silhouetteImpactOf(change: PartDiffChange): SilhouetteImpact {
+  if (change.feature === "dart") {
+    if (change.kind === "added" || change.kind === "removed") {
+      return "high";
+    }
+
+    return change.changes.some((fieldChange) => dartShapingAmountFields.has(fieldChange.field))
+      ? "medium"
+      : "low";
+  }
+
+  if (change.feature === "connector" && connectorChangeTouchesGather(change)) {
+    return "medium";
+  }
+
+  return "none";
+}
+
+// gather = ranges.behavior === "gathered"。gather の増減や寸法変更だけを silhouette の気配に数える。
+// ease など他 behavior の range は形ではなく接続の話なので、connectionRisk 側で拾う。
+function connectorChangeTouchesGather(
+  change: Extract<PartDiffChange, { readonly feature: "connector" }>
+): boolean {
+  if (change.kind === "added") {
+    return hasGatheredRange(change.after);
+  }
+
+  if (change.kind === "removed") {
+    return hasGatheredRange(change.before);
+  }
+
+  const gatheredIds = new Set([
+    ...gatheredRangeIds(change.before),
+    ...gatheredRangeIds(change.after)
+  ]);
+
+  if (gatheredIds.size === 0) {
+    return false;
+  }
+
+  return change.changes.some((fieldChange) => {
+    if (!fieldChange.field.startsWith("ranges.")) {
+      return false;
+    }
+
+    // field は "ranges.<id>" か "ranges.<id>.<sub>"。<id> を取り出して gather かどうか照合する。
+    const rangeId = fieldChange.field.split(".")[1];
+
+    return rangeId !== undefined && gatheredIds.has(rangeId);
+  });
+}
+
+function hasGatheredRange(connector: Connector): boolean {
+  return (connector.ranges ?? []).some((range) => range.behavior === "gathered");
+}
+
+function gatheredRangeIds(connector: Connector): ReadonlySet<string> {
+  return new Set(
+    (connector.ranges ?? [])
+      .filter((range) => range.behavior === "gathered")
+      .map((range) => range.id)
+  );
+}
+
+// 設計判断: dart は布をつまんで除く成形なので、width/intake が増える = 除く布が増える = ゆとりが減る(reduced)。
+// 減る = ゆとりが増える(increased)。dart 追加は reduced、削除は increased。
+// 方向が読めない formula 変更は volume に数えない(幾何評価は別スコープ)。gather も今回は silhouette のみに数える。
+function getVolumeChange(changes: readonly PartDiffChange[]): VolumeChange {
+  let hasReduced = false;
+  let hasIncreased = false;
+
+  for (const change of changes) {
+    if (change.feature !== "dart") {
+      continue;
+    }
+
+    if (change.kind === "added") {
+      hasReduced = true;
+      continue;
+    }
+
+    if (change.kind === "removed") {
+      hasIncreased = true;
+      continue;
+    }
+
+    for (const fieldChange of change.changes) {
+      if (fieldChange.field !== "width_mm" && fieldChange.field !== "intake_length_mm") {
+        continue;
+      }
+
+      const before = numericValue(fieldChange.before);
+      const after = numericValue(fieldChange.after);
+
+      if (before === undefined || after === undefined || before === after) {
+        continue;
+      }
+
+      if (after > before) {
+        hasReduced = true;
+      } else {
+        hasIncreased = true;
+      }
+    }
+  }
+
+  if (hasReduced && hasIncreased) {
+    return "mixed";
+  }
+
+  if (hasReduced) {
+    return "reduced";
+  }
+
+  return hasIncreased ? "increased" : "none";
+}
+
+function numericValue(
+  value: boolean | number | string | readonly string[] | undefined
+): number | undefined {
+  return typeof value === "number" ? value : undefined;
+}
+
+// connectors / requires の変更は縫い合わせ・適合条件に効きうるため、後続の厳密チェック要という気配を立てる。
+function getConnectionRisk(changes: readonly PartDiffChange[]): ConnectionRisk {
+  return changes.some(
+    (change) => change.feature === "connector" || change.feature === "requirement"
+  )
+    ? "review-needed"
+    : "none";
 }

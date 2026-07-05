@@ -29,11 +29,16 @@ export { createDiagnostic, diagnosticSeverities } from "./diagnostics/diagnostic
 export type { Diagnostic, DiagnosticSeverity } from "./diagnostics/diagnostic.js";
 export { diffParts } from "./diff/partDiff.js";
 export type {
+  ConnectionRisk,
   PartDiffChange,
+  PartDiffDecisionSummary,
   PartDiffFieldChange,
   PartDiffPrototypeNoteMatch,
   PartDiffReport,
-  PartDiffStatus
+  PartDiffStatus,
+  PrototypeNoteSignal,
+  SilhouetteImpact,
+  VolumeChange
 } from "./diff/partDiff.js";
 export { createDoctorReport } from "./diagnostics/doctorReport.js";
 export type { DoctorFinding, DoctorReport } from "./diagnostics/doctorReport.js";

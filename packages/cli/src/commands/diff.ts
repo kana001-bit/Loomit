@@ -392,6 +392,13 @@ function createPartLoadFailureReport(
 ): Parameters<typeof formatDiffText>[0] {
   return {
     status: "error",
+    // 読み込み失敗時は判断シグナルを立てられないので、すべて中立(none)にする。
+    decisionSummary: {
+      silhouetteImpact: "none",
+      volumeChange: "none",
+      connectionRisk: "none",
+      prototypeNoteSignal: "none"
+    },
     diagnostics,
     from: {
       name: fromPath,

@@ -450,6 +450,218 @@ describe("diffParts", () => {
 
     expect(report.relatedNotes).toEqual([]);
   });
+
+  it("summarizes an added dart as high silhouette impact and reduced volume", () => {
+    // 守る仕様: dart の追加は形を大きく動かす気配(high)で、布をつまむ量が増える=ゆとりが減る(reduced)。
+    const before = createBodyPart({});
+    const after = createBodyPart({
+      darts: {
+        waist_front: {
+          apex_ref: "val:point#bodice/Apex",
+          width_mm: 30,
+          intake_length_mm: 110,
+          legs: {
+            left_ref: "val:point#bodice/Left",
+            right_ref: "val:point#bodice/Right"
+          }
+        }
+      }
+    });
+
+    const report = diffParts(before, after);
+
+    expect(report.decisionSummary).toEqual({
+      silhouetteImpact: "high",
+      volumeChange: "reduced",
+      connectionRisk: "none",
+      prototypeNoteSignal: "none"
+    });
+  });
+
+  it("raises silhouette to medium and volume to reduced when a dart is widened", () => {
+    // 守る仕様: dart の width_mm を増やすのは寸法変更(medium)で、つまむ量が増える=ゆとりが減る(reduced)。
+    const before = createBodyPart({
+      darts: {
+        waist_front: {
+          apex_ref: "val:point#bodice/Apex",
+          width_mm: 30,
+          legs: {
+            left_ref: "val:point#bodice/Left",
+            right_ref: "val:point#bodice/Right"
+          }
+        }
+      }
+    });
+    const after = createBodyPart({
+      darts: {
+        waist_front: {
+          apex_ref: "val:point#bodice/Apex",
+          width_mm: 35,
+          legs: {
+            left_ref: "val:point#bodice/Left",
+            right_ref: "val:point#bodice/Right"
+          }
+        }
+      }
+    });
+
+    const report = diffParts(before, after);
+
+    expect(report.decisionSummary).toEqual({
+      silhouetteImpact: "medium",
+      volumeChange: "reduced",
+      connectionRisk: "none",
+      prototypeNoteSignal: "none"
+    });
+  });
+
+  it("marks volume as mixed when one dart widens and another narrows", () => {
+    // 守る仕様: 一方の dart で width が増え、他方で減るときは方向が混在するので volume は mixed になる。
+    const before = createBodyPart({
+      darts: {
+        waist_front: {
+          apex_ref: "val:point#bodice/Apex",
+          width_mm: 30,
+          legs: { left_ref: "val:point#bodice/L1", right_ref: "val:point#bodice/R1" }
+        },
+        side_front: {
+          apex_ref: "val:point#bodice/SideApex",
+          width_mm: 40,
+          legs: { left_ref: "val:point#bodice/L2", right_ref: "val:point#bodice/R2" }
+        }
+      }
+    });
+    const after = createBodyPart({
+      darts: {
+        waist_front: {
+          apex_ref: "val:point#bodice/Apex",
+          width_mm: 35,
+          legs: { left_ref: "val:point#bodice/L1", right_ref: "val:point#bodice/R1" }
+        },
+        side_front: {
+          apex_ref: "val:point#bodice/SideApex",
+          width_mm: 30,
+          legs: { left_ref: "val:point#bodice/L2", right_ref: "val:point#bodice/R2" }
+        }
+      }
+    });
+
+    const report = diffParts(before, after);
+
+    expect(report.decisionSummary.volumeChange).toBe("mixed");
+    expect(report.decisionSummary.silhouetteImpact).toBe("medium");
+  });
+
+  it("flags connection risk when only requires change, without silhouette or volume signals", () => {
+    // 守る仕様: connectors / requires の変更は接続確認要(review-needed)を立てるが、形やゆとりの気配は上げない。
+    const before = createBodyPart({
+      requires: { "sleeve.armhole.length_mm": { min: 466, max: 472 } }
+    });
+    const after = createBodyPart({
+      requires: { "sleeve.armhole.length_mm": { min: 468, max: 474 } }
+    });
+
+    const report = diffParts(before, after);
+
+    expect(report.decisionSummary).toEqual({
+      silhouetteImpact: "none",
+      volumeChange: "none",
+      connectionRisk: "review-needed",
+      prototypeNoteSignal: "none"
+    });
+  });
+
+  it("raises silhouette for gather range changes and flags connection risk", () => {
+    // 守る仕様: gather(behavior: gathered)の range が動くと形の気配(medium)を上げ、connector 変更として接続確認要も立てる。
+    const before = createBodyPart({
+      connectors: {
+        armhole: {
+          type: "armhole",
+          length_mm: 469,
+          ranges: [{ id: "cap-gather", from: 0.18, to: 0.72, behavior: "gathered" }]
+        }
+      }
+    });
+    const after = createBodyPart({
+      connectors: {
+        armhole: {
+          type: "armhole",
+          length_mm: 469,
+          ranges: [{ id: "cap-gather", from: 0.2, to: 0.72, behavior: "gathered" }]
+        }
+      }
+    });
+
+    const report = diffParts(before, after);
+
+    expect(report.decisionSummary.silhouetteImpact).toBe("medium");
+    expect(report.decisionSummary.connectionRisk).toBe("review-needed");
+    expect(report.decisionSummary.volumeChange).toBe("none");
+  });
+
+  it("does not raise silhouette for non-gather range changes", () => {
+    // 守る仕様: ease など gather 以外の range 変更は形の気配ではなく接続の話なので、silhouette は上げず connectionRisk だけ立てる。
+    const before = createBodyPart({
+      connectors: {
+        armhole: {
+          type: "armhole",
+          length_mm: 469,
+          ranges: [{ id: "ease-window", from: 0.76, to: 0.84, behavior: "ease" }]
+        }
+      }
+    });
+    const after = createBodyPart({
+      connectors: {
+        armhole: {
+          type: "armhole",
+          length_mm: 469,
+          ranges: [{ id: "ease-window", from: 0.78, to: 0.86, behavior: "ease" }]
+        }
+      }
+    });
+
+    const report = diffParts(before, after);
+
+    expect(report.decisionSummary.silhouetteImpact).toBe("none");
+    expect(report.decisionSummary.connectionRisk).toBe("review-needed");
+  });
+
+  it("signals related prototype notes in the decision summary", () => {
+    // 守る仕様: 関連 prototype note が見つかった差分は prototypeNoteSignal を related-notes-found にする。
+    const from = createBodyPart({ tags: ["fitted-armhole", "non-stretch-fabric"] });
+    const to = createBodyPart({ tags: ["fitted-armhole", "non-stretch-fabric"] });
+    const prototypeNotes: PrototypeNotes = {
+      schema: "loomit.prototype_notes.v0",
+      notes: [
+        {
+          id: "note-2026-06-28-armhole",
+          date: "2026-06-28",
+          result: "failed",
+          issue: "armhole tight when raising arms",
+          creates_test_case: "arm-raise",
+          applies_to: ["fitted-armhole", "non-stretch-fabric"]
+        }
+      ]
+    };
+
+    const report = diffParts(from, to, { prototypeNotes });
+
+    expect(report.decisionSummary.prototypeNoteSignal).toBe("related-notes-found");
+  });
+
+  it("reports an all-none decision summary when nothing changed", () => {
+    // 守る仕様: 差分も関連 note も無いときは、すべての判断シグナルが none になる。
+    const part = createBodyPart({});
+
+    const report = diffParts(part, part);
+
+    expect(report.decisionSummary).toEqual({
+      silhouetteImpact: "none",
+      volumeChange: "none",
+      connectionRisk: "none",
+      prototypeNoteSignal: "none"
+    });
+  });
 });
 
 function createBodyPart(part: Partial<Part>): Part {
