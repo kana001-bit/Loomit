@@ -11,6 +11,15 @@ export type SilhouetteImpact = "none" | "low" | "medium" | "high";
 export type VolumeChange = "none" | "reduced" | "increased" | "mixed";
 export type ConnectionRisk = "none" | "review-needed";
 export type PrototypeNoteSignal = "none" | "related-notes-found";
+export type PartDiffConnectorRecheckKind =
+  | "added"
+  | "removed"
+  | "type"
+  | "length"
+  | "tolerance"
+  | "path"
+  | "gathered-range"
+  | "range";
 
 export interface PartDiffDecisionSummary {
   // darts / gather の追加・寸法変更が、体に見える形をどれだけ動かしそうかの気配。
@@ -21,6 +30,23 @@ export interface PartDiffDecisionSummary {
   readonly connectionRisk: ConnectionRisk;
   // この差分に関連する prototype note が見つかったかどうか。
   readonly prototypeNoteSignal: PrototypeNoteSignal;
+}
+
+export interface PartDiffConnectorRecheckHint {
+  readonly id: string;
+  readonly changeKinds: readonly PartDiffConnectorRecheckKind[];
+}
+
+export interface PartDiffRecheckHints {
+  // Design decision: diff compares the part role/type axis stored in `Part.type`.
+  // Keep the handoff wording "part role" while reusing Loomit's existing field instead of inventing another role key.
+  readonly partRole: {
+    readonly from: string;
+    readonly to: string;
+    readonly changed: boolean;
+  };
+  readonly connectors: readonly PartDiffConnectorRecheckHint[];
+  readonly requirements: readonly string[];
 }
 
 export interface PartDiffFieldChange {
@@ -94,6 +120,7 @@ export type PartDiffChange =
 export interface PartDiffReport {
   readonly status: PartDiffStatus;
   readonly decisionSummary: PartDiffDecisionSummary;
+  readonly recheckHints: PartDiffRecheckHints;
   readonly diagnostics: readonly Diagnostic[];
   readonly from: Pick<Part, "name" | "variant" | "type">;
   readonly to: Pick<Part, "name" | "variant" | "type">;
@@ -153,11 +180,13 @@ export function diffParts(
   ];
   const relatedNotes = findRelatedPrototypeNotes(from, to, changes, options.prototypeNotes);
   const decisionSummary = buildDecisionSummary(changes, relatedNotes);
+  const recheckHints = buildRecheckHints(from, to, changes);
 
   return {
     status: getPartDiffStatus(diagnostics, changes),
     // 判断に効く要約を status の直後・詳細より前に置く。JSON でも後続ツールが最初に読める順にする。
     decisionSummary,
+    recheckHints,
     diagnostics,
     from: {
       name: from.name,
@@ -812,4 +841,138 @@ function getConnectionRisk(changes: readonly PartDiffChange[]): ConnectionRisk {
   )
     ? "review-needed"
     : "none";
+}
+
+function buildRecheckHints(
+  from: Pick<Part, "type">,
+  to: Pick<Part, "type">,
+  changes: readonly PartDiffChange[]
+): PartDiffRecheckHints {
+  const requirementIds = new Set<string>();
+  const connectorHints: PartDiffConnectorRecheckHint[] = [];
+
+  for (const change of changes) {
+    if (change.feature === "requirement") {
+      requirementIds.add(change.id);
+      continue;
+    }
+
+    if (change.feature === "connector") {
+      connectorHints.push({
+        id: change.id,
+        changeKinds: buildConnectorRecheckKinds(change)
+      });
+    }
+  }
+
+  return {
+    partRole: {
+      from: from.type,
+      to: to.type,
+      changed: from.type !== to.type
+    },
+    connectors: connectorHints,
+    requirements: [...requirementIds].sort()
+  };
+}
+
+const connectorRecheckKindOrder: readonly PartDiffConnectorRecheckKind[] = [
+  "added",
+  "removed",
+  "type",
+  "length",
+  "tolerance",
+  "path",
+  "gathered-range",
+  "range"
+];
+
+function buildConnectorRecheckKinds(
+  change: Extract<PartDiffChange, { readonly feature: "connector" }>
+): readonly PartDiffConnectorRecheckKind[] {
+  const kinds = new Set<PartDiffConnectorRecheckKind>();
+
+  if (change.kind === "added") {
+    kinds.add("added");
+    addConnectorRangeKinds(kinds, change.after);
+    return orderedConnectorRecheckKinds(kinds);
+  }
+
+  if (change.kind === "removed") {
+    kinds.add("removed");
+    addConnectorRangeKinds(kinds, change.before);
+    return orderedConnectorRecheckKinds(kinds);
+  }
+
+  for (const fieldChange of change.changes) {
+    if (fieldChange.field === "type") {
+      kinds.add("type");
+      continue;
+    }
+
+    if (fieldChange.field === "length_mm") {
+      kinds.add("length");
+      continue;
+    }
+
+    if (fieldChange.field === "tolerance_mm") {
+      kinds.add("tolerance");
+      continue;
+    }
+
+    if (fieldChange.field === "path_ref") {
+      kinds.add("path");
+      continue;
+    }
+  }
+
+  addConnectorModifiedRangeKinds(kinds, change);
+
+  return orderedConnectorRecheckKinds(kinds);
+}
+
+function orderedConnectorRecheckKinds(
+  kinds: ReadonlySet<PartDiffConnectorRecheckKind>
+): readonly PartDiffConnectorRecheckKind[] {
+  return connectorRecheckKindOrder.filter((kind) => kinds.has(kind));
+}
+
+function addConnectorRangeKinds(
+  kinds: Set<PartDiffConnectorRecheckKind>,
+  connector: Connector
+): void {
+  const ranges = connector.ranges ?? [];
+
+  if (ranges.some((range) => range.behavior === "gathered")) {
+    kinds.add("gathered-range");
+  }
+
+  if (ranges.some((range) => range.behavior !== "gathered")) {
+    kinds.add("range");
+  }
+}
+
+function addConnectorModifiedRangeKinds(
+  kinds: Set<PartDiffConnectorRecheckKind>,
+  change: Extract<PartDiffChange, { readonly feature: "connector"; readonly kind: "modified" }>
+): void {
+  const changedGatheredRangeIds = new Set([
+    ...gatheredRangeIds(change.before),
+    ...gatheredRangeIds(change.after)
+  ]);
+
+  for (const fieldChange of change.changes) {
+    if (!fieldChange.field.startsWith("ranges.")) {
+      continue;
+    }
+
+    const rangeId = fieldChange.field.split(".")[1];
+
+    if (rangeId !== undefined && changedGatheredRangeIds.has(rangeId)) {
+      kinds.add("gathered-range");
+      continue;
+    }
+
+    kinds.add("range");
+  }
 }

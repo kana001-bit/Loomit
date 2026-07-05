@@ -15,6 +15,15 @@ describe("formatDiffText", () => {
         connectionRisk: "review-needed",
         prototypeNoteSignal: "related-notes-found"
       },
+      recheckHints: {
+        partRole: {
+          from: "body",
+          to: "body",
+          changed: false
+        },
+        connectors: [{ id: "armhole", changeKinds: ["length", "path", "gathered-range"] }],
+        requirements: ["sleeve.armhole.length_mm"]
+      },
       diagnostics: [
         {
           severity: "warning",
@@ -42,16 +51,24 @@ describe("formatDiffText", () => {
     const output = formatDiffText(report);
 
     const summaryIndex = output.indexOf("Summary:");
+    const recheckIndex = output.indexOf("Recheck Hints:");
     const diagnosticsIndex = output.indexOf("Diagnostics:");
     const changesIndex = output.indexOf("Changes:");
 
     expect(summaryIndex).toBeGreaterThanOrEqual(0);
-    expect(summaryIndex).toBeLessThan(diagnosticsIndex);
+    expect(summaryIndex).toBeLessThan(recheckIndex);
+    expect(recheckIndex).toBeLessThan(diagnosticsIndex);
     expect(diagnosticsIndex).toBeLessThan(changesIndex);
     expect(output).toContain("silhouette impact: high");
     expect(output).toContain("volume change:     reduced");
     expect(output).toContain("connection risk:   review-needed");
     expect(output).toContain("prototype notes:   related-notes-found");
+    expect(output).toContain("Recheck Hints:");
+    expect(output).toContain("part role: body");
+    expect(output).toContain("connectors:");
+    expect(output).toContain("- armhole (length, path, gathered-range)");
+    expect(output).toContain("requirements:");
+    expect(output).toContain("- sleeve.armhole.length_mm");
   });
 
   it("always renders the summary even when there are no semantic changes", () => {
@@ -64,6 +81,15 @@ describe("formatDiffText", () => {
         connectionRisk: "none",
         prototypeNoteSignal: "none"
       },
+      recheckHints: {
+        partRole: {
+          from: "body",
+          to: "body",
+          changed: false
+        },
+        connectors: [],
+        requirements: []
+      },
       diagnostics: [],
       from: { name: "darted-body", variant: "front-v1", type: "body" },
       to: { name: "darted-body", variant: "front-v1", type: "body" },
@@ -74,6 +100,9 @@ describe("formatDiffText", () => {
     const output = formatDiffText(report);
 
     expect(output).toContain("Summary:");
+    expect(output).toContain("Recheck Hints:");
+    expect(output).toContain("connectors: none");
+    expect(output).toContain("requirements: none");
     expect(output).toContain("silhouette impact: none");
     expect(output).toContain("No semantic changes.");
   });
@@ -87,6 +116,15 @@ describe("formatDiffText", () => {
         volumeChange: "reduced",
         connectionRisk: "none",
         prototypeNoteSignal: "related-notes-found"
+      },
+      recheckHints: {
+        partRole: {
+          from: "body",
+          to: "body",
+          changed: false
+        },
+        connectors: [],
+        requirements: []
       },
       diagnostics: [],
       from: { name: "darted-body", variant: "front-v1", type: "body" },
