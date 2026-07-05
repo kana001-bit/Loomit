@@ -4,7 +4,7 @@ Use these rules when modifying Loomit source code, schemas, package structure, o
 
 ## Implementation Order
 
-Follow `docs/implementation-plan.md`. Work by slice. Do not jump ahead to Studio, DB, plugin runtime, CAD engine, physics simulation, or library auto-update.
+Follow `docs/work/implementation-plan.md`. Work by slice. Do not jump ahead to Studio, DB, plugin runtime, CAD engine, physics simulation, or library auto-update.
 
 ## Core and CLI Boundaries
 
@@ -12,6 +12,7 @@ Follow `docs/implementation-plan.md`. Work by slice. Do not jump ahead to Studio
 - CLI is a thin adapter: parse args, call core, format results, set exit code.
 - Do not put domain logic in CLI commands.
 - Core returns data such as reports and diagnostics; CLI owns text output and process exit.
+- If a change adds, removes, renames, or materially changes a CLI command, flag, subcommand, output format, or command responsibility, update `docs/cli.md` in the same change.
 
 ## Core Side Effects
 
@@ -45,7 +46,7 @@ Compatibility rules, fit rules, and movement test rules should receive domain ob
 
 ## File I/O Safety (Operational)
 
-The filesystem is the source of truth. Server-side concerns (transactions, locking, injection, monitoring) do not disappear here — they take a file-shaped form. See `docs/operational-constraints.md` for the full rationale and the code sites each rule addresses. When touching writes, copies, path resolution, or I/O error handling, follow these rules.
+The filesystem is the source of truth. Server-side concerns (transactions, locking, injection, monitoring) do not disappear here — they take a file-shaped form. See `docs/work/operational-constraints.md` for the full rationale and the code sites each rule addresses. When touching writes, copies, path resolution, or I/O error handling, follow these rules.
 
 ### R1. Writes to durable state must be atomic
 
@@ -141,5 +142,5 @@ Example:
 If docs and implementation disagree:
 
 1. Treat `docs/vision.md` and `docs/architecture.md` as design intent. Do not casually rewrite them to match code.
-2. Treat `docs/implementation-guidelines.md`, `docs/implementation-plan.md`, and `docs/technology-selection.md` as implementation guidance that can follow confirmed implementation details.
+2. Treat `docs/work/implementation-guidelines.md`, `docs/work/implementation-plan.md`, and `docs/technology-selection.md` as implementation guidance that can follow confirmed implementation details.
 3. If changing design decisions such as `variant`, finished measurements, or prototype-note inheritance, update design docs first.

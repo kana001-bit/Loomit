@@ -11,20 +11,20 @@ docs は総覧しない。今のタスクに必要なものだけ読む。
 - schema、domain model、report shape、寸法や意味づけを変えるとき:
   `docs/architecture.md`
 - `variant` / `requires` / `prototype-notes.yml` などの設計判断を触るとき:
-  `docs/memo.md`
+  `docs/work/memo.md`
 - 実装手順、package 境界、一般的な実装方針を確認するとき:
-  `docs/implementation-guidelines.md`
+  `docs/work/implementation-guidelines.md`
 - 書き込み、コピー、パス解決、errno、並行書き込み、`output/` を触るとき:
-  `docs/operational-constraints.md`
+  `docs/work/operational-constraints.md`
 - 今やる slice や完了条件を確認するとき:
-  `docs/implementation-plan.md`
+  `docs/work/implementation-plan.md`
 - 技術選定や cross-platform 方針を確認するとき:
   `docs/technology-selection.md`
 
-`docs/technical-plan.md` には旧設計の例が残っている可能性がある。特に `version: 3` や `requires: ">=4"` のような旧 schema 例を実装へコピーしない。
+`docs/work/technical-plan.md` には旧設計の例が残っている可能性がある。特に `version: 3` や `requires: ">=4"` のような旧 schema 例を実装へコピーしない。
 
 `loom diff` の役割、branch-driven な試作フロー、seamlint / truer との責務分担を確認するとき:
-`docs/diffable-domain.md`
+`docs/work/diffable-domain.md`
 
 ## Required Project Skill
 
@@ -35,7 +35,7 @@ docs は総覧しない。今のタスクに必要なものだけ読む。
 - `loomit.yml`、`part.loom`、`prototype-notes.yml` などの schema を扱うとき。
 - diagnostics / reports / CLI output を扱うとき。
 - tests / fixtures を追加または変更するとき。
-- `docs/implementation-plan.md` の slice を進めるとき。
+- `docs/work/implementation-plan.md` の slice を進めるとき。
 
 ## Non-Negotiables
 
@@ -50,7 +50,7 @@ docs は総覧しない。今のタスクに必要なものだけ読む。
 ## Before Starting Work
 
 - 今やる作業に必要な docs だけ読む。
-- slice を進める作業なら `docs/implementation-plan.md` の対象 slice と完了条件を確認する。
+- slice を進める作業なら `docs/work/implementation-plan.md` の対象 slice と完了条件を確認する。
 - task に応じて `skills/loomit-implementation/references/` を読む。
 
 ## Before Finishing Work
