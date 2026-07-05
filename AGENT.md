@@ -23,6 +23,9 @@ docs は総覧しない。今のタスクに必要なものだけ読む。
 
 `docs/technical-plan.md` には旧設計の例が残っている可能性がある。特に `version: 3` や `requires: ">=4"` のような旧 schema 例を実装へコピーしない。
 
+`loom diff` の役割、branch-driven な試作フロー、seamlint / truer との責務分担を確認するとき:
+`docs/diffable-domain.md`
+
 ## Required Project Skill
 
 次の作業では `skills/loomit-implementation/` を読む。
