@@ -32,15 +32,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # cli の typecheck は core のビルド済み型宣言(dist/index.d.ts)を解決するため、
+      # 先に core→cli の順でビルドしておく。dist は追跡しないので毎回ここで生成する。
+      - name: Build
+        run: pnpm build
+
       - name: Typecheck
         run: pnpm typecheck
 
       - name: Lint
         run: pnpm lint
-
-      # dist は追跡しないので、CI で毎回 core→cli の順にビルドが通ることを確認する。
-      - name: Build
-        run: pnpm build
 
       - name: Test
         run: pnpm test
