@@ -1,0 +1,4 @@
+interface:
+  display_name: "Branch Worklog"
+  short_description: "Track branch plans and progress"
+  default_prompt: "Create or update the current branch worklog in docs/branch and keep its plan and progress sections current."
