@@ -56,7 +56,9 @@ export function formatDiffText(report: PartDiffReport): string {
     for (const note of report.relatedNotes) {
       lines.push(`  - ${note.id} (${note.result}, ${note.date})`);
       lines.push(`    issue: ${note.issue}`);
-      lines.push(`    tags: ${note.appliesTo.join(", ")}`);
+      // why 行が「なぜ関連するか」(前提タグ＋変わったフィーチャ)を一行にまとめるので、旧 tags 行は畳む。
+      lines.push(`    why: ${formatNoteReasons(note.reasons)}`);
+      lines.push(`    test case: ${note.createsTestCase}`);
 
       for (const suggestion of note.suggestedChange) {
         lines.push(`    suggested_change: ${suggestion}`);
@@ -65,6 +67,19 @@ export function formatDiffText(report: PartDiffReport): string {
   }
 
   return `${lines.join("\n")}\n`;
+}
+
+function formatNoteReasons(reasons: PartDiffReport["relatedNotes"][number]["reasons"]): string {
+  const parts = reasons.map((reason) => {
+    if (reason.kind === "applies-to-tags") {
+      return `applies-to tags [${reason.tags.join(", ")}] (${reason.matchedOn})`;
+    }
+
+    return `changed ${reason.feature} [${reason.changedIds.join(", ")}]`;
+  });
+
+  // 理由が空になることは無い想定(最低でも applies-to-tags が入る)だが、念のため中立表現を置く。
+  return parts.length > 0 ? parts.join("; ") : "related";
 }
 
 function formatValue(value: boolean | number | string | readonly string[] | undefined): string {

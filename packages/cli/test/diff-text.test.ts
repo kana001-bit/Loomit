@@ -77,4 +77,67 @@ describe("formatDiffText", () => {
     expect(output).toContain("silhouette impact: none");
     expect(output).toContain("No semantic changes.");
   });
+
+  it("renders why (tags + changed features) and the note test case for related notes", () => {
+    // 守る仕様: related note は「なぜ関連するか」(前提タグ＋変わったフィーチャ)と再走行すべき test case を短く出す。
+    const report: PartDiffReport = {
+      status: "changed",
+      decisionSummary: {
+        silhouetteImpact: "medium",
+        volumeChange: "reduced",
+        connectionRisk: "none",
+        prototypeNoteSignal: "related-notes-found"
+      },
+      diagnostics: [],
+      from: { name: "darted-body", variant: "front-v1", type: "body" },
+      to: { name: "darted-body", variant: "front-v2", type: "body" },
+      changes: [
+        {
+          feature: "dart",
+          kind: "modified",
+          id: "waist_front",
+          before: {
+            apex_ref: "val:point#bodice/Apex",
+            width_mm: 30,
+            legs: { left_ref: "val:point#bodice/Left", right_ref: "val:point#bodice/Right" }
+          },
+          after: {
+            apex_ref: "val:point#bodice/Apex",
+            width_mm: 35,
+            legs: { left_ref: "val:point#bodice/Left", right_ref: "val:point#bodice/Right" }
+          },
+          changes: [{ field: "width_mm", before: 30, after: 35 }]
+        }
+      ],
+      relatedNotes: [
+        {
+          id: "note-2026-06-28-armhole",
+          date: "2026-06-28",
+          result: "failed",
+          issue: "armhole tight when raising arms",
+          appliesTo: ["fitted-armhole", "non-stretch-fabric"],
+          suggestedChange: ["increase armhole ease"],
+          createsTestCase: "arm-raise",
+          reasons: [
+            {
+              kind: "applies-to-tags",
+              tags: ["fitted-armhole", "non-stretch-fabric"],
+              matchedOn: "both"
+            },
+            { kind: "changed-feature", feature: "dart", changedIds: ["waist_front"] }
+          ]
+        }
+      ]
+    };
+
+    const output = formatDiffText(report);
+
+    expect(output).toContain("Related Prototype Notes:");
+    expect(output).toContain("- note-2026-06-28-armhole (failed, 2026-06-28)");
+    expect(output).toContain(
+      "why: applies-to tags [fitted-armhole, non-stretch-fabric] (both); changed dart [waist_front]"
+    );
+    expect(output).toContain("test case: arm-raise");
+    expect(output).toContain("suggested_change: increase armhole ease");
+  });
 });
