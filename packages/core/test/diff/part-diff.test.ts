@@ -379,13 +379,21 @@ describe("diffParts", () => {
     expect(report.relatedNotes).toEqual([]);
   });
 
-  it("links matching prototype notes by part tags", () => {
-    // 守る仕様: diff に prototype notes を紐づけるときは、from/to part の tags を満たす note だけを返す。
+  it("links matching prototype notes with tag and changed-feature reasons", () => {
+    // 守る仕様: 実際に変わったフィーチャがある差分で、from/to の tags を満たす note だけを、
+    // 「なぜ関連するか」の理由(前提タグ＋変わったフィーチャ)と再走行すべき test case 付きで返す。
     const from = createBodyPart({
       tags: ["fitted-armhole", "non-stretch-fabric"]
     });
     const to = createBodyPart({
-      tags: ["fitted-armhole", "non-stretch-fabric", "darted-front"]
+      tags: ["fitted-armhole", "non-stretch-fabric", "darted-front"],
+      darts: {
+        waist_front: {
+          apex_ref: "val:point#bodice/Apex",
+          width_mm: 30,
+          legs: { left_ref: "val:point#bodice/Left", right_ref: "val:point#bodice/Right" }
+        }
+      }
     });
     const prototypeNotes: PrototypeNotes = {
       schema: "loomit.prototype_notes.v0",
@@ -419,7 +427,102 @@ describe("diffParts", () => {
         result: "failed",
         issue: "armhole tight when raising arms",
         appliesTo: ["fitted-armhole", "non-stretch-fabric"],
-        suggestedChange: ["lower sleeve cap", "increase armhole ease"]
+        suggestedChange: ["lower sleeve cap", "increase armhole ease"],
+        createsTestCase: "arm-raise",
+        reasons: [
+          {
+            kind: "applies-to-tags",
+            tags: ["fitted-armhole", "non-stretch-fabric"],
+            matchedOn: "both"
+          },
+          { kind: "changed-feature", feature: "dart", changedIds: ["waist_front"] }
+        ]
+      }
+    ]);
+  });
+
+  it("does not surface prototype notes when tags match but nothing changed", () => {
+    // 守る仕様: タグが付いているだけ(差分ゼロ)では related に載せない。過去メモは「今回変わった何か」に
+    // 紐づけて初めて判断材料になる。
+    const part = createBodyPart({
+      tags: ["fitted-armhole", "non-stretch-fabric"]
+    });
+    const prototypeNotes: PrototypeNotes = {
+      schema: "loomit.prototype_notes.v0",
+      notes: [
+        {
+          id: "note-2026-06-28-armhole",
+          date: "2026-06-28",
+          result: "failed",
+          issue: "armhole tight when raising arms",
+          creates_test_case: "arm-raise",
+          applies_to: ["fitted-armhole", "non-stretch-fabric"]
+        }
+      ]
+    };
+
+    const report = diffParts(part, part, { prototypeNotes });
+
+    expect(report.relatedNotes).toEqual([]);
+    expect(report.decisionSummary.prototypeNoteSignal).toBe("none");
+  });
+
+  it("records changed-feature reasons per feature category and which revision matched", () => {
+    // 守る仕様: 変わったフィーチャは種別ごと(dart→connector→requirement 順・id 昇順)に理由化し、
+    // from にしか無いタグで一致した場合は matchedOn=from を残す。
+    const from = createBodyPart({
+      tags: ["fitted-armhole", "non-stretch-fabric"],
+      connectors: {
+        armhole: { type: "armhole", length_mm: 469 }
+      }
+    });
+    const to = createBodyPart({
+      tags: ["fitted-armhole"],
+      connectors: {
+        armhole: { type: "armhole", length_mm: 472 }
+      },
+      requires: {
+        "sleeve.armhole.length_mm": { min: 468, max: 474 }
+      }
+    });
+    const prototypeNotes: PrototypeNotes = {
+      schema: "loomit.prototype_notes.v0",
+      notes: [
+        {
+          id: "note-2026-06-28-armhole",
+          date: "2026-06-28",
+          result: "failed",
+          issue: "armhole tight when raising arms",
+          creates_test_case: "arm-raise",
+          applies_to: ["fitted-armhole", "non-stretch-fabric"]
+        }
+      ]
+    };
+
+    const report = diffParts(from, to, { prototypeNotes });
+
+    expect(report.relatedNotes).toEqual([
+      {
+        id: "note-2026-06-28-armhole",
+        date: "2026-06-28",
+        result: "failed",
+        issue: "armhole tight when raising arms",
+        appliesTo: ["fitted-armhole", "non-stretch-fabric"],
+        suggestedChange: [],
+        createsTestCase: "arm-raise",
+        reasons: [
+          {
+            kind: "applies-to-tags",
+            tags: ["fitted-armhole", "non-stretch-fabric"],
+            matchedOn: "from"
+          },
+          { kind: "changed-feature", feature: "connector", changedIds: ["armhole"] },
+          {
+            kind: "changed-feature",
+            feature: "requirement",
+            changedIds: ["sleeve.armhole.length_mm"]
+          }
+        ]
       }
     ]);
   });
@@ -627,9 +730,18 @@ describe("diffParts", () => {
   });
 
   it("signals related prototype notes in the decision summary", () => {
-    // 守る仕様: 関連 prototype note が見つかった差分は prototypeNoteSignal を related-notes-found にする。
+    // 守る仕様: 変更があり関連 prototype note が見つかった差分は prototypeNoteSignal を related-notes-found にする。
     const from = createBodyPart({ tags: ["fitted-armhole", "non-stretch-fabric"] });
-    const to = createBodyPart({ tags: ["fitted-armhole", "non-stretch-fabric"] });
+    const to = createBodyPart({
+      tags: ["fitted-armhole", "non-stretch-fabric"],
+      darts: {
+        waist_front: {
+          apex_ref: "val:point#bodice/Apex",
+          width_mm: 30,
+          legs: { left_ref: "val:point#bodice/Left", right_ref: "val:point#bodice/Right" }
+        }
+      }
+    });
     const prototypeNotes: PrototypeNotes = {
       schema: "loomit.prototype_notes.v0",
       notes: [
