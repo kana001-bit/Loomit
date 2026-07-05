@@ -131,6 +131,12 @@ describe("runDiffCommand", () => {
         status: options?.inputDiagnostics?.some((diagnostic) => diagnostic.severity === "error")
           ? "error"
           : "same",
+        decisionSummary: {
+          silhouetteImpact: "none",
+          volumeChange: "none",
+          connectionRisk: "none",
+          prototypeNoteSignal: "none"
+        },
         diagnostics: options?.inputDiagnostics ?? [],
         from: {
           name: from.name,

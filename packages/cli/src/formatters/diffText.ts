@@ -10,6 +10,16 @@ export function formatDiffText(report: PartDiffReport): string {
     `To:   ${report.to.name}@${report.to.variant} (${report.to.type})`
   );
 
+  // keep / discard 判断に効く要約を、詳細(diagnostics / changes)より先に出す。
+  lines.push(
+    "",
+    "Summary:",
+    `  silhouette impact: ${report.decisionSummary.silhouetteImpact}`,
+    `  volume change:     ${report.decisionSummary.volumeChange}`,
+    `  connection risk:   ${report.decisionSummary.connectionRisk}`,
+    `  prototype notes:   ${report.decisionSummary.prototypeNoteSignal}`
+  );
+
   if (report.diagnostics.length > 0) {
     lines.push("", "Diagnostics:", ...formatDiagnosticsText(report.diagnostics));
   }
