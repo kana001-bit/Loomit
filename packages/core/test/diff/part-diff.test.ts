@@ -158,6 +158,181 @@ describe("diffParts", () => {
     expect(report.relatedNotes).toEqual([]);
   });
 
+  it("reports added, removed, and modified notches and raises connection risk", () => {
+    // 守る仕様: notch diff は id 単位で追加・削除・移動を区別し、合印が動いたら縫い合わせ確認(connectionRisk)を促す。
+    //           notch は体積・シルエットには効かないので、それらの気配は none のまま。
+    const before = createBodyPart({
+      notches: {
+        hem_center: {
+          seam_ref: "val:seam#bodice/hem",
+          position: 0.5,
+          type: "single"
+        },
+        side_top: {
+          seam_ref: "val:seam#bodice/side",
+          position: 0.25
+        }
+      }
+    });
+    const after = createBodyPart({
+      notches: {
+        armhole_match: {
+          seam_ref: "val:seam#bodice/armhole",
+          position: 0.6
+        },
+        side_top: {
+          seam_ref: "val:seam#bodice/side",
+          position: 0.4
+        }
+      }
+    });
+
+    const report = diffParts(before, after);
+
+    expect(report.status).toBe("changed");
+    expect(report.changes).toEqual([
+      {
+        feature: "notch",
+        kind: "added",
+        id: "armhole_match",
+        after: {
+          seam_ref: "val:seam#bodice/armhole",
+          position: 0.6
+        }
+      },
+      {
+        feature: "notch",
+        kind: "removed",
+        id: "hem_center",
+        before: {
+          seam_ref: "val:seam#bodice/hem",
+          position: 0.5,
+          type: "single"
+        }
+      },
+      {
+        feature: "notch",
+        kind: "modified",
+        id: "side_top",
+        before: {
+          seam_ref: "val:seam#bodice/side",
+          position: 0.25
+        },
+        after: {
+          seam_ref: "val:seam#bodice/side",
+          position: 0.4
+        },
+        changes: [
+          {
+            field: "position",
+            before: 0.25,
+            after: 0.4
+          }
+        ]
+      }
+    ]);
+    expect(report.decisionSummary.connectionRisk).toBe("review-needed");
+    expect(report.decisionSummary.silhouetteImpact).toBe("none");
+    expect(report.decisionSummary.volumeChange).toBe("none");
+    expect(report.relatedNotes).toEqual([]);
+  });
+
+  it("detects notch seam and type changes as field-level moves", () => {
+    // 守る仕様: notch diff は position だけでなく、seam_ref(どの縫い線へ移したか)と type(合印種別)の
+    //          付け外しも、同じ id のフィールド変更として読める形で返す。
+    const before = createBodyPart({
+      notches: {
+        match_a: {
+          seam_ref: "val:seam#bodice/side",
+          position: 0.5,
+          type: "single"
+        }
+      }
+    });
+    const after = createBodyPart({
+      notches: {
+        match_a: {
+          seam_ref: "val:seam#bodice/armhole",
+          position: 0.5
+        }
+      }
+    });
+
+    const report = diffParts(before, after);
+
+    expect(report.changes).toEqual([
+      {
+        feature: "notch",
+        kind: "modified",
+        id: "match_a",
+        before: {
+          seam_ref: "val:seam#bodice/side",
+          position: 0.5,
+          type: "single"
+        },
+        after: {
+          seam_ref: "val:seam#bodice/armhole",
+          position: 0.5
+        },
+        changes: [
+          {
+            field: "seam_ref",
+            before: "val:seam#bodice/side",
+            after: "val:seam#bodice/armhole"
+          },
+          {
+            field: "type",
+            before: "single"
+          }
+        ]
+      }
+    ]);
+    expect(report.decisionSummary.connectionRisk).toBe("review-needed");
+  });
+
+  it("links a prototype note when a notch changes", () => {
+    // 守る仕様: featureOrder に notch を含むので、notch が変わった差分でも note の「changed-feature」理由に
+    //          notch が現れる(合印を動かした試作に過去メモを結び付けられる)。
+    const from = createBodyPart({
+      tags: ["fitted-armhole"]
+    });
+    const to = createBodyPart({
+      tags: ["fitted-armhole"],
+      notches: {
+        armhole_match: {
+          seam_ref: "val:seam#bodice/armhole",
+          position: 0.6
+        }
+      }
+    });
+    const prototypeNotes: PrototypeNotes = {
+      schema: "loomit.prototype_notes.v0",
+      notes: [
+        {
+          id: "note-2026-07-01-armhole-notch",
+          date: "2026-07-01",
+          result: "failed",
+          issue: "sleeve and body armhole did not line up at the notch",
+          creates_test_case: "arm-raise",
+          applies_to: ["fitted-armhole"]
+        }
+      ]
+    };
+
+    const report = diffParts(from, to, { prototypeNotes });
+
+    expect(report.relatedNotes).toHaveLength(1);
+    expect(report.relatedNotes[0]?.reasons).toEqual([
+      {
+        kind: "applies-to-tags",
+        tags: ["fitted-armhole"],
+        matchedOn: "both"
+      },
+      { kind: "changed-feature", feature: "notch", changedIds: ["armhole_match"] }
+    ]);
+    expect(report.decisionSummary.prototypeNoteSignal).toBe("related-notes-found");
+  });
+
   it("reports connector and requirement changes semantically", () => {
     // 守る仕様: 接続部や requires の変更も blob 差分ではなく、編集対象フィールドとして読める形で返す。
     const before = createBodyPart({

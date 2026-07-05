@@ -74,6 +74,64 @@ describe("part schema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts notches as id-keyed seam-matching features", () => {
+    // 守る仕様: notches は縫い合わせの合印を、縫い線参照＋位置(0..1)＋種別を持つ id 付き編集フィーチャとして保持できる。
+    const result = partSchema.safeParse({
+      schema: "loomit.part.v0",
+      name: "notched-body",
+      variant: "front-v1",
+      type: "body",
+      notches: {
+        side_top: {
+          seam_ref: "val:seam#bodice/side",
+          position: 0.25,
+          type: "single"
+        },
+        hem_center: {
+          seam_ref: "val:seam#bodice/hem",
+          position: 0
+        }
+      }
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a notch position outside the 0..1 seam range", () => {
+    // 守る仕様: position は縫い線上の正規化位置なので 0..1 に収まる。範囲外(縫い線の外)は不正として弾く。
+    const result = partSchema.safeParse({
+      schema: "loomit.part.v0",
+      name: "notched-body",
+      variant: "front-v1",
+      type: "body",
+      notches: {
+        side_top: {
+          seam_ref: "val:seam#bodice/side",
+          position: 1.5
+        }
+      }
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a notch without a seam reference", () => {
+    // 守る仕様: notch は「どの縫い線の合印か」という identity を持つ。seam_ref 無しは許可しない。
+    const result = partSchema.safeParse({
+      schema: "loomit.part.v0",
+      name: "notched-body",
+      variant: "front-v1",
+      type: "body",
+      notches: {
+        side_top: {
+          position: 0.5
+        }
+      }
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it("rejects the old version field shape", () => {
     // 守る仕様: part.loom は旧設計の version 番号に依存せず、name + variant で識別する。
     const result = partSchema.safeParse({

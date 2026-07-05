@@ -1,0 +1,16 @@
+schema: loomit.part.v0
+name: notched-sleeve
+variant: bodice-v1
+type: sleeve
+status: active
+files:
+  source: source.val
+  preview: preview.svg
+connectors:
+  armhole:
+    type: armhole
+    length_mm: 470
+    tolerance_mm: 3
+tags:
+  - blouse
+  - armhole-notch
