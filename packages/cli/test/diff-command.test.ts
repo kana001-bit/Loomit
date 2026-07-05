@@ -140,6 +140,15 @@ describe("runDiffCommand", () => {
           connectionRisk: "none",
           prototypeNoteSignal: "none"
         },
+        recheckHints: {
+          partRole: {
+            from: from.type,
+            to: to.type,
+            changed: from.type !== to.type
+          },
+          connectors: [],
+          requirements: []
+        },
         diagnostics: options?.inputDiagnostics ?? [],
         from: {
           name: from.name,
@@ -368,6 +377,15 @@ describe("runDiffCommand", () => {
             volumeChange: "reduced",
             connectionRisk: "none",
             prototypeNoteSignal: "related-notes-found"
+          },
+          recheckHints: {
+            partRole: {
+              from: from.type,
+              to: to.type,
+              changed: from.type !== to.type
+            },
+            connectors: [],
+            requirements: []
           },
           diagnostics: [],
           from: {
