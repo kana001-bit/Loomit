@@ -1,6 +1,6 @@
 ---
 name: loomit-implementation
-description: Project-specific Loomit implementation guidance. Use when Codex or another coding agent is implementing or modifying Loomit code, schemas, diagnostics, tests, CLI behavior, project structure, or AGENT/docs rules; when following docs/implementation-plan.md slices; or when checking Loomit-specific architecture constraints such as variant vs version, finished measurements, prototype notes, and core/CLI separation.
+description: Project-specific Loomit implementation guidance. Use when Codex or another coding agent is implementing or modifying Loomit code, schemas, diagnostics, tests, CLI behavior, project structure, or AGENT/docs rules; when following docs/work/implementation-plan.md slices; or when checking Loomit-specific architecture constraints such as variant vs version, finished measurements, prototype notes, and core/CLI separation.
 ---
 
 # Loomit Implementation
@@ -10,23 +10,25 @@ Use this skill when working on Loomit implementation tasks. It keeps detailed pr
 ## Minimal Workflow
 
 1. Read only the docs needed for the current task.
-2. Do not use old schema examples from `docs/technical-plan.md` as implementation source. It may still contain legacy `version: 3` or `requires: ">=4"` examples.
+2. Do not use old schema examples from `docs/work/technical-plan.md` as implementation source. It may still contain legacy `version: 3` or `requires: ">=4"` examples.
 3. If the task is part of a planned slice, identify the active slice before editing code.
 4. Implement only the smallest useful slice.
 5. Add or update tests with explicit `守る仕様:` comments.
-6. Before finishing, run the task's required checks, or state why they could not be run.
+6. If you add, remove, rename, or materially change a CLI command or its user-facing behavior, update `docs/cli.md` in the same change.
+7. Before finishing, run the task's required checks, or state why they could not be run.
 
 ## Task-Based Reading
 
 Open only the relevant docs:
 
-- `docs/implementation-plan.md`: when choosing a slice, following the roadmap, or checking completion criteria.
+- `docs/work/implementation-plan.md`: when choosing a slice, following the roadmap, or checking completion criteria.
 - `docs/architecture.md`: when changing schema, domain model, reports, dimensions, or other source-of-truth structures.
-- `docs/memo.md`: when touching `variant`, `requires`, `prototype-notes.yml`, fork/publish semantics, or prior design decisions.
-- `docs/diffable-domain.md`: when touching `loom diff`, branch-driven pattern exploration, projected darts, or the boundary between Loomit, seamlint, and truer.
-- `docs/implementation-guidelines.md`: when confirming package boundaries, implementation conventions, or general coding rules.
-- `docs/operational-constraints.md`: when touching file writes, copies, path resolution, error classification, concurrency, or `output/`.
+- `docs/work/memo.md`: when touching `variant`, `requires`, `prototype-notes.yml`, fork/publish semantics, or prior design decisions.
+- `docs/work/diffable-domain.md`: when touching `loom diff`, branch-driven pattern exploration, projected darts, or the boundary between Loomit, seamlint, and truer.
+- `docs/work/implementation-guidelines.md`: when confirming package boundaries, implementation conventions, or general coding rules.
+- `docs/work/operational-constraints.md`: when touching file writes, copies, path resolution, error classification, concurrency, or `output/`.
 - `docs/technology-selection.md`: when the task depends on tooling choices or cross-platform behavior.
+- `docs/cli.md`: when adding, removing, renaming, or changing CLI commands, flags, subcommands, output formats, or command responsibilities.
 
 ## Reference Files
 

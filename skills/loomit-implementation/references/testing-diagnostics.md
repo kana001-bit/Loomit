@@ -91,7 +91,7 @@ If another target format is needed, document it before introducing it.
 
 Before finishing work:
 
-- Confirm the active `docs/implementation-plan.md` slice.
+- Confirm the active `docs/work/implementation-plan.md` slice.
 - Confirm the slice's completion criteria.
 - Run the relevant unit or fixture tests.
 - Run `pnpm typecheck` and `pnpm test` when available.

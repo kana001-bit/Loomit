@@ -1,12 +1,12 @@
 # Branch Worklog Format
 
-Use this format for `docs/branch/<branch>.md`.
+Use this format for `docs/work/branch/<branch>.md`.
 
 ## Path rule
 
-- Preserve the branch path structure under `docs/branch/`.
-- Example: `feature/diff-decision-summary` -> `docs/branch/feature/diff-decision-summary.md`
-- When seeding from task docs, look for `docs/tasks/feature-diff-decision-summary.md`.
+- Preserve the branch path structure under `docs/work/branch/`.
+- Example: `feature/diff-decision-summary` -> `docs/work/branch/feature/diff-decision-summary.md`
+- When seeding from task docs, look for `docs/work/tasks/feature-diff-decision-summary.md`.
 
 ## Template
 
@@ -40,8 +40,8 @@ Implement the highest-leverage next action.
 
 ## References
 
-- `docs/tasks/example-branch.md`
-- `docs/implementation-plan.md`
+- `docs/work/tasks/example-branch.md`
+- `docs/work/implementation-plan.md`
 ```
 
 ## Writing notes
