@@ -1,0 +1,46 @@
+name: CI
+
+# push(main) と PR で型・lint・build・test を回す。
+# core は CLI/Studio に依存しない前提なので、CI も core→cli の順にビルドできることを検証する。
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同一 ref の古い実行はキャンセルして無駄なランを残さない。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # pnpm のバージョンは package.json の packageManager フィールドを単一の正とする。
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      # dist は追跡しないので、CI で毎回 core→cli の順にビルドが通ることを確認する。
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
