@@ -23,6 +23,7 @@ Open only the relevant docs:
 - `docs/implementation-plan.md`: when choosing a slice, following the roadmap, or checking completion criteria.
 - `docs/architecture.md`: when changing schema, domain model, reports, dimensions, or other source-of-truth structures.
 - `docs/memo.md`: when touching `variant`, `requires`, `prototype-notes.yml`, fork/publish semantics, or prior design decisions.
+- `docs/diffable-domain.md`: when touching `loom diff`, branch-driven pattern exploration, projected darts, or the boundary between Loomit, seamlint, and truer.
 - `docs/implementation-guidelines.md`: when confirming package boundaries, implementation conventions, or general coding rules.
 - `docs/operational-constraints.md`: when touching file writes, copies, path resolution, error classification, concurrency, or `output/`.
 - `docs/technology-selection.md`: when the task depends on tooling choices or cross-platform behavior.
