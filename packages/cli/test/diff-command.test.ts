@@ -235,4 +235,209 @@ describe("runDiffCommand", () => {
     expect(mocks.loadProject).not.toHaveBeenCalled();
     expect(stderr).toEqual([]);
   });
+
+  it("renders related prototype note reasons and test case in text output for --part diffs", async () => {
+    // 守る仕様: --part diff で prototype notes が読めたら、command の text 出力でも related note の
+    // why/test case まで見えるようにする。
+    const cwd = "C:\\workspace";
+    const fromProjectPath = join(cwd, "from-project");
+    const toProjectPath = join(cwd, "to-project");
+    const fromPartPath = join(fromProjectPath, "parts", "body", "part.loom");
+    const toPartPath = join(toProjectPath, "parts", "body", "part.loom");
+    const fromNotesPath = join(fromProjectPath, "notes", "prototype-notes.yml");
+    const toNotesPath = join(toProjectPath, "notes", "prototype-notes.yml");
+
+    mocks.access.mockResolvedValue(undefined);
+    mocks.loadProject
+      .mockResolvedValueOnce({
+        ok: true,
+        value: {
+          paths: {
+            partFilePaths: { body: fromPartPath },
+            projectRoot: fromProjectPath,
+            projectFilePath: join(fromProjectPath, "loomit.yml")
+          }
+        },
+        diagnostics: []
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        value: {
+          paths: {
+            partFilePaths: { body: toPartPath },
+            projectRoot: toProjectPath,
+            projectFilePath: join(toProjectPath, "loomit.yml")
+          }
+        },
+        diagnostics: []
+      });
+
+    mocks.loadProjectedPart
+      .mockResolvedValueOnce({
+        ok: true,
+        value: {
+          schema: "loomit.part.v0",
+          name: "darted-body",
+          variant: "front-v1",
+          type: "body"
+        },
+        diagnostics: []
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        value: {
+          schema: "loomit.part.v0",
+          name: "darted-body",
+          variant: "front-v2",
+          type: "body"
+        },
+        diagnostics: []
+      });
+
+    mocks.loadPrototypeNotesFile
+      .mockResolvedValueOnce({
+        ok: true,
+        value: {
+          schema: "loomit.prototype_notes.v0",
+          notes: [
+            {
+              id: "note-2026-06-28-armhole",
+              date: "2026-06-28",
+              result: "failed",
+              issue: "outdated version should be replaced",
+              creates_test_case: "arm-raise-old",
+              applies_to: ["fitted-armhole"]
+            }
+          ]
+        },
+        diagnostics: []
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        value: {
+          schema: "loomit.prototype_notes.v0",
+          notes: [
+            {
+              id: "note-2026-06-28-armhole",
+              date: "2026-06-28",
+              result: "failed",
+              issue: "armhole tight when raising arms",
+              creates_test_case: "arm-raise",
+              applies_to: ["fitted-armhole", "non-stretch-fabric"],
+              suggested_change: ["increase armhole ease"]
+            }
+          ]
+        },
+        diagnostics: []
+      });
+
+    mocks.diffParts.mockImplementation(
+      (
+        from: { readonly name: string; readonly variant: string; readonly type: string },
+        to: { readonly name: string; readonly variant: string; readonly type: string },
+        options?: {
+          readonly prototypeNotes?: {
+            readonly schema: string;
+            readonly notes: readonly {
+              readonly id: string;
+              readonly issue: string;
+              readonly creates_test_case: string;
+            }[];
+          };
+        }
+      ) => {
+        expect(options?.prototypeNotes?.notes).toEqual([
+          expect.objectContaining({
+            id: "note-2026-06-28-armhole",
+            issue: "armhole tight when raising arms",
+            creates_test_case: "arm-raise"
+          })
+        ]);
+
+        return {
+          status: "changed",
+          decisionSummary: {
+            silhouetteImpact: "medium",
+            volumeChange: "reduced",
+            connectionRisk: "none",
+            prototypeNoteSignal: "related-notes-found"
+          },
+          diagnostics: [],
+          from: {
+            name: from.name,
+            variant: from.variant,
+            type: from.type
+          },
+          to: {
+            name: to.name,
+            variant: to.variant,
+            type: to.type
+          },
+          changes: [
+            {
+              feature: "dart",
+              kind: "modified",
+              id: "waist_front",
+              before: {
+                apex_ref: "val:point#bodice/Apex",
+                width_mm: 30,
+                legs: { left_ref: "val:point#bodice/Left", right_ref: "val:point#bodice/Right" }
+              },
+              after: {
+                apex_ref: "val:point#bodice/Apex",
+                width_mm: 35,
+                legs: { left_ref: "val:point#bodice/Left", right_ref: "val:point#bodice/Right" }
+              },
+              changes: [{ field: "width_mm", before: 30, after: 35 }]
+            }
+          ],
+          relatedNotes: [
+            {
+              id: "note-2026-06-28-armhole",
+              date: "2026-06-28",
+              result: "failed",
+              issue: "armhole tight when raising arms",
+              appliesTo: ["fitted-armhole", "non-stretch-fabric"],
+              suggestedChange: ["increase armhole ease"],
+              createsTestCase: "arm-raise",
+              reasons: [
+                {
+                  kind: "applies-to-tags",
+                  tags: ["fitted-armhole", "non-stretch-fabric"],
+                  matchedOn: "both"
+                },
+                { kind: "changed-feature", feature: "dart", changedIds: ["waist_front"] }
+              ]
+            }
+          ]
+        };
+      }
+    );
+
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const exitCode = await runDiffCommand(["from-project", "to-project", "--part", "body"], {
+      cwd,
+      stdout: (text) => {
+        stdout.push(text);
+      },
+      stderr: (text) => {
+        stderr.push(text);
+      }
+    });
+
+    const output = stdout.join("");
+
+    expect(mocks.loadPrototypeNotesFile).toHaveBeenNthCalledWith(1, fromNotesPath);
+    expect(mocks.loadPrototypeNotesFile).toHaveBeenNthCalledWith(2, toNotesPath);
+    expect(exitCode).toBe(0);
+    expect(output).toContain("Loomit diff: changed");
+    expect(output).toContain("Related Prototype Notes:");
+    expect(output).toContain(
+      "why: applies-to tags [fitted-armhole, non-stretch-fabric] (both); changed dart [waist_front]"
+    );
+    expect(output).toContain("test case: arm-raise");
+    expect(output).toContain("suggested_change: increase armhole ease");
+    expect(stderr).toEqual([]);
+  });
 });

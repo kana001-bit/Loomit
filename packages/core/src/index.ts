@@ -34,6 +34,7 @@ export type {
   PartDiffDecisionSummary,
   PartDiffFieldChange,
   PartDiffPrototypeNoteMatch,
+  PartDiffPrototypeNoteReason,
   PartDiffReport,
   PartDiffStatus,
   PrototypeNoteSignal,

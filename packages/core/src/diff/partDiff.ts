@@ -101,6 +101,25 @@ export interface PartDiffReport {
   readonly relatedNotes: readonly PartDiffPrototypeNoteMatch[];
 }
 
+// 設計判断: prototype note と差分の間に id レベルの構造リンクは無い(note は applies_to タグと
+// creates_test_case しか差分に接続できない)。そこで「なぜ今回の差分に関連するか」を、発明した幾何意味では
+// なく、実際に読める事実だけで説明する: (1) note の設計前提タグが今も成立している、(2) その前提下で
+// 実際にフィーチャが変わった。この2つを reason として持たせ、判断材料を透明にする。
+export type PartDiffPrototypeNoteReason =
+  | {
+      readonly kind: "applies-to-tags";
+      // note.applies_to のうち part のタグと一致した設計前提タグ。regime が今も成立している根拠。
+      readonly tags: readonly string[];
+      // from / to / both のどの revision で前提が成立したか。
+      readonly matchedOn: "from" | "to" | "both";
+    }
+  | {
+      readonly kind: "changed-feature";
+      // 今回の差分で変わったフィーチャ種別。note を読み返す価値がある「変化があった」根拠。
+      readonly feature: PartDiffChange["feature"];
+      readonly changedIds: readonly string[];
+    };
+
 export interface PartDiffPrototypeNoteMatch {
   readonly id: string;
   readonly date: string;
@@ -108,6 +127,10 @@ export interface PartDiffPrototypeNoteMatch {
   readonly issue: string;
   readonly appliesTo: readonly string[];
   readonly suggestedChange: readonly string[];
+  // schema 上 applies_to と対で必ず存在する movement test。差分後に再走行すべき試験の手がかり。
+  readonly createsTestCase: string;
+  // この note が今回の差分に関連する根拠。tag 一致(regime)＋変わったフィーチャ種別。
+  readonly reasons: readonly PartDiffPrototypeNoteReason[];
 }
 
 export function diffParts(
@@ -128,7 +151,7 @@ export function diffParts(
     ...diffConnectors(from.connectors ?? {}, to.connectors ?? {}),
     ...diffRequirements(from.requires ?? {}, to.requires ?? {})
   ];
-  const relatedNotes = findRelatedPrototypeNotes(from, to, options.prototypeNotes);
+  const relatedNotes = findRelatedPrototypeNotes(from, to, changes, options.prototypeNotes);
   const decisionSummary = buildDecisionSummary(changes, relatedNotes);
 
   return {
@@ -533,17 +556,28 @@ function getPartDiffStatus(
 function findRelatedPrototypeNotes(
   from: Part,
   to: Part,
+  changes: readonly PartDiffChange[],
   prototypeNotes: PrototypeNotes | undefined
 ): readonly PartDiffPrototypeNoteMatch[] {
   if (prototypeNotes === undefined) {
     return [];
   }
 
+  // 何も変わっていない差分に過去メモを並べても「この変更が過去とどう関わるか」の判断材料にならない。
+  // note は今回変わったフィーチャに紐づけて初めて related とみなす(タグが付いているだけでは出さない)。
+  if (changes.length === 0) {
+    return [];
+  }
+
   const fromTags = new Set(from.tags ?? []);
   const toTags = new Set(to.tags ?? []);
+  // 変わったフィーチャの根拠は差分ごとに同一なので、note ごとに作り直さず一度だけ組み立てて共有する。
+  const changedFeatureReasons = buildChangedFeatureReasons(changes);
 
   return prototypeNotes.notes.flatMap((note) => {
-    if (note.applies_to === undefined) {
+    // applies_to と creates_test_case は schema 上つねに対で存在するが、片方でも欠ける不正データは
+    // related に載せない(createsTestCase を確定した string として扱えるようにする防御)。
+    if (note.applies_to === undefined || note.creates_test_case === undefined) {
       return [];
     }
 
@@ -554,6 +588,12 @@ function findRelatedPrototypeNotes(
       return [];
     }
 
+    const appliesToReason: PartDiffPrototypeNoteReason = {
+      kind: "applies-to-tags",
+      tags: [...note.applies_to],
+      matchedOn: matchesFrom && matchesTo ? "both" : matchesFrom ? "from" : "to"
+    };
+
     return [
       {
         id: note.id,
@@ -561,7 +601,41 @@ function findRelatedPrototypeNotes(
         result: note.result,
         issue: note.issue,
         appliesTo: [...note.applies_to],
-        suggestedChange: [...(note.suggested_change ?? [])]
+        suggestedChange: [...(note.suggested_change ?? [])],
+        createsTestCase: note.creates_test_case,
+        reasons: [appliesToReason, ...changedFeatureReasons]
+      }
+    ];
+  });
+}
+
+// 差分で変わったフィーチャを種別ごとにまとめ、related note の「変化があった」根拠にする。
+// 種別は安定順(dart→connector→requirement)・id は昇順で並べ、出力とテストを決定的にする。
+function buildChangedFeatureReasons(
+  changes: readonly PartDiffChange[]
+): readonly PartDiffPrototypeNoteReason[] {
+  const idsByFeature = new Map<PartDiffChange["feature"], Set<string>>();
+
+  for (const change of changes) {
+    const ids = idsByFeature.get(change.feature) ?? new Set<string>();
+    ids.add(change.id);
+    idsByFeature.set(change.feature, ids);
+  }
+
+  const featureOrder: readonly PartDiffChange["feature"][] = ["dart", "connector", "requirement"];
+
+  return featureOrder.flatMap((feature) => {
+    const ids = idsByFeature.get(feature);
+
+    if (ids === undefined) {
+      return [];
+    }
+
+    return [
+      {
+        kind: "changed-feature" as const,
+        feature,
+        changedIds: [...ids].sort()
       }
     ];
   });
