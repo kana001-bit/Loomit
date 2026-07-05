@@ -1,7 +1,7 @@
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import type { PrototypeNotes } from "../schema/prototype-notes.schema.js";
-import type { Connector, Dart, Part, Requirement } from "../schema/part.schema.js";
+import type { Connector, Dart, Notch, Part, Requirement } from "../schema/part.schema.js";
 
 export type PartDiffStatus = "same" | "changed" | "warning" | "error";
 
@@ -74,6 +74,26 @@ export type PartDiffChange =
       readonly id: string;
       readonly before: Dart;
       readonly after: Dart;
+      readonly changes: readonly PartDiffFieldChange[];
+    }
+  | {
+      readonly feature: "notch";
+      readonly kind: "added";
+      readonly id: string;
+      readonly after: Notch;
+    }
+  | {
+      readonly feature: "notch";
+      readonly kind: "removed";
+      readonly id: string;
+      readonly before: Notch;
+    }
+  | {
+      readonly feature: "notch";
+      readonly kind: "modified";
+      readonly id: string;
+      readonly before: Notch;
+      readonly after: Notch;
       readonly changes: readonly PartDiffFieldChange[];
     }
   | {
@@ -175,6 +195,7 @@ export function diffParts(
   ];
   const changes = [
     ...diffDarts(from.darts ?? {}, to.darts ?? {}),
+    ...diffNotches(from.notches ?? {}, to.notches ?? {}),
     ...diffConnectors(from.connectors ?? {}, to.connectors ?? {}),
     ...diffRequirements(from.requires ?? {}, to.requires ?? {})
   ];
@@ -307,6 +328,68 @@ function diffDartFields(before: Dart, after: Dart): readonly PartDiffFieldChange
   );
   pushFieldChange(changes, "legs.left_ref", before.legs.left_ref, after.legs.left_ref);
   pushFieldChange(changes, "legs.right_ref", before.legs.right_ref, after.legs.right_ref);
+
+  return changes;
+}
+
+function diffNotches(
+  fromNotches: Readonly<Record<string, Notch>>,
+  toNotches: Readonly<Record<string, Notch>>
+): readonly PartDiffChange[] {
+  const ids = new Set([...Object.keys(fromNotches), ...Object.keys(toNotches)]);
+  const changes: PartDiffChange[] = [];
+
+  for (const id of [...ids].sort()) {
+    const before = fromNotches[id];
+    const after = toNotches[id];
+
+    if (before === undefined && after !== undefined) {
+      changes.push({
+        feature: "notch",
+        kind: "added",
+        id,
+        after
+      });
+      continue;
+    }
+
+    if (before !== undefined && after === undefined) {
+      changes.push({
+        feature: "notch",
+        kind: "removed",
+        id,
+        before
+      });
+      continue;
+    }
+
+    if (before === undefined || after === undefined) {
+      continue;
+    }
+
+    const fieldChanges = diffNotchFields(before, after);
+
+    if (fieldChanges.length > 0) {
+      changes.push({
+        feature: "notch",
+        kind: "modified",
+        id,
+        before,
+        after,
+        changes: fieldChanges
+      });
+    }
+  }
+
+  return changes;
+}
+
+function diffNotchFields(before: Notch, after: Notch): readonly PartDiffFieldChange[] {
+  const changes: PartDiffFieldChange[] = [];
+
+  pushFieldChange(changes, "seam_ref", before.seam_ref, after.seam_ref);
+  pushFieldChange(changes, "position", before.position, after.position);
+  pushFieldChange(changes, "type", before.type, after.type);
 
   return changes;
 }
@@ -651,7 +734,12 @@ function buildChangedFeatureReasons(
     idsByFeature.set(change.feature, ids);
   }
 
-  const featureOrder: readonly PartDiffChange["feature"][] = ["dart", "connector", "requirement"];
+  const featureOrder: readonly PartDiffChange["feature"][] = [
+    "dart",
+    "notch",
+    "connector",
+    "requirement"
+  ];
 
   return featureOrder.flatMap((feature) => {
     const ids = idsByFeature.get(feature);
@@ -834,10 +922,14 @@ function numericValue(
   return typeof value === "number" ? value : undefined;
 }
 
-// connectors / requires の変更は縫い合わせ・適合条件に効きうるため、後続の厳密チェック要という気配を立てる。
+// connectors / requires / notches の変更は縫い合わせ・適合に効きうるため、後続の厳密チェック要という気配を立てる。
+// notch(合印)は縫い合わせの位置合わせそのものなので、追加・削除・移動はすべて接続確認の対象にする。
 function getConnectionRisk(changes: readonly PartDiffChange[]): ConnectionRisk {
   return changes.some(
-    (change) => change.feature === "connector" || change.feature === "requirement"
+    (change) =>
+      change.feature === "connector" ||
+      change.feature === "requirement" ||
+      change.feature === "notch"
   )
     ? "review-needed"
     : "none";

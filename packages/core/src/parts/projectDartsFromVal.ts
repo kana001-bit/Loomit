@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
+import { collectBlocks, collectFirstBlock, collectSelfClosingTags } from "./valXml.js";
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import { getErrno } from "../filesystem/fsError.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
@@ -9,11 +10,6 @@ import type { Dart } from "../schema/part.schema.js";
 export interface ValentinaDartProjectionResult {
   readonly darts: Readonly<Record<string, Dart>>;
   readonly diagnostics: readonly Diagnostic[];
-}
-
-interface XmlTagMatch {
-  readonly attrs: Readonly<Record<string, string>>;
-  readonly content: string;
 }
 
 interface ValPoint {
@@ -152,6 +148,10 @@ export function projectDartsFromValText(
   };
 }
 
+// NOTE: loadProjectedPart は source.val を1回読みに集約したため、現状この関数の Loomit 内部消費者は無い。
+// ただし「part の相対パスから darts だけを read-only に射影する」自己完結APIとして public に残す。
+// Seamlint(merge 周りの seam/geometry を focused に検査する将来ツール)のように、単一フィーチャだけを
+// .val から取り出したい消費者に向く粒度なので温存する。責務分担は docs/work/diffable-domain.md 参照。
 export async function projectPartDartsFromSource(
   partFilePath: string,
   sourceRelativePath: string
@@ -262,52 +262,4 @@ function extractHalfBase(formula: string): string | undefined {
 
 function formatPointRef(drawName: string, point: ValPoint): string {
   return `val:point#${drawName}/${point.name ?? point.id}`;
-}
-
-function collectFirstBlock(source: string, tagName: string): XmlTagMatch | undefined {
-  return collectBlocks(source, tagName)[0];
-}
-
-function collectBlocks(source: string, tagName: string): readonly XmlTagMatch[] {
-  const pattern = new RegExp(`<${tagName}\\b([^>]*)>([\\s\\S]*?)<\\/${tagName}>`, "g");
-  const tags: XmlTagMatch[] = [];
-
-  for (const match of source.matchAll(pattern)) {
-    tags.push({
-      attrs: parseAttributes(match[1] ?? ""),
-      content: match[2] ?? ""
-    });
-  }
-
-  return tags;
-}
-
-function collectSelfClosingTags(source: string, tagName: string): readonly XmlTagMatch[] {
-  const pattern = new RegExp(`<${tagName}\\b([^>]*)\\/>`, "g");
-  const tags: XmlTagMatch[] = [];
-
-  for (const match of source.matchAll(pattern)) {
-    tags.push({
-      attrs: parseAttributes(match[1] ?? ""),
-      content: ""
-    });
-  }
-
-  return tags;
-}
-
-function parseAttributes(source: string): Readonly<Record<string, string>> {
-  const attrs: Record<string, string> = {};
-  const attrPattern = /([A-Za-z0-9_:-]+)\s*=\s*"([^"]*)"/g;
-
-  for (const match of source.matchAll(attrPattern)) {
-    const key = match[1];
-    const value = match[2];
-
-    if (key !== undefined && value !== undefined) {
-      attrs[key] = value;
-    }
-  }
-
-  return attrs;
 }
