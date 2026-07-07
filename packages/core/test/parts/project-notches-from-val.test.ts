@@ -211,6 +211,68 @@ describe("projectNotchesFromValText", () => {
       }
     });
   });
+
+  it("projects Seamly2D notchLength/notchWidth into depth_mm/width_mm", () => {
+    // 守る仕様: Seamly2D は合印の寸法を node に数値で持つ(notchLength=縫い代方向の深さ, notchWidth=マーク幅)。
+    //           これを depth_mm / width_mm へ read-only 射影する。
+    const result = projectNotchesFromValText(
+      `<?xml version="1.0" encoding="UTF-8"?>
+<pattern>
+  <draw name="bodice">
+    <modeling>
+      <path id="46" inUse="true" name="seam" seam="side" type="1">
+        <nodes>
+          <node idObject="92" type="NodePoint" passmark="1" position="0.5" notchLength="8" notchWidth="3"/>
+        </nodes>
+      </path>
+    </modeling>
+  </draw>
+</pattern>`,
+      {
+        filePath: "fixture.val"
+      }
+    );
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.notches).toEqual({
+      "val:bodice:notch:side:92": {
+        seam_ref: "val:seam#bodice/side",
+        position: 0.5,
+        depth_mm: 8,
+        width_mm: 3
+      }
+    });
+  });
+
+  it("omits notch depth_mm/width_mm when the dimensions are absent or non-positive", () => {
+    // 守る仕様: 寸法未設定・0・負は「指定なし」として黙って省く(Seamly2D は既定値運用があり、書かれていないのは正常系)。
+    //           位置さえ読めれば合印自体は射影する。
+    const result = projectNotchesFromValText(
+      `<?xml version="1.0" encoding="UTF-8"?>
+<pattern>
+  <draw name="bodice">
+    <modeling>
+      <path id="47" inUse="true" name="seam" seam="side" type="1">
+        <nodes>
+          <node idObject="93" type="NodePoint" passmark="1" position="0.5" notchLength="0" notchWidth="-1"/>
+        </nodes>
+      </path>
+    </modeling>
+  </draw>
+</pattern>`,
+      {
+        filePath: "fixture.val"
+      }
+    );
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.notches).toEqual({
+      "val:bodice:notch:side:93": {
+        seam_ref: "val:seam#bodice/side",
+        position: 0.5
+      }
+    });
+  });
 });
 
 describe("projectNotchesFromValFile", () => {

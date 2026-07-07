@@ -32,7 +32,14 @@ export const notchSchema = z
     // position は縫い線上の正規化位置(0=始点, 1=終点)。connector range の from/to と同じ約束にそろえる。
     position: z.number().finite().min(0).max(1),
     // type は合印の種類(single/double/slit 等)。任意。
-    type: z.string().min(1).optional()
+    type: z.string().min(1).optional(),
+    // 設計判断: depth_mm は合印を縫い代方向にどれだけ深く入れるか(クリップ量)を表す編集フィーチャの param で、
+    // 幾何の点そのものではない。Seamly2D の notchLength に対応する。厚地では深いと縫い代が弱り、浅いと厚みで
+    // 見えない、という縫製判断が乗る層。仕上がり寸法系と同じ mm 規約。0/負は寸法指定なしとして扱うため positive。
+    depth_mm: z.number().finite().positive().optional(),
+    // 設計判断: width_mm は合印マークの幅。Seamly2D の notchWidth に対応する。depth と同じく「縫いやすさ」の
+    // param であって、辺が合うかどうか(接続整合)は変えない。
+    width_mm: z.number().finite().positive().optional()
   })
   .strict();
 

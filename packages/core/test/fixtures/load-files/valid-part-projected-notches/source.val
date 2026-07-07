@@ -13,7 +13,7 @@
       <path id="30" inUse="true" name="seam" seam="armhole" type="1">
         <nodes>
           <node idObject="20" type="NodePoint"/>
-          <node idObject="21" type="NodePoint" passmark="1" passmarkType="single" position="0.5"/>
+          <node idObject="21" type="NodePoint" passmark="1" passmarkType="single" position="0.5" notchLength="8" notchWidth="3"/>
           <node idObject="22" type="NodePoint"/>
         </nodes>
       </path>

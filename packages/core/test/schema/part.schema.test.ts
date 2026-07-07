@@ -97,6 +97,47 @@ describe("part schema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts a notch with depth_mm and width_mm sewing params", () => {
+    // 守る仕様: notch は identity(seam_ref/position)に加えて、縫いやすさの param として depth_mm(クリップ量)と
+    //           width_mm(マーク幅)を任意で持てる。Seamly2D の notchLength/notchWidth に対応する。
+    const result = partSchema.safeParse({
+      schema: "loomit.part.v0",
+      name: "notched-body",
+      variant: "front-v1",
+      type: "body",
+      notches: {
+        side_top: {
+          seam_ref: "val:seam#bodice/side",
+          position: 0.25,
+          type: "single",
+          depth_mm: 8,
+          width_mm: 3
+        }
+      }
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a non-positive notch depth_mm", () => {
+    // 守る仕様: depth_mm は「どれだけ深く入れるか」の実寸なので正の数のみ。0/負は寸法として無意味なので弾く。
+    const result = partSchema.safeParse({
+      schema: "loomit.part.v0",
+      name: "notched-body",
+      variant: "front-v1",
+      type: "body",
+      notches: {
+        side_top: {
+          seam_ref: "val:seam#bodice/side",
+          position: 0.25,
+          depth_mm: 0
+        }
+      }
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it("rejects a notch position outside the 0..1 seam range", () => {
     // 守る仕様: position は縫い線上の正規化位置なので 0..1 に収まる。範囲外(縫い線の外)は不正として弾く。
     const result = partSchema.safeParse({
