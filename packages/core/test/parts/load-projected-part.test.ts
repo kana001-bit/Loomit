@@ -38,7 +38,9 @@ describe("loadProjectedPart", () => {
       "val:block:notch:armhole:21": {
         seam_ref: "val:seam#block/armhole",
         position: 0.5,
-        type: "single"
+        type: "single",
+        depth_mm: 8,
+        width_mm: 3
       }
     });
     expect(result.diagnostics).toEqual([]);

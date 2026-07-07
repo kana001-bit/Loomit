@@ -51,8 +51,14 @@ export async function projectNotchesFromValFile(
 
 // 設計判断: notch(合印)は縫い線上の「合わせ目印」であって幾何の点そのものではない。
 // Valentina の modeling では、縫い線を表す <path name="seam"> の <node> に passmark="1" が立つ。
-// ここではその passmark node を identity(seam＋node)＋param(縫い線上の正規化位置)へ射影する。
+// ここではその passmark node を identity(seam＋node)＋param(縫い線上の正規化位置＋深さ/幅)へ射影する。
 // 位置は幾何計算せず、.val 側が持つ position 属性(0..1)をそのまま読む(read-only 射影)。
+// 深さ/幅は Seamly2D 方言の数値属性 notchLength → depth_mm(縫い代方向のクリップ量) / notchWidth → width_mm
+// (合印マーク幅)を射影する。Seamly2D 優先で実装し、Valentina 本家の enum(passmarkLine/passmarkAngle)は
+// 将来フォールバックとして足せるよう、寸法の読み取りを parsePositiveDimension に分離しておく。
+// 注: .val の寸法は pattern の <unit>(cm/mm/inch)依存。現状は既存の射影(darts 含む)と同様に単位変換せず、
+//     数値をそのまま mm として読む。実ファイル運用時の <unit>→mm 変換は、position/passmarkType が実 .val に
+//     存在しない合成属性である点(= 実フォーマット整合)と合わせた follow-up とする。
 export function projectNotchesFromValText(
   source: string,
   options: {
@@ -110,11 +116,18 @@ export function projectNotchesFromValText(
           return;
         }
 
+        // Seamly2D は合印の寸法を node に数値で持つ(notchLength=縫い代方向の深さ, notchWidth=マーク幅)。
+        // 正の有限数だけ param 化し、未設定・0・負・非数値は「寸法指定なし」として黙って省く(既定値運用が正常系)。
+        const depthMm = parsePositiveDimension(node.attrs.notchLength);
+        const widthMm = parsePositiveDimension(node.attrs.notchWidth);
+
         notches[`val:${drawName}:notch:${seamName}:${nodeKey}`] = {
           seam_ref: seamRef,
           position,
           // passmarkType が空文字だと schema(min 1)に反するので、中身があるときだけ type を載せる。
-          ...(node.attrs.passmarkType ? { type: node.attrs.passmarkType } : {})
+          ...(node.attrs.passmarkType ? { type: node.attrs.passmarkType } : {}),
+          ...(depthMm === undefined ? {} : { depth_mm: depthMm }),
+          ...(widthMm === undefined ? {} : { width_mm: widthMm })
         };
       });
     }
@@ -153,6 +166,22 @@ function parsePosition(raw: string | undefined): number | undefined {
   const value = Number(raw);
 
   if (!Number.isFinite(value) || value < 0 || value > 1) {
+    return undefined;
+  }
+
+  return value;
+}
+
+// 合印の寸法(深さ notchLength / 幅 notchWidth)。正の有限数だけ受け付け、未設定・空文字・0・負・非数値は
+// 「寸法指定なし」として省く(Seamly2D は既定値運用があり、寸法が書かれていないのは正常系)。
+function parsePositiveDimension(raw: string | undefined): number | undefined {
+  if (raw === undefined || raw.trim() === "") {
+    return undefined;
+  }
+
+  const value = Number(raw);
+
+  if (!Number.isFinite(value) || value <= 0) {
     return undefined;
   }
 
