@@ -117,6 +117,12 @@ export type {
   MovementTestRuleContext,
   MovementTestRuleRegistry
 } from "./movement-tests/rules.js";
+export { addPartToProject } from "./parts/addPartToProject.js";
+export type {
+  AddedPart,
+  AddPartConnectorInput,
+  AddPartToProjectOptions
+} from "./parts/addPartToProject.js";
 export { loadPartFile } from "./parts/loadPartFile.js";
 export { loadProjectedPart } from "./parts/loadProjectedPart.js";
 export { projectDartsFromValFile, projectDartsFromValText, projectPartDartsFromSource } from "./parts/projectDartsFromVal.js";

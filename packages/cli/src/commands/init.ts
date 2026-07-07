@@ -41,8 +41,24 @@ export async function runInitCommand(
     return 1;
   }
 
-  options.stdout(`Created Loomit project: ${result.value.projectRoot}\n`);
+  options.stdout(`Created Loomit project: ${result.value.projectRoot}\n\n${formatNextSteps()}`);
   return 0;
+}
+
+// init 直後に「次に何をするか」だけを案内する。長いチュートリアルにはせず最短導線を1画面に収める。
+// part.loom は手書きさせず、`loom add` に .val を渡して生成する導線に統一する(ユーザーは .val を
+// 用意するだけでよい)。
+export function formatNextSteps(): string {
+  return [
+    "Next steps:",
+    "",
+    "  1. Add a Valentina .val as a part (generates part.loom for you):",
+    "       loom add path/to/your.val",
+    "  2. Check it:  loom check",
+    "  3. Build it:  loom build",
+    "",
+    "Run loom --help to see all commands."
+  ].join("\n") + "\n";
 }
 
 export function formatInitHelp(): string {
