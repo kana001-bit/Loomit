@@ -756,7 +756,7 @@ describe("runCli", () => {
     expect(output.stderr.join("")).toContain("Unknown command: unknown");
   });
 
-  it("creates a project with init and can check it", async () => {
+  it("guides you to add a part when checking a freshly initialized (empty) project", async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-init-"));
     const projectPath = join(tempRoot, "created-blouse");
 
@@ -778,14 +778,66 @@ describe("runCli", () => {
       expect(initStdout).toContain("loom check");
       expect(initOutput.stderr).toEqual([]);
 
+      // 守る仕様: part が1つも無い project の check は「ok」で誤誘導せず、先に loom add するよう error で促す。
       const checkOutput = createOutputCollector();
       const checkExitCode = await runCli(["node", "loom", "check", projectPath], {
         cwd: workspaceRoot,
         io: checkOutput.io
       });
 
-      expect(checkExitCode).toBe(0);
-      expect(checkOutput.stdout.join("")).toContain("Loomit check: ok");
+      expect(checkExitCode).toBe(1);
+      expect(checkOutput.stdout.join("")).toContain("Loomit check: error");
+      expect(checkOutput.stdout.join("")).toContain("PROJECT_HAS_NO_PARTS");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("blocks build on an empty project and points to loom add", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-build-empty-"));
+
+    try {
+      await runCli(["node", "loom", "init"], { cwd: tempRoot, io: createOutputCollector().io });
+
+      const output = createOutputCollector();
+      const exitCode = await runCli(["node", "loom", "build", tempRoot], {
+        cwd: workspaceRoot,
+        io: output.io
+      });
+
+      expect(exitCode).toBe(1);
+      expect(output.stdout.join("")).toContain("PROJECT_HAS_NO_PARTS");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("warns about an unregistered .val under parts/ without failing check", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-stray-val-"));
+
+    try {
+      await runCli(["node", "loom", "init"], { cwd: tempRoot, io: createOutputCollector().io });
+      await writeFile(join(tempRoot, "body.val"), "body source\n", "utf8");
+      await runCli(["node", "loom", "add", "body.val"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io,
+        prompter: createScriptedPrompter({ texts: ["body", "body", "v1"], confirms: [false] })
+      });
+
+      // 登録されていない .val を parts/ 配下に置く。
+      await writeFile(join(tempRoot, "parts/leftover.val"), "stray\n", "utf8");
+
+      const output = createOutputCollector();
+      const exitCode = await runCli(["node", "loom", "check", tempRoot], {
+        cwd: workspaceRoot,
+        io: output.io
+      });
+
+      // 守る仕様: 未登録 .val は warning(check は失敗させない)で、loom add を促す。
+      expect(exitCode).toBe(0);
+      expect(output.stdout.join("")).toContain("Loomit check: warning");
+      expect(output.stdout.join("")).toContain("UNREGISTERED_VAL_SOURCE");
+      expect(output.stdout.join("")).toContain("loom add parts/leftover.val");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }

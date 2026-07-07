@@ -97,6 +97,10 @@ loom check [path] [--format text|json]
 - `path` を省略すると現在位置から project を探す
 - 出力形式は `text` または `json`
 - 仕上がり寸法ベースの互換性を扱い、geometry の rich check までは持たない
+- part が1つも無い(まだ `loom add` していない)ときは error で先に add するよう促す
+- `parts/` 配下に、どの part も参照していない `.val` があるときは warning で `loom add` を促す
+
+`loom build` も同様に、part が空なら error で止まる。
 
 ## `loom doctor`
 

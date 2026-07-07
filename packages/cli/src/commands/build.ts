@@ -2,7 +2,9 @@ import { join, resolve } from "node:path";
 
 import {
   buildProject,
+  collectProjectReadinessDiagnostics,
   createBuildReport,
+  getStatusForDiagnostics,
   loadProject,
   resolveParts,
   runChecks
@@ -59,11 +61,14 @@ export async function runBuildCommand(
     return 1;
   }
 
+  // part が空(まだ loom add していない)なら build しても中身が無い。error で止めて先に add を促す。
+  const readinessDiagnostics = await collectProjectReadinessDiagnostics(resolvedProjectResult.value);
   const checkReport = runChecks(resolvedProjectResult.value);
 
-  if (checkReport.status === "error") {
+  if (getStatusForDiagnostics(readinessDiagnostics) === "error" || checkReport.status === "error") {
     writeReport(
       createBuildErrorReportForProject(projectResult.value, [
+        ...readinessDiagnostics,
         ...checkReport.diagnostics,
         ...checkReport.compatibility.flatMap((result) => result.diagnostics)
       ]),
