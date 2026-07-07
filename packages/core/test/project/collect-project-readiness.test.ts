@@ -85,6 +85,30 @@ describe("collectProjectReadinessDiagnostics", () => {
     }
   });
 
+  it("suggests deleting a stray .val that duplicates an already-registered part", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "loomit-readiness-dup-"));
+
+    try {
+      await writeProject(projectRoot, "parts:\n  body: ./parts/body/part.loom");
+      await writeBodyPart(projectRoot);
+      // 登録済み parts/body/body.val と同一内容の残骸を parts/ 直下に置く(= コピーの取り残し)。
+      await writeFile(join(projectRoot, "parts/body.val"), "body source\n", "utf8");
+
+      const diagnostics = await collectProjectReadinessDiagnostics(await resolve(projectRoot));
+
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]?.code).toBe("UNREGISTERED_VAL_SOURCE");
+
+      // 複製なので loom add ではなく「登録済み source を指して削除を促す」に切り替わる。
+      const suggestion = diagnostics[0]?.suggestion?.[0] ?? "";
+      expect(suggestion).toContain("delete");
+      expect(suggestion).toContain("parts/body/body.val");
+      expect(suggestion).not.toContain("loom add");
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
+
   it("is silent when every .val under parts/ is registered", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "loomit-readiness-ok-"));
 

@@ -1,4 +1,4 @@
-import { readdir } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
@@ -48,8 +48,14 @@ export async function collectProjectReadinessDiagnostics(
     return diagnostics;
   }
 
+  // 登録済み source の内容を先読みしておく。stray がこのどれかと同一内容なら「登録済み part の複製」であり、
+  // loom add で登録し直しても role の二重登録(PART_ADD_ALREADY_REGISTERED)や生成先の既存で行き止まりになる。
+  // その場合だけ、add ではなく「残骸なら削除」を促す。
+  const registeredByContent = await readRegisteredSourceContents(resolvedProject, projectRoot);
+
   for (const valPath of unregistered) {
     const relativePath = toRelativePosix(projectRoot, valPath);
+    const duplicateOf = await readDuplicateSource(valPath, registeredByContent);
 
     diagnostics.push(
       createDiagnostic({
@@ -57,7 +63,12 @@ export async function collectProjectReadinessDiagnostics(
         code: "UNREGISTERED_VAL_SOURCE",
         message: `未登録の .val があります: ${relativePath} / A .val under parts/ is not registered as a part: ${relativePath}`,
         target: valPath,
-        suggestion: [`Register it as a part: loom add ${relativePath}`]
+        suggestion:
+          duplicateOf === undefined
+            ? [`Register it as a part: loom add ${relativePath}`]
+            : [
+                `This is a copy of the already-registered ${duplicateOf}; delete it if it is a leftover.`
+              ]
       })
     );
   }
@@ -79,6 +90,52 @@ function collectRegisteredSources(resolvedProject: ResolvedProject): ReadonlySet
   }
 
   return registered;
+}
+
+// 登録済み source の内容 → project 相対パスの map。同一内容の stray を「複製」と判定するために使う。
+// 内容一致だけを複製と見なす(basename 一致だと別 part の別ファイルを誤って「削除して」と促し、取り違えで
+// 消させかねないため)。読めない source は判定から外す(advisory なのでスキャンで失敗させない)。
+async function readRegisteredSourceContents(
+  resolvedProject: ResolvedProject,
+  projectRoot: string
+): Promise<ReadonlyMap<string, string>> {
+  const byContent = new Map<string, string>();
+
+  for (const part of Object.values(resolvedProject.parts)) {
+    const source = part.part.files?.source;
+
+    if (source === undefined) {
+      continue;
+    }
+
+    const absolute = resolve(dirname(part.filePath), source);
+
+    try {
+      const content = await readFile(absolute, "utf8");
+
+      if (!byContent.has(content)) {
+        byContent.set(content, toRelativePosix(projectRoot, absolute));
+      }
+    } catch {
+      // 読めない source は複製判定から外す。
+    }
+  }
+
+  return byContent;
+}
+
+// stray .val が登録済み source と同一内容なら、その登録済み source の project 相対パスを返す。
+// 読めない/一致しない場合は undefined(= 通常の loom add 案内にフォールバックする)。
+async function readDuplicateSource(
+  valPath: string,
+  registeredByContent: ReadonlyMap<string, string>
+): Promise<string | undefined> {
+  try {
+    const content = await readFile(valPath, "utf8");
+    return registeredByContent.get(content);
+  } catch {
+    return undefined;
+  }
 }
 
 // parts/ 配下を再帰的に走査して .val を集める。parts/ が無い場合や読めない場合は advisory なので空で返す
