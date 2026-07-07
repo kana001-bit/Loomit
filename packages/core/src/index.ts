@@ -117,7 +117,7 @@ export type {
   MovementTestRuleContext,
   MovementTestRuleRegistry
 } from "./movement-tests/rules.js";
-export { addPartToProject } from "./parts/addPartToProject.js";
+export { addPartToProject, checkValSourceExists } from "./parts/addPartToProject.js";
 export type {
   AddedPart,
   AddPartConnectorInput,

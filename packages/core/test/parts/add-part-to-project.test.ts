@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -60,6 +60,36 @@ describe("addPartToProject", () => {
       expect(await readFile(join(projectRoot, "loomit.yml"), "utf8")).toContain(
         "body: ./parts/body/part.loom"
       );
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("consumes a .val that already lives inside parts/ (no leftover for check to flag)", async () => {
+    // parts/ 内に置いた生 .val は、取り込み後に元を削除する(= 実質 move)。コピーのままだと
+    // parts/waist.val と parts/body/waist.val の二重になり、check が「未登録の .val」と咎めてしまう。
+    const projectRoot = await makeProject();
+    const valPath = join(projectRoot, "parts", "waist.val");
+
+    try {
+      await mkdir(join(projectRoot, "parts"), { recursive: true });
+      await writeFile(valPath, "waist source\n", "utf8");
+
+      const result = await addPartToProject({
+        projectPath: projectRoot,
+        valPath,
+        name: "waist",
+        type: "body",
+        variant: "v1"
+      });
+
+      expect(result.ok).toBe(true);
+
+      // 正本は part ディレクトリへ移り、parts/ 直下の元ファイルは消える。
+      expect(await readFile(join(projectRoot, "parts/body/waist.val"), "utf8")).toBe(
+        "waist source\n"
+      );
+      await expect(readFile(valPath, "utf8")).rejects.toThrow();
     } finally {
       await rm(projectRoot, { recursive: true, force: true });
     }
