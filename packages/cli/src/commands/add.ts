@@ -1,6 +1,6 @@
 import { basename, dirname, relative, resolve } from "node:path";
 
-import { addPartToProject, isSafePathSegment } from "@loomit/core";
+import { addPartToProject, checkValSourceExists, isSafePathSegment } from "@loomit/core";
 import type { AddedPart, AddPartConnectorInput } from "@loomit/core";
 import { formatDiagnosticsText } from "../formatters/diagnosticsText.js";
 import { createReadlinePrompter } from "../prompter.js";
@@ -49,6 +49,15 @@ export async function runAddCommand(
 
   const valPath = resolve(options.cwd, parsedArgs.valPath);
   const defaultName = stripExtension(basename(parsedArgs.valPath));
+
+  // 対話を始める前に .val の存在を確認する。無ければ即座に失敗させ、name/type/seam を全部入力させた
+  // 最後に「見つからない」と言う無駄をなくす(core も書き込み直前に同じ関門を持つ)。
+  const missingSource = await checkValSourceExists(valPath);
+
+  if (missingSource !== undefined) {
+    options.stderr(`${formatDiagnosticsText([missingSource]).join("\n")}\n`);
+    return 1;
+  }
 
   const prompter = options.prompter ?? createReadlinePrompter();
   let answers: PartAnswers;

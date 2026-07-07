@@ -3,6 +3,7 @@ import { basename, join, resolve } from "node:path";
 import { stringify } from "yaml";
 
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
+import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import { describeFsError } from "../filesystem/fsError.js";
 import { isPathWithin, isSafePathSegment } from "../filesystem/pathWithin.js";
 import { writeFileAtomic } from "../filesystem/writeFileAtomic.js";
@@ -83,19 +84,10 @@ export async function addPartToProject(
   const valPath = resolve(options.valPath);
   const valBasename = basename(valPath);
 
-  if (!(await pathExists(valPath))) {
-    return {
-      ok: false,
-      diagnostics: [
-        createDiagnostic({
-          severity: "error",
-          code: "PART_ADD_SOURCE_NOT_FOUND",
-          message: "取り込む .val が見つかりません。 / The .val source to add was not found.",
-          target: valPath,
-          suggestion: ["Check the path to the .val file."]
-        })
-      ]
-    };
+  const missingSource = await checkValSourceExists(valPath);
+
+  if (missingSource !== undefined) {
+    return { ok: false, diagnostics: [missingSource] };
   }
 
   const partDirectory = resolve(projectRoot, "parts", role);
@@ -167,9 +159,14 @@ export async function addPartToProject(
     }
   };
 
+  // 取り込み元 .val が parts/ の中にあるかを、書き込みを始める前に確定させる。中にあれば「取り込み後に
+  // 元を削除(= 実質 move)」して重複を残さない(check が「未登録の .val」と咎める状態を作らない)。
+  // parts/ の外(Downloads や共有フォルダ)から取り込むときは元を残す(コピー)。
+  const consumeSource = isPathWithin(resolve(projectRoot, "parts"), valPath);
+
   try {
     await mkdir(partDirectory, { recursive: true });
-    // .val はコピーする(元ファイルは残す)。誤って上書きしないよう既存があれば失敗させる。
+    // .val は part ディレクトリへコピーする。誤って上書きしないよう既存があれば失敗させる。
     await copyFile(valPath, sourceFilePath);
     await writeFileAtomic(partFilePath, stringify(part));
     // loomit.yml は最後に書く。ここまでで失敗したら下の catch で part ディレクトリを巻き戻す。
@@ -192,6 +189,13 @@ export async function addPartToProject(
     };
   }
 
+  // part.loom と loomit.yml を書けた時点で add は成功。取り込み元が parts/ 内なら、ここで初めて元 .val を
+  // 削除する。ロールバック(上の catch の rm)の後に置くことで、途中失敗で唯一のコピーごと消す事故を防ぐ。
+  // 削除に失敗しても add は成功のまま(元が残り、check が再度案内するだけ)。
+  if (consumeSource) {
+    await rm(valPath, { force: true }).catch(() => undefined);
+  }
+
   return {
     ok: true,
     value: {
@@ -207,6 +211,25 @@ export async function addPartToProject(
     },
     diagnostics: []
   };
+}
+
+// 取り込む .val が存在するかを確認する。存在すれば undefined、無ければ診断を返す。CLI は対話を
+// 始める前にこれを呼んで即座に失敗させ(全部入力させてから「無い」と言わない)、core も書き込み直前の
+// 最終ガードとして同じものを使う。メッセージを1箇所に保つための共有ヘルパー。
+export async function checkValSourceExists(valPath: string): Promise<Diagnostic | undefined> {
+  const resolved = resolve(valPath);
+
+  if (await pathExists(resolved)) {
+    return undefined;
+  }
+
+  return createDiagnostic({
+    severity: "error",
+    code: "PART_ADD_SOURCE_NOT_FOUND",
+    message: "取り込む .val が見つかりません。 / The .val source to add was not found.",
+    target: resolved,
+    suggestion: ["Check the path to the .val file."]
+  });
 }
 
 // 回答から Part を組み立て、書き込む前に正本 schema で検証する。CLI 側で弾ききれない値(例: 負の
