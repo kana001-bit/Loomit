@@ -390,6 +390,8 @@ function diffNotchFields(before: Notch, after: Notch): readonly PartDiffFieldCha
   pushFieldChange(changes, "seam_ref", before.seam_ref, after.seam_ref);
   pushFieldChange(changes, "position", before.position, after.position);
   pushFieldChange(changes, "type", before.type, after.type);
+  pushFieldChange(changes, "depth_mm", before.depth_mm, after.depth_mm);
+  pushFieldChange(changes, "width_mm", before.width_mm, after.width_mm);
 
   return changes;
 }
@@ -923,16 +925,37 @@ function numericValue(
 }
 
 // connectors / requires / notches の変更は縫い合わせ・適合に効きうるため、後続の厳密チェック要という気配を立てる。
-// notch(合印)は縫い合わせの位置合わせそのものなので、追加・削除・移動はすべて接続確認の対象にする。
+// notch(合印)は縫い合わせの位置合わせそのものなので、追加・削除・移動(position)・付け替え(seam_ref)・種別(type)は
+// すべて接続確認の対象にする。ただし depth_mm / width_mm だけの変更は「合印をどれだけ深く/広く入れるか」という
+// 縫いやすさの param であって、辺が合うか(接続整合)は変えないため、connectionRisk は立てない(誤検知を避ける)。
 function getConnectionRisk(changes: readonly PartDiffChange[]): ConnectionRisk {
-  return changes.some(
-    (change) =>
-      change.feature === "connector" ||
-      change.feature === "requirement" ||
-      change.feature === "notch"
-  )
+  return changes.some((change) => {
+    if (change.feature === "connector" || change.feature === "requirement") {
+      return true;
+    }
+
+    if (change.feature === "notch") {
+      return notchChangeAffectsConnection(change);
+    }
+
+    return false;
+  })
     ? "review-needed"
     : "none";
+}
+
+// 設計判断: notch の追加・削除は常に接続確認の対象。変更は接続に効くフィールド(seam_ref/position/type)が
+// 動いたときだけ数え、深さ/幅(depth_mm/width_mm)だけの変更は縫いやすさの調整なので接続確認から外す。
+function notchChangeAffectsConnection(
+  change: Extract<PartDiffChange, { readonly feature: "notch" }>
+): boolean {
+  if (change.kind !== "modified") {
+    return true;
+  }
+
+  return change.changes.some(
+    (fieldChange) => fieldChange.field !== "depth_mm" && fieldChange.field !== "width_mm"
+  );
 }
 
 function buildRecheckHints(

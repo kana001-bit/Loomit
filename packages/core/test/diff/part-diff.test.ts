@@ -290,6 +290,90 @@ describe("diffParts", () => {
     expect(report.decisionSummary.connectionRisk).toBe("review-needed");
   });
 
+  it("reads a notch depth_mm/width_mm change but does not raise connection risk", () => {
+    // 守る仕様: depth_mm(クリップ量) / width_mm(マーク幅)は縫いやすさの調整で、辺が合うか(接続整合)は変えない。
+    //           フィールド変更としては読めるが、depth/width だけの変更なら connectionRisk は立てない(誤検知回避)。
+    const before = createBodyPart({
+      notches: {
+        side_top: {
+          seam_ref: "val:seam#bodice/side",
+          position: 0.5,
+          depth_mm: 6,
+          width_mm: 3
+        }
+      }
+    });
+    const after = createBodyPart({
+      notches: {
+        side_top: {
+          seam_ref: "val:seam#bodice/side",
+          position: 0.5,
+          depth_mm: 9,
+          width_mm: 3
+        }
+      }
+    });
+
+    const report = diffParts(before, after);
+
+    expect(report.changes).toEqual([
+      {
+        feature: "notch",
+        kind: "modified",
+        id: "side_top",
+        before: {
+          seam_ref: "val:seam#bodice/side",
+          position: 0.5,
+          depth_mm: 6,
+          width_mm: 3
+        },
+        after: {
+          seam_ref: "val:seam#bodice/side",
+          position: 0.5,
+          depth_mm: 9,
+          width_mm: 3
+        },
+        changes: [
+          {
+            field: "depth_mm",
+            before: 6,
+            after: 9
+          }
+        ]
+      }
+    ]);
+    expect(report.decisionSummary.connectionRisk).toBe("none");
+    expect(report.decisionSummary.silhouetteImpact).toBe("none");
+    expect(report.decisionSummary.volumeChange).toBe("none");
+  });
+
+  it("still raises connection risk when a notch moves and its depth changes together", () => {
+    // 守る仕様: depth/width の付随変更があっても、position など接続に効くフィールドが動いていれば connectionRisk は立てる。
+    //           「depth/width だけ」の変更を接続確認から外す精緻化が、位置移動を取りこぼさないことを固定する。
+    const before = createBodyPart({
+      notches: {
+        side_top: {
+          seam_ref: "val:seam#bodice/side",
+          position: 0.25,
+          depth_mm: 6
+        }
+      }
+    });
+    const after = createBodyPart({
+      notches: {
+        side_top: {
+          seam_ref: "val:seam#bodice/side",
+          position: 0.4,
+          depth_mm: 9
+        }
+      }
+    });
+
+    const report = diffParts(before, after);
+
+    expect(report.decisionSummary.connectionRisk).toBe("review-needed");
+  });
+
   it("links a prototype note when a notch changes", () => {
     // 守る仕様: featureOrder に notch を含むので、notch が変わった差分でも note の「changed-feature」理由に
     //          notch が現れる(合印を動かした試作に過去メモを結び付けられる)。
