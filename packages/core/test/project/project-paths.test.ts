@@ -63,7 +63,7 @@ describe("project path resolution", () => {
     expect(paths.projectRoot).toBe(projectRoot);
     expect(paths.partFilePaths.body).toBe(join(projectRoot, "./parts/body/part.loom"));
     expect(paths.partFilePaths.sleeve).toBe(join(projectRoot, "./parts/sleeve/part.loom"));
-    expect(isAbsolute(paths.partFilePaths.body)).toBe(true);
+    expect(isAbsolute(paths.partFilePaths.body ?? "")).toBe(true);
   });
 
   it("loads a project without rewriting stored relative paths", async () => {
@@ -83,7 +83,7 @@ describe("project path resolution", () => {
 
     expect(result.ok).toBe(true);
 
-    const bodyPath = result.ok ? result.value.paths.partFilePaths.body : "";
+    const bodyPath = result.ok ? result.value.paths.partFilePaths.body ?? "" : "";
     const relativeBodyPath = normalize(relative(projectRoot, bodyPath));
 
     expect(relativeBodyPath).toBe(normalize("parts/body/part.loom"));
