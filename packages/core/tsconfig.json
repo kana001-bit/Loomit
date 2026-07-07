@@ -1,10 +1,13 @@
 {
+  // IDE と typecheck 用の設定。src と test の両方を含む(rootDir を "." にして test/ も範囲に入れる)。
+  // これが「tsconfig.json」なので、エディタの TS サーバがテストファイルにもこの設定を適用でき、
+  // node / vitest の型が解決される。dist への出力は tsconfig.build.json が担当する(noEmit)。
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "dist",
-    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
+    "rootDir": ".",
+    "noEmit": true,
+    "types": ["node", "vitest"]
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["dist", "test"]
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["dist"]
 }
