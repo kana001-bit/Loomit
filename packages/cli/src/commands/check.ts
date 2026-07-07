@@ -1,4 +1,5 @@
 import {
+  collectProjectReadinessDiagnostics,
   createCheckReport,
   loadProject,
   resolveParts,
@@ -55,10 +56,16 @@ export async function runCheckCommand(
     return 1;
   }
 
+  // loom add してからでないと意味がない状況(part が空/未登録の .val)を黙って ok にせず案内する。
+  const readinessDiagnostics = await collectProjectReadinessDiagnostics(resolvedProjectResult.value);
   const report = runChecks(resolvedProjectResult.value);
-  writeReport(report, parsedArgs, options);
+  const finalReport = createCheckReport({
+    diagnostics: [...report.diagnostics, ...readinessDiagnostics],
+    compatibility: report.compatibility
+  });
+  writeReport(finalReport, parsedArgs, options);
 
-  return report.status === "error" ? 1 : 0;
+  return finalReport.status === "error" ? 1 : 0;
 }
 
 export function formatCheckHelp(): string {
