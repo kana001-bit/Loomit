@@ -40,7 +40,9 @@ const TYPE_CHOICES = ["body", "sleeve", "collar", "cuff", "facing", "other"] as 
 // 既存から選べば相手と id が確実に一致し(打ち間違いで繋がらない事故を防ぐ)、新規なら将来のパーツが
 // 選べる join になる。将来は .val の <path name="seam" seam="..."> から join を供給する余地も残す。
 
-// 「新しい join を名付ける」を表す select の番兵。実在の join id と衝突しないよう説明的な文字列にする。
+// 「新しい join を名付ける」を表す select の番兵。この文字列は isSafePathSegment を通ってしまう
+// (slash も ".." も含まない)ため、実 join 名としては promptNewJoinName で拒否する。許してしまうと、
+// 次回以降その join を選んでも番兵と誤認され、同名 join を再利用できなくなる。
 const NAME_NEW_JOIN = "(name a new join)";
 
 // プロジェクト内に既にある join(縫い合わせ先候補)。id と、それを宣言しているパーツ(role)を持つ。
@@ -189,28 +191,52 @@ async function promptJoin(
   notify: (text: string) => void,
   existingJoins: readonly ExistingJoin[]
 ): Promise<string> {
-  // 相手になりうる join がまだ無い(最初のパーツ等)なら、選ばせず新しい join を名付けてもらう。
-  if (existingJoins.length === 0) {
-    return promptSegment(prompter, notify, "New join name", undefined);
+  // 縫い合わせ相手になれるのは「まだ1パーツしか宣言していない open な join(=相手待ち)」だけに絞る。
+  // check は同じ id を宣言するパーツ同士を総当たりでペアにする(rules.ts comparePartConnectorLengths)ため、
+  // 既に2パーツで閉じた join を3つ目にも選ばせると、狙った相手だけでなく既存の両者と多対多に繋がってしまう。
+  const openJoins = existingJoins.filter((join) => join.roles.length === 1);
+
+  // 相手になりうる open join がまだ無い(最初のパーツ / 既存が全て閉じている)なら、新しい join を名付けてもらう。
+  if (openJoins.length === 0) {
+    return promptNewJoinName(prompter, notify);
   }
 
   // どの join がどのパーツのものかは select の番号一覧だけでは分からないため、先に宣言元 role 付きで示す。
   notify(
     "Existing joins (pick one to connect, or name a new one):\n" +
-      existingJoins.map((join) => `  ${join.id} (${join.roles.join(", ")})`).join("\n") +
+      openJoins.map((join) => `  ${join.id} (${join.roles.join(", ")})`).join("\n") +
       "\n"
   );
 
-  const choices = [...existingJoins.map((join) => join.id), NAME_NEW_JOIN];
+  const choices = [...openJoins.map((join) => join.id), NAME_NEW_JOIN];
+  // default は「新しい join を名付ける」に倒す。既存 join を default にすると、空 Enter や EOF で
+  // (prompter.select はどちらでも default を返す)意図せず先頭の相手へ黙って接続してしまう。
   const chosen = await prompter.select("Connect to which join?", choices, {
-    default: choices[0] ?? NAME_NEW_JOIN
+    default: NAME_NEW_JOIN
   });
 
   if (chosen !== NAME_NEW_JOIN) {
     return chosen;
   }
 
-  return promptSegment(prompter, notify, "New join name", undefined);
+  return promptNewJoinName(prompter, notify);
+}
+
+// 新しい join 名を単一 segment で受け取る。番兵 NAME_NEW_JOIN は isSafePathSegment を通ってしまうので、
+// 実 join 名としてはここで弾く(通すと次回以降その join を選べなくなる)。
+async function promptNewJoinName(
+  prompter: Prompter,
+  notify: (text: string) => void
+): Promise<string> {
+  for (;;) {
+    const name = await promptSegment(prompter, notify, "New join name", undefined);
+
+    if (name !== NAME_NEW_JOIN) {
+      return name;
+    }
+
+    notify(`"${NAME_NEW_JOIN}" is reserved; choose a different join name.\n`);
+  }
 }
 
 // プロジェクト内の他パーツが宣言している join(connector id)を、宣言元 role 付きで集める。id ごとに
