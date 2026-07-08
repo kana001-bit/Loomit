@@ -240,6 +240,28 @@ describe("part schema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("accepts a connector without a finished length (unmeasured at scaffold time)", () => {
+    // 守る仕様: length_mm は幾何の測定値(.val 評価が要る)で、scaffold 時は未測定を許す。
+    // identity(type)だけの connector も正本 schema を満たす(値は後で Valentina / truer が埋める)。
+    const result = partSchema.safeParse({
+      schema: "loomit.part.v0",
+      name: "puff-sleeve",
+      variant: "v3",
+      type: "sleeve",
+      connectors: {
+        armhole: {
+          type: "armhole"
+        }
+      }
+    });
+
+    expect(result.success).toBe(true);
+
+    if (result.success) {
+      expect(result.data.connectors?.armhole?.length_mm).toBeUndefined();
+    }
+  });
+
   it("rejects negative connector finished lengths", () => {
     // 守る仕様: connectors.*.length_mm は仕上がり線上の長さであり、負の寸法は許可しない。
     const result = partSchema.safeParse({

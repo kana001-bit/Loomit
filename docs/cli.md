@@ -15,6 +15,7 @@
 Loomit の CLI は、大きく次の役割に分かれる。
 
 - project を作る: `init`, `fork`
+- part を用意する: `add`
 - project を検証する: `check`, `doctor`, `fit`, `suggest-tests`, `test`
 - project から成果物を作る: `build`
 - 変更を読む: `diff`
@@ -57,6 +58,26 @@ loom fork <source> <target> [--name name]
 - fork 後の project は元 project と自動連動しない
 - `--name` を省略した場合は target ディレクトリ名が project 名になる
 
+## `loom add`
+
+Valentina の `.val` を project の part として取り込む。
+
+```text
+loom add <file.val>
+```
+
+主な用途:
+
+- `.val` を用意しただけの状態から、最初の part を作る
+- `part.loom` を手で書かずに用意する
+
+補足:
+
+- `.val` から導出できない情報(name, type, variant, seam connector)は対話で尋ねる
+- `parts/<name>/` に `.val` をコピーし、`part.loom` を生成する
+- `loomit.yml` の `parts:` に登録するので、以後 `loom check` などが使える
+- 質問はパイプでも与えられる(例: `loom add body.val < answers.txt`)
+
 ## `loom check`
 
 project と part の整合性を検証する。
@@ -76,6 +97,10 @@ loom check [path] [--format text|json]
 - `path` を省略すると現在位置から project を探す
 - 出力形式は `text` または `json`
 - 仕上がり寸法ベースの互換性を扱い、geometry の rich check までは持たない
+- part が1つも無い(まだ `loom add` していない)ときは error で先に add するよう促す
+- `parts/` 配下に、どの part も参照していない `.val` があるときは warning で `loom add` を促す
+
+`loom build` も同様に、part が空なら error で止まる。
 
 ## `loom doctor`
 

@@ -1,0 +1,12 @@
+{
+  // dist へ出力するビルド専用設定。src だけをコンパイルし、test は含めない。
+  // 型検査は tsconfig.json(src + test)が担当するので、こちらは配布物の生成に専念する。
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["dist", "test"]
+}

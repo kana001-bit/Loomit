@@ -12,9 +12,8 @@
     "forceConsistentCasingInFileNames": true,
     "isolatedModules": true,
     "skipLibCheck": true,
-    "baseUrl": ".",
     "paths": {
-      "@loomit/core": ["packages/core/src/index.ts"]
+      "@loomit/core": ["./packages/core/src/index.ts"]
     },
     "declaration": true,
     "declarationMap": true,

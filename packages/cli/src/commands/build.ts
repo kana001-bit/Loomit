@@ -2,7 +2,9 @@ import { join, resolve } from "node:path";
 
 import {
   buildProject,
+  collectProjectReadinessDiagnostics,
   createBuildReport,
+  getStatusForDiagnostics,
   loadProject,
   resolveParts,
   runChecks
@@ -59,11 +61,14 @@ export async function runBuildCommand(
     return 1;
   }
 
+  // part が空(まだ loom add していない)なら build しても中身が無い。error で止めて先に add を促す。
+  const readinessDiagnostics = await collectProjectReadinessDiagnostics(resolvedProjectResult.value);
   const checkReport = runChecks(resolvedProjectResult.value);
 
-  if (checkReport.status === "error") {
+  if (getStatusForDiagnostics(readinessDiagnostics) === "error" || checkReport.status === "error") {
     writeReport(
       createBuildErrorReportForProject(projectResult.value, [
+        ...readinessDiagnostics,
         ...checkReport.diagnostics,
         ...checkReport.compatibility.flatMap((result) => result.diagnostics)
       ]),
@@ -84,8 +89,19 @@ export async function runBuildCommand(
     return 1;
   }
 
-  writeReport(buildResult.value, parsedArgs, options);
-  return buildResult.value.status === "error" ? 1 : 0;
+  // build が成功しても、readiness の警告(未登録 .val 等)は check と同様に握りつぶさずレポートに載せる。
+  // ここに来た時点で readiness は error を含まない(上の gate で弾き済み)ので、追加しても build を
+  // 止めない(warning のまま)。「build は通るが未登録 .val に気づけない」という取りこぼしを防ぐ。
+  const report = buildResult.value;
+  const finalReport = createBuildReport({
+    diagnostics: [...readinessDiagnostics, ...report.diagnostics],
+    outputDir: report.outputDir,
+    manifestFilePath: report.manifestFilePath,
+    ...(report.manifest === undefined ? {} : { manifest: report.manifest })
+  });
+
+  writeReport(finalReport, parsedArgs, options);
+  return finalReport.status === "error" ? 1 : 0;
 }
 
 export function formatBuildHelp(): string {
