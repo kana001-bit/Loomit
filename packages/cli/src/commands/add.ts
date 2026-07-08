@@ -1,6 +1,12 @@
 import { basename, dirname, relative, resolve } from "node:path";
 
-import { addPartToProject, checkValSourceExists, isSafePathSegment } from "@loomit/core";
+import {
+  addPartToProject,
+  checkValSourceExists,
+  isSafePathSegment,
+  loadProject,
+  resolveParts
+} from "@loomit/core";
 import type { AddedPart, AddPartConnectorInput } from "@loomit/core";
 import { formatDiagnosticsText } from "../formatters/diagnosticsText.js";
 import { createReadlinePrompter, EndOfInputError } from "../prompter.js";
@@ -28,8 +34,20 @@ interface PartAnswers {
 
 // type は garment 上の役割。schema は自由な単一 segment だが、よく使う候補を出して選びやすくする。
 const TYPE_CHOICES = ["body", "sleeve", "collar", "cuff", "facing", "other"] as const;
-// seam(縫い合わせ口)の候補。connector.type と record key を兼ねる。
-const SEAM_CHOICES = ["armhole", "neckline", "shoulder", "side", "waist", "hem", "other"] as const;
+// connector は「名前付きの join(縫い合わせ先)」で、check は両パーツが同じ id を宣言しているかだけで
+// ペアにする(seam の形の分類ではなく id の一致が本質)。そこで形の taxonomy から選ばせるのをやめ、
+// 「プロジェクト内に既にある join から選ぶ」か「新しい join を名付ける」かで縫い合わせ相手を決めさせる。
+// 既存から選べば相手と id が確実に一致し(打ち間違いで繋がらない事故を防ぐ)、新規なら将来のパーツが
+// 選べる join になる。将来は .val の <path name="seam" seam="..."> から join を供給する余地も残す。
+
+// 「新しい join を名付ける」を表す select の番兵。実在の join id と衝突しないよう説明的な文字列にする。
+const NAME_NEW_JOIN = "(name a new join)";
+
+// プロジェクト内に既にある join(縫い合わせ先候補)。id と、それを宣言しているパーツ(role)を持つ。
+interface ExistingJoin {
+  readonly id: string;
+  readonly roles: readonly string[];
+}
 
 export async function runAddCommand(
   args: readonly string[],
@@ -59,13 +77,17 @@ export async function runAddCommand(
     return 1;
   }
 
+  // 縫い合わせ相手の候補として、プロジェクト内の他パーツが既に宣言している join(connector id)を集める。
+  // 取得できなくても add は続行する(最初のパーツや壊れた project では単に候補なしで新規命名に倒す)。
+  const existingJoins = await collectExistingJoins(options.cwd);
+
   const prompter = options.prompter ?? createReadlinePrompter();
   let answers: PartAnswers;
 
   try {
-    answers = await collectAnswers(prompter, options.stdout, defaultName);
+    answers = await collectAnswers(prompter, options.stdout, defaultName, existingJoins);
   } catch (error) {
-    // パイプ/リダイレクト入力が必要な回答数に足りず、default で埋められない prompt(Custom type/seam 等)に
+    // パイプ/リダイレクト入力が必要な回答数に足りず、default で埋められない prompt(Custom type / New join 名 等)に
     // 達したとき。空回答で問い直し続けてハングするより、ここで綺麗に失敗終了させる。
     if (error instanceof EndOfInputError) {
       options.stderr(
@@ -103,7 +125,7 @@ export function formatAddHelp(): string {
     "Usage: loom add <file.val>",
     "",
     "Add a Valentina .val to the project as a part. Interactively fills in the",
-    "metadata that cannot be derived from the .val (name, type, variant, seams),",
+    "metadata that cannot be derived from the .val (name, type, variant, joins),",
     "generates parts/<name>/part.loom, and registers it in loomit.yml.",
     "",
     "Options:",
@@ -114,12 +136,13 @@ export function formatAddHelp(): string {
 async function collectAnswers(
   prompter: Prompter,
   notify: (text: string) => void,
-  defaultName: string
+  defaultName: string,
+  existingJoins: readonly ExistingJoin[]
 ): Promise<PartAnswers> {
   const name = await promptSegment(prompter, notify, "Part name", defaultName);
   const type = await promptType(prompter, notify);
   const variant = await prompter.input("Variant", { default: "v1" });
-  const connectors = await promptConnectors(prompter, notify);
+  const connectors = await promptConnectors(prompter, notify, existingJoins);
 
   return { name, type, variant, connectors };
 }
@@ -136,19 +159,20 @@ async function promptType(prompter: Prompter, notify: (text: string) => void): P
 
 async function promptConnectors(
   prompter: Prompter,
-  notify: (text: string) => void
+  notify: (text: string) => void,
+  existingJoins: readonly ExistingJoin[]
 ): Promise<readonly AddPartConnectorInput[]> {
   const connectors: AddPartConnectorInput[] = [];
   let more = await prompter.confirm("Add a seam connector?", { default: false });
 
   while (more) {
-    const seam = await promptSeam(prompter, notify);
+    const join = await promptJoin(prompter, notify, existingJoins);
 
-    if (connectors.some((connector) => connector.id === seam)) {
-      notify(`Connector "${seam}" is already added; skipping duplicate.\n`);
+    if (connectors.some((connector) => connector.id === join)) {
+      notify(`Connector "${join}" is already added; skipping duplicate.\n`);
     } else {
-      const lengthMm = await promptOptionalLengthMm(prompter, notify, seam);
-      connectors.push(lengthMm === undefined ? { id: seam } : { id: seam, lengthMm });
+      const lengthMm = await promptOptionalLengthMm(prompter, notify, join);
+      connectors.push(lengthMm === undefined ? { id: join } : { id: join, lengthMm });
     }
 
     more = await prompter.confirm("Add another connector?", { default: false });
@@ -157,14 +181,67 @@ async function promptConnectors(
   return connectors;
 }
 
-async function promptSeam(prompter: Prompter, notify: (text: string) => void): Promise<string> {
-  const chosen = await prompter.select("Seam type", SEAM_CHOICES, { default: "armhole" });
+// 縫い合わせ先(join)を1つ決める。connector の本質は「名前付きの join」なので、seam の形ではなく
+// 「どの join に繋ぐか」を尋ねる。既存の join があればそこから選ばせ(選べば相手と id が一致して check が
+// ペアにする)、無い/新規を選んだときだけ join 名を付けさせる。
+async function promptJoin(
+  prompter: Prompter,
+  notify: (text: string) => void,
+  existingJoins: readonly ExistingJoin[]
+): Promise<string> {
+  // 相手になりうる join がまだ無い(最初のパーツ等)なら、選ばせず新しい join を名付けてもらう。
+  if (existingJoins.length === 0) {
+    return promptSegment(prompter, notify, "New join name", undefined);
+  }
 
-  if (chosen !== "other") {
+  // どの join がどのパーツのものかは select の番号一覧だけでは分からないため、先に宣言元 role 付きで示す。
+  notify(
+    "Existing joins (pick one to connect, or name a new one):\n" +
+      existingJoins.map((join) => `  ${join.id} (${join.roles.join(", ")})`).join("\n") +
+      "\n"
+  );
+
+  const choices = [...existingJoins.map((join) => join.id), NAME_NEW_JOIN];
+  const chosen = await prompter.select("Connect to which join?", choices, {
+    default: choices[0] ?? NAME_NEW_JOIN
+  });
+
+  if (chosen !== NAME_NEW_JOIN) {
     return chosen;
   }
 
-  return promptSegment(prompter, notify, "Custom seam type", undefined);
+  return promptSegment(prompter, notify, "New join name", undefined);
+}
+
+// プロジェクト内の他パーツが宣言している join(connector id)を、宣言元 role 付きで集める。id ごとに
+// まとめて id 昇順で返す。project が読めない/解決できないときは候補なし([])で返し、add を止めない
+// (縫い合わせ相手が居ないだけなので、新規 join を名付ける導線に倒す)。
+async function collectExistingJoins(projectPath: string): Promise<readonly ExistingJoin[]> {
+  const loaded = await loadProject(projectPath);
+
+  if (!loaded.ok) {
+    return [];
+  }
+
+  const resolved = await resolveParts(loaded.value);
+
+  if (!resolved.ok) {
+    return [];
+  }
+
+  const rolesByJoinId = new Map<string, string[]>();
+
+  for (const part of Object.values(resolved.value.parts)) {
+    for (const joinId of Object.keys(part.part.connectors ?? {})) {
+      const roles = rolesByJoinId.get(joinId) ?? [];
+      roles.push(part.role);
+      rolesByJoinId.set(joinId, roles);
+    }
+  }
+
+  return [...rolesByJoinId.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([id, roles]) => ({ id, roles }));
 }
 
 // 単一 segment を満たすまで訊き直す。core も同じ検証をするが、失敗させる前にここで直せるようにする。
