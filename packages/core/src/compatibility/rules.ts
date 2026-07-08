@@ -26,9 +26,20 @@ export const requirementRangeRule: CompatibilityRule = {
   check: checkRequirements
 };
 
+// connector は2パーツを縫い合わせる cross-part join。長さや requirement を比べる前段として、
+// 「join が graph として健全か(相手が居るか・多重でないか)」は宣言だけで判定できる。これを独立ルールにする。
+// 自己シーム(同一パーツ内の縫い目)は connector で表さない設計(幾何は Seamlint 側)なので、相手の居ない
+// open join は「相手待ち / id の取り違え / 自己シームの connector 誤登録」を促す warning にする。
+export const connectorPairingRule: CompatibilityRule = {
+  id: "connector-pairing",
+  description: "Checks that each connector join pairs exactly two parts.",
+  check: checkConnectorPairing
+};
+
 export const defaultCompatibilityRules = [
   connectorLengthRule,
-  requirementRangeRule
+  requirementRangeRule,
+  connectorPairingRule
 ] as const;
 
 export function createCompatibilityRuleRegistry(
@@ -49,10 +60,14 @@ export function runCompatibilityRules(
 function checkConnectorLengths(resolvedProject: ResolvedProject): readonly CompatibilityResult[] {
   const compatibility: CompatibilityResult[] = [];
   const parts = Object.values(resolvedProject.parts);
+  // 3パーツ以上が宣言する over-pair な join は縫い合わせ相手が一意に定まらない。connector-pairing が
+  // CONNECTOR_JOIN_OVERPAIRED で別途 error にするので、ここでは長さ比較そのものを打ち切る。
+  // 打ち切らないと任意の組の [ok] connector-length が混ざり、構造的に壊れた join の診断がミスリーディングになる。
+  const overPairedJoinIds = collectOverPairedJoinIds(resolvedProject);
 
   for (const [fromIndex, fromPart] of parts.entries()) {
     for (const toPart of parts.slice(fromIndex + 1)) {
-      compatibility.push(...comparePartConnectorLengths(fromPart, toPart));
+      compatibility.push(...comparePartConnectorLengths(fromPart, toPart, overPairedJoinIds));
     }
   }
 
@@ -61,7 +76,8 @@ function checkConnectorLengths(resolvedProject: ResolvedProject): readonly Compa
 
 function comparePartConnectorLengths(
   fromPart: ResolvedProjectPart,
-  toPart: ResolvedProjectPart
+  toPart: ResolvedProjectPart,
+  overPairedJoinIds: ReadonlySet<string>
 ): readonly CompatibilityResult[] {
   const compatibility: CompatibilityResult[] = [];
   const fromConnectors = fromPart.part.connectors ?? {};
@@ -71,6 +87,11 @@ function comparePartConnectorLengths(
     const toConnector = toConnectors[connectorId];
 
     if (toConnector === undefined || fromConnector.type !== toConnector.type) {
+      continue;
+    }
+
+    // over-pair な join は相手が一意に定まらないため長さ比較しない(connector-pairing が error 化する)。
+    if (overPairedJoinIds.has(connectorId)) {
       continue;
     }
 
@@ -176,6 +197,110 @@ function buildUnmeasuredConnectorResult(input: {
         target: unmeasured.join(", "),
         suggestion: [
           `Measure the seam length in Valentina and set length_mm on ${unmeasured.join(" and ")}.`
+        ]
+      })
+    ]
+  });
+}
+
+// join id ごとに、それを宣言しているパーツの role を集める。connector-pairing(健全性判定)と
+// connector-length(over-pair の比較打ち切り)の両方が使う共有ヘルパ。
+function collectRolesByJoinId(resolvedProject: ResolvedProject): Map<string, string[]> {
+  const rolesByJoinId = new Map<string, string[]>();
+
+  for (const part of Object.values(resolvedProject.parts)) {
+    for (const joinId of Object.keys(part.part.connectors ?? {})) {
+      const roles = rolesByJoinId.get(joinId) ?? [];
+      roles.push(part.role);
+      rolesByJoinId.set(joinId, roles);
+    }
+  }
+
+  return rolesByJoinId;
+}
+
+// 3パーツ以上が宣言する over-pair な join id の集合。connector-length はこの join の長さ比較を打ち切る。
+function collectOverPairedJoinIds(resolvedProject: ResolvedProject): ReadonlySet<string> {
+  const overPaired = new Set<string>();
+
+  for (const [joinId, roles] of collectRolesByJoinId(resolvedProject)) {
+    if (roles.length >= 3) {
+      overPaired.add(joinId);
+    }
+  }
+
+  return overPaired;
+}
+
+// 同じ join id を宣言しているパーツ数で graph の健全性を判定する。
+// N=2 は健全(縫い合わせペア)なので何も出さない。N=1 は相手待ちの open join(warning)、
+// N>=3 は connector が想定する pairwise を超えた over-pair(error)。over-pair な join は
+// connector-length 側でも長さ比較を打ち切る(相手が一意でないため)。出力は join id 昇順、role も昇順で安定させる。
+function checkConnectorPairing(resolvedProject: ResolvedProject): readonly CompatibilityResult[] {
+  const results: CompatibilityResult[] = [];
+
+  for (const [joinId, roles] of [...collectRolesByJoinId(resolvedProject).entries()].sort(
+    ([a], [b]) => a.localeCompare(b)
+  )) {
+    const sortedRoles = [...roles].sort((a, b) => a.localeCompare(b));
+
+    if (sortedRoles.length === 1) {
+      const role = sortedRoles[0];
+
+      if (role !== undefined) {
+        results.push(buildOpenJoinResult(joinId, role));
+      }
+
+      continue;
+    }
+
+    if (sortedRoles.length >= 3) {
+      results.push(buildOverpairedJoinResult(joinId, sortedRoles));
+    }
+  }
+
+  return results;
+}
+
+function buildOpenJoinResult(joinId: string, role: string): CompatibilityResult {
+  const target = `${role}.${joinId}`;
+
+  return createCompatibilityResult({
+    from: target,
+    to: "(no mate)",
+    rule: "connector-pairing",
+    diagnostics: [
+      createDiagnostic({
+        severity: "warning",
+        code: "CONNECTOR_JOIN_OPEN",
+        message:
+          "コネクタの縫い合わせ相手がいません(1つのパーツだけが宣言)。/ Connector join has no mate; only one part declares it.",
+        target,
+        suggestion: [
+          `Add a part that also declares connector "${joinId}", fix a mismatched id, or if "${joinId}" is an internal (self) seam, check it in Seamlint instead of declaring a connector.`
+        ]
+      })
+    ]
+  });
+}
+
+function buildOverpairedJoinResult(
+  joinId: string,
+  roles: readonly string[]
+): CompatibilityResult {
+  return createCompatibilityResult({
+    from: joinId,
+    to: roles.join(", "),
+    rule: "connector-pairing",
+    diagnostics: [
+      createDiagnostic({
+        severity: "error",
+        code: "CONNECTOR_JOIN_OVERPAIRED",
+        message:
+          "コネクタの縫い合わせ相手が2つのパーツを超えています。/ Connector join is shared by more than two parts.",
+        target: joinId,
+        suggestion: [
+          `Connector "${joinId}" is declared by ${roles.length} parts (${roles.join(", ")}); a connector joins exactly two parts. Give the extra seams distinct join ids.`
         ]
       })
     ]

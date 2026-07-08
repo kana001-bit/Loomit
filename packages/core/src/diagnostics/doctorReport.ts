@@ -81,6 +81,14 @@ function explainCompatibilityDiagnostic(
     return `${result.from} references ${result.to}, but that connector is not available on the target part.`;
   }
 
+  if (diagnostic.code === "CONNECTOR_JOIN_OPEN") {
+    return `${result.from} is declared by only one part, so it has no seam partner to sew to. A connector joins two parts: add the mating part, fix a mismatched join id, or move an internal (self) seam to Seamlint.`;
+  }
+
+  if (diagnostic.code === "CONNECTOR_JOIN_OVERPAIRED") {
+    return `Connector "${result.from}" is declared by more than two parts (${result.to}). A connector joins exactly two parts, so Loomit cannot tell which pair should be sewn; give the extra seams distinct join ids.`;
+  }
+
   return diagnostic.message;
 }
 
