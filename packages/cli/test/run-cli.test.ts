@@ -2,10 +2,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { Readable, Writable } from "node:stream";
 
 import { describe, expect, it } from "vitest";
 
 import { runCli } from "../src/main.js";
+import { createReadlinePrompter } from "../src/prompter.js";
 import type { Prompter } from "../src/prompter.js";
 
 const workspaceRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -859,9 +861,10 @@ describe("runCli", () => {
       const exitCode = await runCli(["node", "loom", "add", "body.val"], {
         cwd: projectPath,
         io: output.io,
-        // 回答順: name, type(select), variant, [connector追加?], seam(select), length, [もう1つ?]
+        // 回答順: name, type(select), variant, [connector追加?], seam(select), length(空=未測定), [もう1つ?]
+        // length は幾何の測定値で .val 評価が要るため、手入力を強制せず空 Enter(未測定)で先へ進める。
         prompter: createScriptedPrompter({
-          texts: ["body", "body", "v1", "armhole", "469"],
+          texts: ["body", "body", "v1", "armhole", ""],
           confirms: [true, false]
         })
       });
@@ -876,7 +879,10 @@ describe("runCli", () => {
       expect(generatedPart).toContain("schema: loomit.part.v0");
       expect(generatedPart).toContain("type: body");
       expect(generatedPart).toContain("source: body.val");
-      expect(generatedPart).toContain("length_mm: 469");
+      // 未測定なので identity(type)だけの connector が生成され、length_mm は載らない。
+      expect(generatedPart).toContain("armhole:");
+      expect(generatedPart).toContain("type: armhole");
+      expect(generatedPart).not.toContain("length_mm:");
       expect(await readFile(join(projectPath, "loomit.yml"), "utf8")).toContain(
         "body: ./parts/body/part.loom"
       );
@@ -890,6 +896,71 @@ describe("runCli", () => {
 
       expect(checkExitCode).toBe(0);
       expect(checkOutput.stdout.join("")).toContain("Loomit check: ok");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("fails cleanly (does not hang) when piped input runs out at a required prompt", async () => {
+    // 守る仕様: パイプ入力が足りず、default で埋められない prompt(ここでは type=other の Custom type)に
+    // 達したら、空回答で問い直し続けてハングせず、exit 1 で「入力が途中で終了」と案内して終わる。
+    // 回帰するとこのテストは戻らず、vitest のタイムアウトで落ちる(=ハングの見張り)。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-eof-"));
+
+    try {
+      await runCli(["node", "loom", "init"], { cwd: tempRoot, io: createOutputCollector().io });
+      await writeFile(join(tempRoot, "body.val"), "body source\n", "utf8");
+
+      const output = createOutputCollector();
+      // name="body" を渡し、type select で "6"(other)を選ばせる。続く Custom type の入力は無く EOF。
+      const prompter = createReadlinePrompter(
+        Readable.from("body\n6\n"),
+        new Writable({
+          write(_chunk, _encoding, callback) {
+            callback();
+          }
+        })
+      );
+
+      const exitCode = await runCli(["node", "loom", "add", "body.val"], {
+        cwd: tempRoot,
+        io: output.io,
+        prompter
+      });
+
+      expect(exitCode).toBe(1);
+      expect(output.stderr.join("")).toContain("Input ended before all required answers");
+      // 途中終了なので part は生成されない。
+      await expect(readFile(join(tempRoot, "parts/body/part.loom"), "utf8")).rejects.toThrow();
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("re-prompts with a message that matches the actual segment rule (no false 'spaces' claim)", async () => {
+    // 守る仕様: isSafePathSegment は slashes / "." / ".." を弾くが spaces は許す。再入力を促す文言も
+    // それに合わせ、実際には受け付ける spaces を「禁止」と偽らない。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-msg-"));
+
+    try {
+      await runCli(["node", "loom", "init"], { cwd: tempRoot, io: createOutputCollector().io });
+      await writeFile(join(tempRoot, "body.val"), "body source\n", "utf8");
+
+      const output = createOutputCollector();
+      // 1回目の Part name にスラッシュ入り(無効)を渡し、2回目で有効名を渡す。
+      const exitCode = await runCli(["node", "loom", "add", "body.val"], {
+        cwd: tempRoot,
+        io: output.io,
+        prompter: createScriptedPrompter({
+          texts: ["bad/name", "body", "body", "v1"],
+          confirms: [false]
+        })
+      });
+
+      const stdout = output.stdout.join("");
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain('Use a single name without slashes or "..".');
+      expect(stdout).not.toContain("spaces");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }
@@ -1104,6 +1175,38 @@ describe("runCli", () => {
       );
       expect(await readFile(join(tempRoot, "output/parts/body/source/body.val"), "utf8")).toBe(
         "body source\n"
+      );
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("surfaces readiness warnings on a successful build (does not silently drop an unregistered .val)", async () => {
+    // 守る仕様: build が成功しても、未登録 .val の警告は check と同様にレポートへ載せる(build は止めない)。
+    // 以前は成功パスで readiness を握りつぶし、build だけでは stray .val に気づけなかった。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-build-warn-"));
+
+    try {
+      await writeCliBuildFixture(tempRoot);
+      // parts/ 配下に、どの part の files.source にも該当しない stray .val を置く。
+      await writeFile(join(tempRoot, "parts/leftover.val"), "stray source\n", "utf8");
+
+      const output = createOutputCollector();
+      const exitCode = await runCli(["node", "loom", "build", tempRoot], {
+        cwd: workspaceRoot,
+        io: output.io
+      });
+
+      const stdout = output.stdout.join("");
+
+      // warning は build を失敗させない(exit 0)が、レポートには出る。
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Loomit build: warning");
+      expect(stdout).toContain("UNREGISTERED_VAL_SOURCE");
+      expect(stdout).toContain("loom add parts/leftover.val");
+      // build 自体は成功して manifest が書かれている。
+      expect(await readFile(join(tempRoot, "output/manifest.json"), "utf8")).toContain(
+        "loomit.build_manifest.v0"
       );
     } finally {
       await rm(tempRoot, { recursive: true, force: true });

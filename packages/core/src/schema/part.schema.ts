@@ -59,8 +59,11 @@ const connectorRangeSchema = z
 export const connectorSchema = z
   .object({
     type: z.string().min(1),
-    // 設計判断: length_mm は仕上がり線上の長さであり、縫い代を含む裁断寸法ではない。
-    length_mm: z.number().finite().nonnegative(),
+    // 設計判断: length_mm は仕上がり線上の長さ=幾何の測定値であって、人が手で発明する authored 値ではない。
+    // .val(正本)を評価して初めて出る計算値(seam path の弧長)で、Loomit は幾何を計算しない(A案)。
+    // よって scaffold(loom add)時は未測定(optional)を許し、値は Valentina / seamlint / truer が測って埋める。
+    // 未測定の connector は identity(type)だけを持ち、check の connector-length 比較からは外れる。
+    length_mm: z.number().finite().nonnegative().optional(),
     tolerance_mm: z.number().finite().nonnegative().optional(),
     path_ref: z.string().min(1).optional(),
     // range id は connector 内で一意でなければならない。diff は id をキーに range を突き合わせるため、

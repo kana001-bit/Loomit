@@ -95,5 +95,10 @@ function getArmholeLength(part: Part): number {
     throw new Error(`Fixture part is missing armhole connector: ${part.name}`);
   }
 
+  // length_mm は optional(未測定を許す)。このフィクスチャは測定済み前提なので、未測定なら明示的に落とす。
+  if (connector.length_mm === undefined) {
+    throw new Error(`Fixture part armhole connector has no length_mm: ${part.name}`);
+  }
+
   return connector.length_mm;
 }
