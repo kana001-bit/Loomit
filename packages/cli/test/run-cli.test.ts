@@ -887,7 +887,9 @@ describe("runCli", () => {
         "body: ./parts/body/part.loom"
       );
 
-      // 生成した part を含めて check が通る(= .val を置くだけで検証可能な状態になる)。
+      // 生成した part を含めて check が走る(= .val を置くだけで検証可能な状態になる)。
+      // この時点では armhole を宣言しているのは body だけ=相手待ちの open join なので、
+      // connector-pairing ルールが warning を出す(相手パーツを足すまでは正常。error ではないので exit 0)。
       const checkOutput = createOutputCollector();
       const checkExitCode = await runCli(["node", "loom", "check", projectPath], {
         cwd: workspaceRoot,
@@ -895,7 +897,9 @@ describe("runCli", () => {
       });
 
       expect(checkExitCode).toBe(0);
-      expect(checkOutput.stdout.join("")).toContain("Loomit check: ok");
+      const checkStdout = checkOutput.stdout.join("");
+      expect(checkStdout).toContain("Loomit check: warning");
+      expect(checkStdout).toContain("CONNECTOR_JOIN_OPEN");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }
