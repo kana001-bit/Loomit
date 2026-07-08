@@ -117,6 +117,12 @@ export type {
   MovementTestRuleContext,
   MovementTestRuleRegistry
 } from "./movement-tests/rules.js";
+export { addPartToProject, checkValSourceExists } from "./parts/addPartToProject.js";
+export type {
+  AddedPart,
+  AddPartConnectorInput,
+  AddPartToProjectOptions
+} from "./parts/addPartToProject.js";
 export { loadPartFile } from "./parts/loadPartFile.js";
 export { loadProjectedPart } from "./parts/loadProjectedPart.js";
 export { projectDartsFromValFile, projectDartsFromValText, projectPartDartsFromSource } from "./parts/projectDartsFromVal.js";
@@ -129,6 +135,7 @@ export { loadProfileFile } from "./profile/loadProfile.js";
 export { loadPrototypeNotesFile } from "./prototype-notes/loadPrototypeNotes.js";
 export { createProject } from "./project/createProject.js";
 export type { CreatedProject, CreateProjectOptions } from "./project/createProject.js";
+export { collectProjectReadinessDiagnostics } from "./project/collectProjectReadiness.js";
 export { findProjectRoot } from "./project/findProjectRoot.js";
 export { forkProject } from "./project/forkProject.js";
 export type { ForkedProject, ForkProjectOptions } from "./project/forkProject.js";

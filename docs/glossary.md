@@ -1,0 +1,242 @@
+# Glossary
+
+この文書は、Loomit のドキュメントで使用される洋裁用語および Loomit 固有の概念をまとめたものです。
+
+---
+
+# Sewing Terms
+
+## Pattern
+
+服を作るための型紙。
+Loomit では主に Valentina の `.val` ファイルを指す。
+
+---
+
+## Part
+
+型紙を構成する一つの部品。
+一着の服は複数の Part から構成される。
+
+代表例:
+
+- Front Bodice（前身頃）
+- Back Bodice（後身頃）
+- Sleeve（袖）
+- Collar（襟）
+- Cuff（カフス）
+
+Loomit では Part が互換判定・再利用・Diff の基本単位になる。
+
+---
+
+## Bodice（身頃）
+
+服の胴体部分を覆うパーツ。
+一般的には次の二つに分かれる。
+
+- Front Bodice（前身頃）
+- Back Bodice（後身頃）
+
+---
+
+## Sleeve（袖）
+
+腕を覆うパーツ。
+通常は Armhole で Bodice（身頃）と縫い合わされる。
+
+---
+
+## Collar（襟）
+
+首まわりに付くパーツ。
+
+---
+
+## Cuff（カフス）
+
+袖口に付くパーツ。
+袖口の形状や開きを整える役割を持つ。
+
+---
+
+## Facing（見返し）
+
+襟ぐりや前端などの裏側に付ける補強用パーツ。
+表からは基本的に見えない。
+
+---
+
+## Armhole（袖ぐり）
+
+袖を取り付けるための開口部。
+身頃と袖を縫い合わせる境界になる。
+
+---
+
+## Neckline
+
+首まわりの開口部。
+襟が付く位置でもある。
+
+---
+
+## Shoulder
+
+肩部分の縫い合わせ位置。
+前身頃と後身頃を接続する。
+
+---
+
+## Side Seam
+
+身頃の脇を縫い合わせる縫い目。
+
+---
+
+## Hem
+
+服の裾、または裾を折り返して処理する部分。
+
+---
+
+## Waist
+
+服におけるウエスト位置。
+人体のウエストそのものではなく、型紙上の位置を指す場合もある。
+
+---
+
+## Seam
+
+二つの Part を縫い合わせる縫い目、またはその接続部分。
+ちなみにシームレスは縫い目がなく、滑らかにつながっていること。
+
+---
+
+## Seam Allowance（縫い代）
+
+実際に縫うために型紙へ追加する余白。
+完成時には服の内側へ隠れる。
+
+---
+
+## Connector
+
+Loomit が縫い合わせ可能な境界として扱う情報。
+例:
+
+- armhole
+- neckline
+- shoulder
+- side seam
+- waist
+- hem
+  Connector には長さや接続条件などの情報が含まれ、互換判定の対象になる。
+
+---
+
+## Dart（ダーツ）
+
+平面の布を立体的な形状にするための構造。
+余分な布をつまんで縫うことで、胸やウエストなどの曲面を表現する。
+Loomit では、人が頻繁に編集する設計フィーチャとして扱う。
+
+---
+
+## Notch（合印）
+
+型紙の端に付ける小さな切り込みや印。
+縫い合わせ位置を正しく合わせるための目印として使われる。
+
+---
+
+## Ease（ゆとり量）
+
+身体寸法より大きく設計するための余裕。
+着心地や動きやすさに大きく影響する。
+
+---
+
+## Prototype（試作品）
+
+実際に布で製作し、着心地や動作を確認するための服。
+Loomit は Prototype をなくすことではなく、より効率的に行うことを目指している。
+
+---
+
+# Loomit Concepts
+
+## Project
+
+一着の服を管理する単位。
+Project には Part、設定、Prototype Notes などが含まれる。
+
+---
+
+## Library
+
+再利用したい Part を保存する場所。
+Project 内の Part は自動では登録されず、明示的に publish したものだけが Library に保存される。
+
+---
+
+## Publish
+
+Part を Library へ登録する操作。
+Library に登録された Part は他の Project へコピーして利用できる。
+
+---
+
+## Prototype Notes
+
+試作品から得られた知見を記録するデータ。
+例:
+
+- 腕が上がりにくい
+- 脇が突っ張る
+- この袖は縫いやすかった
+  Prototype Notes は型紙そのものではなく、試作によって得られた経験を保存する。
+
+---
+
+## Variant
+
+同じ Part の異なるデザインを識別する名前。
+Version のような新旧関係は持たず、異なる設計案として扱われる。
+
+---
+
+# Related Projects
+
+## Valentina
+
+オープンソースのパターンメイキング CAD。
+Loomit は Valentina が作成した `.val` ファイルを読み込み、解析や履歴管理、Diff を行う。
+
+---
+
+## Seamlint
+
+Loomit と連携する静的解析ツール。
+パーツ同士の互換性や縫製上の問題を検査する。
+
+---
+
+## Truer
+
+Loomit と連携するツール。
+CAD 側の形状補正や高度な幾何編集を担当する予定である。
+
+### 担当する責務(メモ)
+
+- **connector の `length_mm`(仕上がり seam 長)の測定。**
+  この値は `.val` に数値として実在せず、seam path の弧長=パラメトリックモデル(点の数式＋寸法参照＋曲線)を
+  評価して初めて出る**計算値**である。「`.val` が正本だから読めば取れるはず」は精神としては正しい(正本は `.val`)が、
+  実務としては**読取り射影ではなく幾何計算**が要る。Loomit は幾何を計算しない([A案](work/diffable-domain.md):
+  CAD エンジンは作らない)ため、`.val` から seam 長を測って `connectors.*.length_mm` を埋めるのは
+  Truer(または Valentina)側の責務とする。
+  - 現状の Loomit 側(2026-07-08): `loom add` は `length_mm` を手入力で強制せず optional(未測定可)にした。
+    未測定の connector は `type`(identity)だけを持ち、`loom check` は未測定ペアを比較せず
+    `CONNECTOR_LENGTH_UNMEASURED` warning で「Valentina / truer で測って埋めて」と促す。
+    参照: `connectorSchema.length_mm`(optional 化)/ `connector-length` rule(未測定は比較せず warning)。

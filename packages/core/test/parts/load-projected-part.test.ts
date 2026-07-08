@@ -52,7 +52,7 @@ describe("loadProjectedPart", () => {
     const result = await loadProjectedPart(join(fixturesRoot, "valid-part-with-darts/part.loom"));
 
     expect(result.ok).toBe(true);
-    expect(result.ok ? result.value.darts?.waist_front.width_mm : 0).toBe(30);
+    expect(result.ok ? result.value.darts?.waist_front?.width_mm : 0).toBe(30);
     expect(result.diagnostics).toEqual([]);
   });
 

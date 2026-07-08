@@ -185,6 +185,110 @@ describe("runChecks", () => {
     );
   });
 
+  it("warns instead of comparing when a matched connector length is unmeasured", async () => {
+    // 守る仕様: 対になる connector があっても、片方の length_mm が未測定なら長さを比較できない。
+    // 0 とみなして偽の不一致(NaN 比較)を出さず、「接続整合を未確認」の warning に振り替える。
+    // 値は Valentina / truer が後で測って埋める(A案: 幾何の測定は Loomit の外)。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = getResolvedPart(resolvedProject, "body");
+    const sleeve = getResolvedPart(resolvedProject, "sleeve");
+    const report = runChecks({
+      ...resolvedProject,
+      parts: {
+        body,
+        sleeve: {
+          ...sleeve,
+          part: {
+            ...sleeve.part,
+            // length_mm を落とし(未測定)、requires は本テストの対象外なので空にして connector-length に絞る。
+            connectors: {
+              armhole: { type: "armhole", tolerance_mm: 3, path_ref: "svg:path#sleeve-armhole" }
+            },
+            requires: {}
+          }
+        }
+      }
+    });
+
+    // 未測定は warning(check は失敗させない)。
+    expect(report.status).toBe("warning");
+    expect(report.compatibility).toContainEqual({
+      status: "warning",
+      from: "body.armhole",
+      to: "sleeve.armhole",
+      rule: "connector-length",
+      actual: undefined,
+      expected: undefined,
+      diagnostics: [
+        {
+          severity: "warning",
+          code: "CONNECTOR_LENGTH_UNMEASURED",
+          message:
+            "コネクタの仕上がり線の長さが未測定のため、接続整合を確認できません。/ Connector finished seam length is unmeasured; cannot verify the seam fit.",
+          target: "sleeve.armhole",
+          suggestion: [
+            "Measure the seam length in Valentina and set length_mm on sleeve.armhole."
+          ]
+        }
+      ]
+    });
+    // 未測定を 0 と誤解して不一致にしない。
+    expect(report.compatibility).not.toContainEqual(
+      expect.objectContaining({
+        diagnostics: expect.arrayContaining([
+          expect.objectContaining({ code: "CONNECTOR_LENGTH_MISMATCH" })
+        ])
+      })
+    );
+  });
+
+  it("warns that a requirement cannot be checked when the target length is unmeasured", async () => {
+    // 守る仕様: requires が参照する connector が未測定のとき、「未対応」ではなく「未測定」を伝える
+    // (property は対応済みで、値が .val 評価待ちなだけ)。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = getResolvedPart(resolvedProject, "body");
+    const sleeve = getResolvedPart(resolvedProject, "sleeve");
+    const report = runChecks({
+      ...resolvedProject,
+      parts: {
+        body,
+        sleeve: {
+          ...sleeve,
+          part: {
+            ...sleeve.part,
+            connectors: {
+              armhole: { type: "armhole", tolerance_mm: 3, path_ref: "svg:path#sleeve-armhole" }
+            },
+            requires: {}
+          }
+        }
+      }
+    });
+
+    expect(report.compatibility).toContainEqual({
+      status: "warning",
+      from: "body.requires.sleeve.armhole.length_mm",
+      to: "sleeve.armhole.length_mm",
+      rule: "requirement-range",
+      expected: {
+        min: 466,
+        max: 472
+      },
+      diagnostics: [
+        {
+          severity: "warning",
+          code: "CONNECTOR_LENGTH_UNMEASURED",
+          message:
+            "要求条件の参照先コネクタの length_mm が未測定のため、条件を確認できません。/ The connector referenced by the requirement has an unmeasured length_mm; cannot check the requirement.",
+          target: "sleeve.armhole.length_mm",
+          suggestion: [
+            "Measure the seam length in Valentina and set length_mm on sleeve.armhole."
+          ]
+        }
+      ]
+    });
+  });
+
   it("reports missing connectors referenced by requirements", async () => {
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const body = getResolvedPart(resolvedProject, "body");

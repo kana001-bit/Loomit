@@ -29,7 +29,7 @@ describe("YAML file loading", () => {
     const result = await loadPartFile(join(fixturesRoot, "valid-part-with-darts/part.loom"));
 
     expect(result.ok).toBe(true);
-    expect(result.ok ? result.value.darts?.waist_front.width_mm : 0).toBe(30);
+    expect(result.ok ? result.value.darts?.waist_front?.width_mm : 0).toBe(30);
   });
 
   it("does not read source.val or project darts when loading a part file", async () => {

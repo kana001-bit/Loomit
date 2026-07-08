@@ -74,13 +74,27 @@ function comparePartConnectorLengths(
       continue;
     }
 
+    const fromLengthMm = fromConnector.length_mm;
+    const toLengthMm = toConnector.length_mm;
+
+    // どちらかが未測定(length_mm 無し)なら長さを比較できない。0 とみなして差分を計算すると
+    // 偽の一致/不一致(NaN 比較)になるため、比較を試みず「接続整合を未確認」の warning に振り替える。
+    // 値は Valentina / seamlint / truer が後で埋める前提(A案: 幾何の測定は Loomit の外)。
+    if (fromLengthMm === undefined || toLengthMm === undefined) {
+      compatibility.push(
+        buildUnmeasuredConnectorResult({ connectorId, fromPart, fromConnector, toPart, toConnector })
+      );
+      continue;
+    }
+
     compatibility.push(
       compareConnectorLength({
         connectorId,
         fromPart,
-        fromConnector,
+        fromLengthMm,
         toPart,
-        toConnector
+        toLengthMm,
+        toleranceMm: Math.max(fromConnector.tolerance_mm ?? 0, toConnector.tolerance_mm ?? 0)
       })
     );
   }
@@ -91,15 +105,13 @@ function comparePartConnectorLengths(
 function compareConnectorLength(input: {
   readonly connectorId: string;
   readonly fromPart: ResolvedProjectPart;
-  readonly fromConnector: Connector;
+  readonly fromLengthMm: number;
   readonly toPart: ResolvedProjectPart;
-  readonly toConnector: Connector;
+  readonly toLengthMm: number;
+  readonly toleranceMm: number;
 }): CompatibilityResult {
-  const differenceMm = Math.abs(input.fromConnector.length_mm - input.toConnector.length_mm);
-  const toleranceMm = Math.max(
-    input.fromConnector.tolerance_mm ?? 0,
-    input.toConnector.tolerance_mm ?? 0
-  );
+  const differenceMm = Math.abs(input.fromLengthMm - input.toLengthMm);
+  const toleranceMm = input.toleranceMm;
   const fromTarget = `${input.fromPart.role}.${input.connectorId}`;
   const toTarget = `${input.toPart.role}.${input.connectorId}`;
   const diagnostics =
@@ -123,14 +135,50 @@ function compareConnectorLength(input: {
     to: toTarget,
     rule: "connector-length",
     actual: {
-      fromLengthMm: input.fromConnector.length_mm,
-      toLengthMm: input.toConnector.length_mm,
+      fromLengthMm: input.fromLengthMm,
+      toLengthMm: input.toLengthMm,
       differenceMm
     },
     expected: {
       toleranceMm
     },
     diagnostics
+  });
+}
+
+// 対になる connector があるのに、どちらかの length_mm が未測定で長さ比較できないときの結果。
+// 「合う/合わない」を断定せず、Valentina / truer で seam 長を測るよう促す warning にする。
+function buildUnmeasuredConnectorResult(input: {
+  readonly connectorId: string;
+  readonly fromPart: ResolvedProjectPart;
+  readonly fromConnector: Connector;
+  readonly toPart: ResolvedProjectPart;
+  readonly toConnector: Connector;
+}): CompatibilityResult {
+  const fromTarget = `${input.fromPart.role}.${input.connectorId}`;
+  const toTarget = `${input.toPart.role}.${input.connectorId}`;
+  // 未測定なのがどちら側か(両方のこともある)を具体的に示す。
+  const unmeasured = [
+    input.fromConnector.length_mm === undefined ? fromTarget : undefined,
+    input.toConnector.length_mm === undefined ? toTarget : undefined
+  ].filter((target): target is string => target !== undefined);
+
+  return createCompatibilityResult({
+    from: fromTarget,
+    to: toTarget,
+    rule: "connector-length",
+    diagnostics: [
+      createDiagnostic({
+        severity: "warning",
+        code: "CONNECTOR_LENGTH_UNMEASURED",
+        message:
+          "コネクタの仕上がり線の長さが未測定のため、接続整合を確認できません。/ Connector finished seam length is unmeasured; cannot verify the seam fit.",
+        target: unmeasured.join(", "),
+        suggestion: [
+          `Measure the seam length in Valentina and set length_mm on ${unmeasured.join(" and ")}.`
+        ]
+      })
+    ]
   });
 }
 
@@ -222,20 +270,36 @@ function checkRequirement(
   const actualValue = getConnectorPropertyValue(targetConnector, parsedPath.property);
 
   if (actualValue === undefined) {
+    // length_mm を参照しているのに未測定のケースは「未対応」ではなく「未測定」を伝える。
+    // property 自体は対応済みで、値が .val 評価待ちなだけ(A案: 測定は Valentina / truer が担う)。
+    const unmeasuredLength =
+      parsedPath.property === "length_mm" && targetConnector.length_mm === undefined;
+
     return createCompatibilityResult({
       from: sourceTarget,
       to: resolvedTarget,
       rule: "requirement-range",
       expected: requirement,
       diagnostics: [
-        createDiagnostic({
-          severity: "error",
-          code: "REQUIREMENT_PROPERTY_UNSUPPORTED",
-          message:
-            "要求条件の参照先プロパティはまだ検証できません。/ The requirement target property is not supported yet.",
-          target: sourceTarget,
-          suggestion: ['Use a supported connector property such as "length_mm".']
-        })
+        unmeasuredLength
+          ? createDiagnostic({
+              severity: "warning",
+              code: "CONNECTOR_LENGTH_UNMEASURED",
+              message:
+                "要求条件の参照先コネクタの length_mm が未測定のため、条件を確認できません。/ The connector referenced by the requirement has an unmeasured length_mm; cannot check the requirement.",
+              target: resolvedTarget,
+              suggestion: [
+                `Measure the seam length in Valentina and set length_mm on ${parsedPath.role}.${parsedPath.connectorId}.`
+              ]
+            })
+          : createDiagnostic({
+              severity: "error",
+              code: "REQUIREMENT_PROPERTY_UNSUPPORTED",
+              message:
+                "要求条件の参照先プロパティはまだ検証できません。/ The requirement target property is not supported yet.",
+              target: sourceTarget,
+              suggestion: ['Use a supported connector property such as "length_mm".']
+            })
       ]
     });
   }

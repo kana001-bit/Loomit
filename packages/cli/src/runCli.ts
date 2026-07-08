@@ -1,3 +1,4 @@
+import { runAddCommand } from "./commands/add.js";
 import { runBuildCommand } from "./commands/build.js";
 import { runCheckCommand } from "./commands/check.js";
 import { runDiffCommand } from "./commands/diff.js";
@@ -9,6 +10,7 @@ import { runLibraryCommand } from "./commands/library.js";
 import { runPublishCommand } from "./commands/publish.js";
 import { runSuggestTestsCommand } from "./commands/suggestTests.js";
 import { runTestCommand } from "./commands/test.js";
+import type { Prompter } from "./prompter.js";
 
 export interface CliIo {
   readonly stdout: (text: string) => void;
@@ -18,6 +20,8 @@ export interface CliIo {
 export interface RunCliOptions {
   readonly cwd?: string;
   readonly io?: CliIo;
+  // 対話コマンド(add)用。テストは scripted Prompter を注入する。未指定なら readline で対話する。
+  readonly prompter?: Prompter;
 }
 
 export async function runCli(
@@ -39,6 +43,16 @@ export async function runCli(
   if (command === undefined || command === "--help" || command === "-h") {
     io.stdout(formatMainHelp());
     return 0;
+  }
+
+  if (command === "add") {
+    return runAddCommand(args.slice(1), {
+      cwd,
+      stdout: io.stdout,
+      stderr: io.stderr,
+      // exactOptionalPropertyTypes: 未指定の prompter は渡さず、add 側の readline default に委ねる。
+      ...(options.prompter === undefined ? {} : { prompter: options.prompter })
+    });
   }
 
   if (command === "check") {
@@ -138,6 +152,7 @@ export function formatMainHelp(): string {
     "Usage: loom <command>",
     "",
     "Commands:",
+    "  add    Add a Valentina .val to the project as a part.",
     "  build  Collect referenced files into output and write a manifest.",
     "  check  Validate a Loomit project.",
     "  diff   Compare two Loomit part files semantically.",
