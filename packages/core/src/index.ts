@@ -16,6 +16,7 @@ export { runChecks } from "./compatibility/runChecks.js";
 export type { RunChecksOptions } from "./compatibility/runChecks.js";
 export {
   connectorLengthRule,
+  connectorPairingRule,
   createCompatibilityRuleRegistry,
   defaultCompatibilityRules,
   requirementRangeRule,
