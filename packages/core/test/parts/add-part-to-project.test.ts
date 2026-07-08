@@ -65,6 +65,38 @@ describe("addPartToProject", () => {
     }
   });
 
+  it("adds a connector without a length as identity only (deferred measurement)", async () => {
+    // 守る仕様: length_mm 未測定の connector は type(identity)だけで生成し、length_mm は載せない。
+    // loom add は幾何の測定値を手打ちさせず、値は後で Valentina / truer が埋める前提。
+    const projectRoot = await makeProject();
+    const valPath = join(projectRoot, "body.val");
+
+    try {
+      await writeFile(valPath, "body source\n", "utf8");
+
+      const result = await addPartToProject({
+        projectPath: projectRoot,
+        valPath,
+        name: "body",
+        type: "body",
+        variant: "v1",
+        connectors: [{ id: "armhole" }]
+      });
+
+      expect(result.ok).toBe(true);
+
+      if (!result.ok) {
+        return;
+      }
+
+      expect(result.value.part.connectors).toEqual({ armhole: { type: "armhole" } });
+      const generatedPart = await readFile(join(projectRoot, "parts/body/part.loom"), "utf8");
+      expect(generatedPart).not.toContain("length_mm");
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
+
   it("consumes a .val that already lives inside parts/ (no leftover for check to flag)", async () => {
     // parts/ 内に置いた生 .val は、取り込み後に元を削除する(= 実質 move)。コピーのままだと
     // parts/waist.val と parts/body/waist.val の二重になり、check が「未登録の .val」と咎めてしまう。

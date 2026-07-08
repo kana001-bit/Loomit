@@ -3,7 +3,7 @@ import { basename, dirname, relative, resolve } from "node:path";
 import { addPartToProject, checkValSourceExists, isSafePathSegment } from "@loomit/core";
 import type { AddedPart, AddPartConnectorInput } from "@loomit/core";
 import { formatDiagnosticsText } from "../formatters/diagnosticsText.js";
-import { createReadlinePrompter } from "../prompter.js";
+import { createReadlinePrompter, EndOfInputError } from "../prompter.js";
 import type { Prompter } from "../prompter.js";
 
 export interface AddCommandOptions {
@@ -64,6 +64,18 @@ export async function runAddCommand(
 
   try {
     answers = await collectAnswers(prompter, options.stdout, defaultName);
+  } catch (error) {
+    // パイプ/リダイレクト入力が必要な回答数に足りず、default で埋められない prompt(Custom type/seam 等)に
+    // 達したとき。空回答で問い直し続けてハングするより、ここで綺麗に失敗終了させる。
+    if (error instanceof EndOfInputError) {
+      options.stderr(
+        "入力が途中で終了したため、part を追加できませんでした(必須の回答が不足)。 / Input ended before all required answers were provided.\n" +
+          "全ての回答を渡すか、対話端末で実行してください。 / Provide every answer, or run it in an interactive terminal.\n"
+      );
+      return 1;
+    }
+
+    throw error;
   } finally {
     prompter.close();
   }
@@ -135,8 +147,8 @@ async function promptConnectors(
     if (connectors.some((connector) => connector.id === seam)) {
       notify(`Connector "${seam}" is already added; skipping duplicate.\n`);
     } else {
-      const lengthMm = await promptNonNegativeNumber(prompter, notify, `${seam} length_mm`);
-      connectors.push({ id: seam, lengthMm });
+      const lengthMm = await promptOptionalLengthMm(prompter, notify, seam);
+      connectors.push(lengthMm === undefined ? { id: seam } : { id: seam, lengthMm });
     }
 
     more = await prompter.confirm("Add another connector?", { default: false });
@@ -172,24 +184,34 @@ async function promptSegment(
       return value;
     }
 
-    notify("Use a single name without slashes, spaces, or \"..\".\n");
+    // isSafePathSegment が弾くのは「空 / "." / ".." / 区切り文字」。spaces は許容するので文言に含めない
+    // (メッセージが実際の検証と食い違わないようにする)。
+    notify("Use a single name without slashes or \"..\".\n");
   }
 }
 
-async function promptNonNegativeNumber(
+// length_mm は seam path の弧長=幾何の測定値で、.val を評価しないと出ない(Loomit は幾何を計算しない: A案)。
+// ここで手打ちを強制せず、分かっていれば受け取り、空 Enter なら未測定のまま進める。未測定の値は後で
+// Valentina / seamlint / truer が測って埋める(connector は identity だけでも成立するよう length_mm を optional 化済み)。
+async function promptOptionalLengthMm(
   prompter: Prompter,
   notify: (text: string) => void,
-  label: string
-): Promise<number> {
+  seam: string
+): Promise<number | undefined> {
   for (;;) {
-    const raw = await prompter.input(label);
+    const raw = await prompter.input(`${seam} length_mm (optional, Enter to measure later)`);
+
+    if (raw === "") {
+      return undefined;
+    }
+
     const value = Number(raw);
 
-    if (raw !== "" && Number.isFinite(value) && value >= 0) {
+    if (Number.isFinite(value) && value >= 0) {
       return value;
     }
 
-    notify("Enter a non-negative number in mm (e.g. 469).\n");
+    notify("Enter a non-negative number in mm (e.g. 469), or leave blank to measure later.\n");
   }
 }
 

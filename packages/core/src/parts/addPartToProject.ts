@@ -19,8 +19,10 @@ import type { Project } from "../schema/project.schema.js";
 export interface AddPartConnectorInput {
   // record key かつ connector.type として使う seam の識別子(例: "armhole")。
   readonly id: string;
-  // 仕上がり線上の長さ(mm)。connectorSchema が length_mm を必須にするため回答が要る。
-  readonly lengthMm: number;
+  // 仕上がり線上の長さ(mm)。幾何の測定値であり scaffold 時は未測定(undefined)を許す。
+  // 値は .val を評価して初めて出る計算値なので、ここでは人が知っている場合だけ受け取り、
+  // 無ければ Valentina / seamlint / truer が後で埋める(connectorSchema も length_mm を optional にした)。
+  readonly lengthMm?: number;
 }
 
 export interface AddPartToProjectOptions {
@@ -280,7 +282,11 @@ function buildConnectors(
   for (const input of inputs) {
     // 同じ seam を二重登録した場合は後勝ちにせず、最初の1件を残す(CLI 側でも重複は避けるが二重の安全策)。
     if (connectors[input.id] === undefined) {
-      connectors[input.id] = { type: input.id, length_mm: input.lengthMm };
+      // length_mm は未測定なら載せない(identity だけの connector にする)。
+      connectors[input.id] = {
+        type: input.id,
+        ...(input.lengthMm === undefined ? {} : { length_mm: input.lengthMm })
+      };
     }
   }
 

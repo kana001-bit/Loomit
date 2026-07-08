@@ -19,6 +19,16 @@ export interface Prompter {
   close(): void;
 }
 
+// 対話の途中で入力(stdin)が尽きたことを表す。パイプ/リダイレクト入力が必要な回答数に足りず、
+// かつ default で埋められない prompt に達したときに投げる。ここで throw することで、回答を得られない
+// prompt を空回答で無限に問い直してハングする事故を防ぐ(呼び手は wizard を失敗終了させる)。
+export class EndOfInputError extends Error {
+  constructor() {
+    super("Input ended before a required answer was provided.");
+    this.name = "EndOfInputError";
+  }
+}
+
 // process.stdin / stdout(または任意の stream)を使う本番 Prompter。
 //
 // 行は「キュー」で受ける。readline はパイプ入力を一気に読み切って 'line' を先に流すため、質問より先に
@@ -31,7 +41,10 @@ export function createReadlinePrompter(
   // prompt は自前で output.write するので、readline には output を渡さない(二重エコー防止)。
   const rl = createInterface({ input });
   const bufferedLines: string[] = [];
-  const waiters: Array<(line: string) => void> = [];
+  const waiters: Array<{
+    readonly resolve: (line: string) => void;
+    readonly reject: (error: Error) => void;
+  }> = [];
   let closed = false;
 
   rl.on("line", (line) => {
@@ -40,15 +53,16 @@ export function createReadlinePrompter(
     if (waiter === undefined) {
       bufferedLines.push(line);
     } else {
-      waiter(line);
+      waiter.resolve(line);
     }
   });
 
   rl.on("close", () => {
     closed = true;
-    // EOF 後に待っている質問は空回答で解決し、ハングさせない(default があれば呼び手が拾う)。
+    // EOF 後に待っている質問は解決不能。空回答で解決すると default を持たない prompt の retry ループが
+    // 永遠に回ってハングするため、EndOfInputError で失敗させる(default を持つ prompt は下の catch で拾う)。
     for (const waiter of waiters.splice(0)) {
-      waiter("");
+      waiter.reject(new EndOfInputError());
     }
   });
 
@@ -60,11 +74,11 @@ export function createReadlinePrompter(
     }
 
     if (closed) {
-      return Promise.resolve("");
+      return Promise.reject(new EndOfInputError());
     }
 
-    return new Promise((resolve) => {
-      waiters.push(resolve);
+    return new Promise((resolve, reject) => {
+      waiters.push({ resolve, reject });
     });
   }
 
@@ -85,7 +99,18 @@ export function createReadlinePrompter(
       output.write(`  ${index + 1}) ${choice}${marker}\n`);
     });
 
-    const raw = await ask("> ");
+    let raw: string;
+
+    try {
+      raw = await ask("> ");
+    } catch (error) {
+      // EOF。default があればそれを使い、無ければ「入力が尽きた」を呼び手へ伝える(retry ループを回さない)。
+      if (error instanceof EndOfInputError && options?.default !== undefined) {
+        return options.default;
+      }
+
+      throw error;
+    }
 
     if (raw === "" && options?.default !== undefined) {
       return options.default;
@@ -112,20 +137,40 @@ export function createReadlinePrompter(
   return {
     async input(question, options) {
       const suffix = options?.default === undefined ? "" : ` [${options.default}]`;
-      const answer = await ask(`${question}${suffix}: `);
-      return answer === "" && options?.default !== undefined ? options.default : answer;
+
+      try {
+        const answer = await ask(`${question}${suffix}: `);
+        return answer === "" && options?.default !== undefined ? options.default : answer;
+      } catch (error) {
+        // EOF。default があればそれを使い、無ければ呼び手へ EndOfInputError を伝える(無限問い直しを防ぐ)。
+        if (error instanceof EndOfInputError && options?.default !== undefined) {
+          return options.default;
+        }
+
+        throw error;
+      }
     },
     select,
     async confirm(question, options) {
       const fallback = options?.default ?? false;
       const hint = fallback ? "[Y/n]" : "[y/N]";
-      const raw = (await ask(`${question} ${hint}: `)).toLowerCase();
 
-      if (raw === "") {
-        return fallback;
+      try {
+        const raw = (await ask(`${question} ${hint}: `)).toLowerCase();
+
+        if (raw === "") {
+          return fallback;
+        }
+
+        return raw === "y" || raw === "yes";
+      } catch (error) {
+        // confirm は常に fallback を持つので、EOF なら fallback に落とす(ハングも失敗もさせない)。
+        if (error instanceof EndOfInputError) {
+          return fallback;
+        }
+
+        throw error;
       }
-
-      return raw === "y" || raw === "yes";
     },
     close() {
       rl.close();
