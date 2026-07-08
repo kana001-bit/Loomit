@@ -375,6 +375,114 @@ describe("runChecks", () => {
       ]
     });
   });
+
+  it("warns about an open connector join declared by only one part", async () => {
+    // 守る仕様: connector は2パーツを縫い合わせる cross-part join。相手が居ない(1パーツだけが宣言)join は
+    // 相手待ち / id の取り違え / 自己シーム誤登録のいずれかなので、error ではなく warning で surface する。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = getResolvedPart(resolvedProject, "body");
+    const sleeve = getResolvedPart(resolvedProject, "sleeve");
+    // body だけが armhole を宣言し、sleeve は別 id(cuff)を持つ → armhole は相手待ちの open join。
+    const report = runChecks({
+      ...resolvedProject,
+      parts: {
+        body: { ...body, part: { ...body.part, requires: {} } },
+        sleeve: {
+          ...sleeve,
+          part: {
+            ...sleeve.part,
+            connectors: { cuff: { type: "cuff", length_mm: 200, tolerance_mm: 3 } },
+            requires: {}
+          }
+        }
+      }
+    });
+
+    expect(report.status).toBe("warning");
+    expect(report.compatibility).toContainEqual({
+      status: "warning",
+      from: "body.armhole",
+      to: "(no mate)",
+      rule: "connector-pairing",
+      actual: undefined,
+      expected: undefined,
+      diagnostics: [
+        {
+          severity: "warning",
+          code: "CONNECTOR_JOIN_OPEN",
+          message:
+            "コネクタの縫い合わせ相手がいません(1つのパーツだけが宣言)。/ Connector join has no mate; only one part declares it.",
+          target: "body.armhole",
+          suggestion: [
+            'Add a part that also declares connector "armhole", fix a mismatched id, or if "armhole" is an internal (self) seam, check it in Seamlint instead of declaring a connector.'
+          ]
+        }
+      ]
+    });
+  });
+
+  it("errors on a connector join shared by more than two parts", async () => {
+    // 守る仕様: connector は pairwise。3パーツ以上が同じ id を宣言すると comparePartConnectorLengths が
+    // 多対多に総当たり比較してしまうため、over-pair は error で止める。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = getResolvedPart(resolvedProject, "body");
+    const sleeve = getResolvedPart(resolvedProject, "sleeve");
+    // body・sleeve に加えて collar も同じ armhole を宣言 → 3パーツ共有の over-pair。
+    const collar: ResolvedProjectPart = {
+      role: "collar",
+      filePath: sleeve.filePath,
+      part: {
+        ...sleeve.part,
+        type: "collar",
+        connectors: { armhole: { type: "armhole", length_mm: 470, tolerance_mm: 3 } },
+        requires: {}
+      }
+    };
+    const report = runChecks({
+      ...resolvedProject,
+      parts: {
+        body: { ...body, part: { ...body.part, requires: {} } },
+        sleeve: { ...sleeve, part: { ...sleeve.part, requires: {} } },
+        collar
+      }
+    });
+
+    expect(report.status).toBe("error");
+    expect(report.compatibility).toContainEqual({
+      status: "error",
+      from: "armhole",
+      to: "body, collar, sleeve",
+      rule: "connector-pairing",
+      actual: undefined,
+      expected: undefined,
+      diagnostics: [
+        {
+          severity: "error",
+          code: "CONNECTOR_JOIN_OVERPAIRED",
+          message:
+            "コネクタの縫い合わせ相手が2つのパーツを超えています。/ Connector join is shared by more than two parts.",
+          target: "armhole",
+          suggestion: [
+            'Connector "armhole" is declared by 3 parts (body, collar, sleeve); a connector joins exactly two parts. Give the extra seams distinct join ids.'
+          ]
+        }
+      ]
+    });
+    // over-pair な join は長さ比較を打ち切るので、任意の組の [ok] connector-length が混ざらない。
+    expect(report.compatibility).not.toContainEqual(
+      expect.objectContaining({ rule: "connector-length" })
+    );
+  });
+
+  it("does not add a connector-pairing result for a healthy two-part join", async () => {
+    // 健全な N=2 のペア(armhole を body と sleeve が宣言)には connector-pairing の結果を出さない。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const report = runChecks(resolvedProject);
+
+    expect(report.compatibility).not.toContainEqual(
+      expect.objectContaining({ rule: "connector-pairing" })
+    );
+  });
 });
 
 async function loadResolvedFixture(fixtureName: string): Promise<ResolvedProject> {
