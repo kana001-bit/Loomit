@@ -965,6 +965,147 @@ describe("runCli", () => {
     }
   });
 
+  it("does not re-offer a join already declared by two parts (avoids many-to-many wiring)", async () => {
+    // 守る仕様: check は同じ id を宣言するパーツ同士を総当たりでペアにするため、既に2パーツで閉じた join を
+    // 3つ目にも選ばせると多対多に繋がる。そこで候補は「まだ1パーツしか宣言していない open な join」だけに絞り、
+    // 閉じた join(body+sleeve の armhole)は3つ目のパーツには提示しない。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-closed-join-"));
+
+    try {
+      await runCli(["node", "loom", "init", "--garment", "blouse"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io
+      });
+      await writeFile(join(tempRoot, "body.val"), "body source\n", "utf8");
+      await writeFile(join(tempRoot, "sleeve.val"), "sleeve source\n", "utf8");
+      await writeFile(join(tempRoot, "facing.val"), "facing source\n", "utf8");
+
+      // body と sleeve が armhole を宣言し合い、armhole を「閉じた(2パーツ)」join にする。
+      await runCli(["node", "loom", "add", "body.val"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io,
+        prompter: createScriptedPrompter({
+          texts: ["body", "body", "v1", "armhole", ""],
+          confirms: [true, false]
+        })
+      });
+      await runCli(["node", "loom", "add", "sleeve.val"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io,
+        prompter: createScriptedPrompter({
+          texts: ["sleeve", "sleeve", "v1", "armhole", ""],
+          confirms: [true, false]
+        })
+      });
+
+      // 3つ目(facing): armhole は閉じているので候補に出ず、既存 join 一覧そのものが提示されない。
+      // openJoins が空なので promptJoin は直接「新しい join 名」を訊く。
+      const facingOut = createOutputCollector();
+      const facingExit = await runCli(["node", "loom", "add", "facing.val"], {
+        cwd: tempRoot,
+        io: facingOut.io,
+        prompter: createScriptedPrompter({
+          texts: ["facing", "facing", "v1", "neckline", ""],
+          confirms: [true, false]
+        })
+      });
+
+      expect(facingExit).toBe(0);
+      // 閉じた armhole は再提示されない(一覧そのものが出ない)。
+      expect(facingOut.stdout.join("")).not.toContain("Existing joins");
+      expect(facingOut.stdout.join("")).not.toContain("armhole");
+      // facing は既存 armhole に相乗りせず、新しい join を宣言する。
+      const facingPart = await readFile(join(tempRoot, "parts/facing/part.loom"), "utf8");
+      expect(facingPart).toContain("neckline:");
+      expect(facingPart).not.toContain("armhole:");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("defaults the join prompt to naming a new join, so a blank Enter does not silently reuse an existing join", async () => {
+    // 守る仕様: 既存 join があるときの select default は「新しい join を名付ける」に倒す。default を先頭の
+    // 既存 join にすると、空 Enter だけで意図せずその相手へ接続されてしまう(prompter.select は空入力で default を返す)。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-join-default-"));
+
+    try {
+      await runCli(["node", "loom", "init", "--garment", "blouse"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io
+      });
+      await writeFile(join(tempRoot, "body.val"), "body source\n", "utf8");
+      await writeFile(join(tempRoot, "sleeve.val"), "sleeve source\n", "utf8");
+
+      await runCli(["node", "loom", "add", "body.val"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io,
+        prompter: createScriptedPrompter({
+          texts: ["body", "body", "v1", "armhole", ""],
+          confirms: [true, false]
+        })
+      });
+
+      // sleeve の join select で空 Enter を押す。回答順: name, type, variant, connector追加?(y),
+      // join select(空=default), New join name(sideseam), length(空), もう1つ?(空=false)。
+      const output = createOutputCollector();
+      const prompter = createReadlinePrompter(
+        Readable.from("sleeve\nsleeve\nv1\ny\n\nsideseam\n\n\n"),
+        new Writable({
+          write(_chunk, _encoding, callback) {
+            callback();
+          }
+        })
+      );
+
+      const exitCode = await runCli(["node", "loom", "add", "sleeve.val"], {
+        cwd: tempRoot,
+        io: output.io,
+        prompter
+      });
+
+      expect(exitCode).toBe(0);
+      // 空 Enter は default(=新しい join を名付ける)へ倒れ、既存 armhole には黙って繋がらない。
+      const sleevePart = await readFile(join(tempRoot, "parts/sleeve/part.loom"), "utf8");
+      expect(sleevePart).toContain("sideseam:");
+      expect(sleevePart).not.toContain("armhole:");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects the reserved sentinel as a new join name so it stays selectable later", async () => {
+    // 守る仕様: 番兵 "(name a new join)" は isSafePathSegment を通ってしまうが、実 join 名としては拒否する。
+    // 許すと次回以降その join を選んでも番兵と誤認され、再利用できなくなる。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-reserved-"));
+
+    try {
+      await runCli(["node", "loom", "init", "--garment", "blouse"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io
+      });
+      await writeFile(join(tempRoot, "body.val"), "body source\n", "utf8");
+
+      const output = createOutputCollector();
+      // New join name にまず番兵そのものを渡す(拒否される)→ 続けて有効名 "hem" を渡す。
+      const exitCode = await runCli(["node", "loom", "add", "body.val"], {
+        cwd: tempRoot,
+        io: output.io,
+        prompter: createScriptedPrompter({
+          texts: ["body", "body", "v1", "(name a new join)", "hem", ""],
+          confirms: [true, false]
+        })
+      });
+
+      expect(exitCode).toBe(0);
+      expect(output.stdout.join("")).toContain("is reserved");
+      const bodyPart = await readFile(join(tempRoot, "parts/body/part.loom"), "utf8");
+      expect(bodyPart).toContain("hem:");
+      expect(bodyPart).not.toContain("(name a new join)");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   it("fails cleanly (does not hang) when piped input runs out at a required prompt", async () => {
     // 守る仕様: パイプ入力が足りず、default で埋められない prompt(ここでは type=other の Custom type)に
     // 達したら、空回答で問い直し続けてハングせず、exit 1 で「入力が途中で終了」と案内して終わる。
