@@ -901,6 +901,70 @@ describe("runCli", () => {
     }
   });
 
+  it("suggests joins already declared by other parts when adding a connector", async () => {
+    // 守る仕様: connector は「名前付きの join」で、check は同じ id を宣言し合うかでペアにする。
+    // そこで2つ目以降のパーツを add するとき、既に他パーツが宣言している join を宣言元 role 付きで提示し、
+    // 選べば相手と id が確実に一致する(seam の形は尋ねない)。最初のパーツには提示する相手が居ないので出さない。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-join-"));
+
+    try {
+      await runCli(["node", "loom", "init", "--garment", "blouse"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io
+      });
+      await writeFile(join(tempRoot, "body.val"), "body source\n", "utf8");
+      await writeFile(join(tempRoot, "sleeve.val"), "sleeve source\n", "utf8");
+
+      // 1つ目(body): 既存 join が無いので新しい join "armhole" を名付ける。相手一覧は出ないはず。
+      // 回答順: name, type(select), variant, [connector追加?], New join name, length(空=未測定), [もう1つ?]
+      const bodyOut = createOutputCollector();
+      const bodyExit = await runCli(["node", "loom", "add", "body.val"], {
+        cwd: tempRoot,
+        io: bodyOut.io,
+        prompter: createScriptedPrompter({
+          texts: ["body", "body", "v1", "armhole", ""],
+          confirms: [true, false]
+        })
+      });
+
+      expect(bodyExit).toBe(0);
+      expect(bodyOut.stdout.join("")).not.toContain("Existing joins");
+
+      // 2つ目(sleeve): body が宣言済みの "armhole" が候補として提示され、選ぶと同じ id の connector になる。
+      // 回答順: name, type(select), variant, [connector追加?], join(select=armhole), length(空), [もう1つ?]
+      const sleeveOut = createOutputCollector();
+      const sleeveExit = await runCli(["node", "loom", "add", "sleeve.val"], {
+        cwd: tempRoot,
+        io: sleeveOut.io,
+        prompter: createScriptedPrompter({
+          texts: ["sleeve", "sleeve", "v1", "armhole", ""],
+          confirms: [true, false]
+        })
+      });
+
+      expect(sleeveExit).toBe(0);
+      // 既存 join が宣言元 role 付きで提示される(shape の taxonomy は出さない)。
+      expect(sleeveOut.stdout.join("")).toContain("Existing joins");
+      expect(sleeveOut.stdout.join("")).toContain("armhole (body)");
+      // 選んだ join がそのまま connector id になり、body と同じ id で縫い合わせ相手になる。
+      const sleevePart = await readFile(join(tempRoot, "parts/sleeve/part.loom"), "utf8");
+      expect(sleevePart).toContain("armhole:");
+      expect(sleevePart).toContain("type: armhole");
+
+      // check は同じ id を突き合わせて「縫い合わせ可能」を判定する。
+      const checkOut = createOutputCollector();
+      const checkExit = await runCli(["node", "loom", "check", tempRoot], {
+        cwd: workspaceRoot,
+        io: checkOut.io
+      });
+
+      expect(checkExit).toBe(0);
+      expect(checkOut.stdout.join("")).toContain("connector-length body.armhole -> sleeve.armhole");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   it("fails cleanly (does not hang) when piped input runs out at a required prompt", async () => {
     // 守る仕様: パイプ入力が足りず、default で埋められない prompt(ここでは type=other の Custom type)に
     // 達したら、空回答で問い直し続けてハングせず、exit 1 で「入力が途中で終了」と案内して終わる。
