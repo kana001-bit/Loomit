@@ -17,8 +17,12 @@ import type { Project } from "../schema/project.schema.js";
 // prompt を持ち込まない(core / CLI 分離: 対話は CLI、決定済みの値からの生成は core)。ユーザーは .val を
 // 置くだけで part.loom を手書きしなくてよい、という設計を成立させる入口。
 export interface AddPartConnectorInput {
-  // record key かつ connector.type として使う seam の識別子(例: "armhole")。
+  // record key = join id。縫い目ごとに一意な rendezvous で、check は同じ id を宣言するパーツ同士をペアにする。
+  // type(種類ラベル)とは別軸: 同じ type の縫い目が複数あってよく、その区別は id が担う(id を潰すと over-pair する)。
   readonly id: string;
+  // connector.type = 縫い目の種類ラベル(例: "side" / "armhole")。ペアリングには使われない分類語。
+  // 省略時は id にフォールバックする(id=type だった旧来の呼び出しと、type を分けない core 直呼びとの後方互換)。
+  readonly type?: string;
   // 仕上がり線上の長さ(mm)。幾何の測定値であり scaffold 時は未測定(undefined)を許す。
   // 値は .val を評価して初めて出る計算値なので、ここでは人が知っている場合だけ受け取り、
   // 無ければ Valentina / seamlint / truer が後で埋める(connectorSchema も length_mm を optional にした)。
@@ -299,9 +303,11 @@ function buildConnectors(
   for (const input of inputs) {
     // 同じ seam を二重登録した場合は後勝ちにせず、最初の1件を残す(CLI 側でも重複は避けるが二重の安全策)。
     if (connectors[input.id] === undefined) {
+      // type(種類ラベル)は id とは別軸。未指定なら id にフォールバックする(旧来の id=type 互換)。
+      // これにより「同じ type の別の縫い目」を、一意な id を保ったまま同じ type で表せる。
       // length_mm は未測定なら載せない(identity だけの connector にする)。
       connectors[input.id] = {
-        type: input.id,
+        type: input.type ?? input.id,
         ...(input.lengthMm === undefined ? {} : { length_mm: input.lengthMm })
       };
     }
