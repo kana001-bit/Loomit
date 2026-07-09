@@ -4,6 +4,7 @@ import {
   addPartToProject,
   checkValSourceExists,
   isSafePathSegment,
+  listValDetailsFromFile,
   loadProject,
   resolveParts
 } from "@loomit/core";
@@ -30,6 +31,17 @@ interface PartAnswers {
   readonly type: string;
   readonly variant: string;
   readonly connectors: readonly AddPartConnectorInput[];
+}
+
+// detail(ピース)ごとの回答。role(front / back)を type(body / sleeve)とは別軸で持つ(案B)。
+interface DetailPartAnswers extends PartAnswers {
+  readonly role: string;
+}
+
+// .val から検出した1ピース。どの <draw> の <detail> かを覚えておき、prompt 見出しと files.piece に使う。
+interface DetectedPiece {
+  readonly drawName: string;
+  readonly pieceName: string;
 }
 
 // type は garment 上の役割。schema は自由な単一 segment だが、よく使う候補を出して選びやすくする。
@@ -79,22 +91,95 @@ export async function runAddCommand(
     return 1;
   }
 
+  // .val を read-only で覗いて <detail> ピースを列挙する。1着 = 1 .val = N ピースなので、ここで割り出した
+  // ピースの数だけ part を作る(案B)。読めなければ幾何に触れる前に explainable な診断で止める。
+  const detailList = await listValDetailsFromFile(valPath);
+
+  if (!detailList.ok) {
+    options.stderr(`${formatDiagnosticsText(detailList.diagnostics).join("\n")}\n`);
+    return 1;
+  }
+
+  // 検出した draw / detail を先に見せる(取り込み前の read-only な一覧)。何が入るか分かってから対話に入る。
+  const detectedDetails = formatDetectedDetails(detailList.value);
+
+  if (detectedDetails !== undefined) {
+    options.stdout(detectedDetails);
+  }
+
+  const detectedPieces = flattenDetectedPieces(detailList.value);
+
+  // draw はあるが detail が1つも無い .val(construction のみ、裁断ピース未定義)。黙って落とさず、
+  // 「取り込むピースが無い」と案内して何も追加せずに正常終了する(実データに存在するケース)。
+  if (detailList.value.draws.length > 0 && detectedPieces.length === 0) {
+    options.stdout(
+      "No detail pieces were added. Add <detail> pieces in Valentina, then run loom add again.\n"
+    );
+    return 0;
+  }
+
   // 縫い合わせ相手の候補として、プロジェクト内の他パーツが既に宣言している join(connector id)を集める。
   // 取得できなくても add は続行する(最初のパーツや壊れた project では単に候補なしで新規命名に倒す)。
-  const existingJoins = await collectExistingJoins(options.cwd);
-
+  // 1回の add で複数ピースを足すときは、直前に足したピースの join も候補に加えていく(mergeExistingJoins)。
+  let existingJoins = await collectExistingJoins(options.cwd);
   const prompter = options.prompter ?? createReadlinePrompter();
-  let answers: PartAnswers;
 
   try {
-    answers = await collectAnswers(prompter, options.stdout, defaultName, existingJoins);
+    // detail を割り出せない .val(draw も detail も無い等)は、旧来の 1 .val=1 part 経路に倒す。
+    if (detectedPieces.length === 0) {
+      const answers = await collectAnswers(prompter, options.stdout, defaultName, existingJoins);
+      return await addOnePart(options, valPath, answers);
+    }
+
+    for (const [index, piece] of detectedPieces.entries()) {
+      // 元 .val が parts/ 内なら「取り込み後に削除(= 実質 move)」だが、複数ピースでは後続が同じ元を要る。
+      // 消費(削除)は最後のピースだけに任せ、途中で元を消して後続が PART_ADD_SOURCE_NOT_FOUND で落ちて
+      // 部分取り込みになるのを防ぐ。途中で失敗しても元は残る(最後の成功まで消えない)。
+      const isLastPiece = index === detectedPieces.length - 1;
+
+      // 今どのピースを訊いているかを毎回見出しで示す(複数ピースを続けて訊くので迷子にしない)。
+      options.stdout(formatPiecePromptHeader(piece));
+
+      const answers = await collectDetailAnswers(
+        prompter,
+        options.stdout,
+        piece.pieceName,
+        existingJoins
+      );
+      const result = await addPartToProject({
+        projectPath: options.cwd,
+        valPath,
+        name: answers.name,
+        role: answers.role,
+        type: answers.type,
+        variant: answers.variant,
+        piece: piece.pieceName,
+        keepSource: !isLastPiece,
+        ...(answers.connectors.length === 0 ? {} : { connectors: answers.connectors })
+      });
+
+      if (!result.ok) {
+        options.stderr(`${formatDiagnosticsText(result.diagnostics).join("\n")}\n`);
+        return 1;
+      }
+
+      options.stdout(formatAddSuccess(result.value));
+      // 足したばかりの part の join を候補に反映し、次のピースが同じ join を選んで繋げられるようにする。
+      existingJoins = mergeExistingJoins(
+        existingJoins,
+        result.value.role,
+        Object.keys(result.value.part.connectors ?? {})
+      );
+    }
+
+    return 0;
   } catch (error) {
     // パイプ/リダイレクト入力が必要な回答数に足りず、default で埋められない prompt(Custom type / New join 名 等)に
     // 達したとき。空回答で問い直し続けてハングするより、ここで綺麗に失敗終了させる。
     if (error instanceof EndOfInputError) {
       options.stderr(
-        "入力が途中で終了したため、part を追加できませんでした(必須の回答が不足)。 / Input ended before all required answers were provided.\n" +
-          "全ての回答を渡すか、対話端末で実行してください。 / Provide every answer, or run it in an interactive terminal.\n"
+        "Input ended before all required answers were provided.\n" +
+          "Provide every answer, or run it in an interactive terminal.\n"
       );
       return 1;
     }
@@ -103,7 +188,66 @@ export async function runAddCommand(
   } finally {
     prompter.close();
   }
+}
 
+export function formatAddHelp(): string {
+  return [
+    "Usage: loom add <file.val>",
+    "",
+    "Add a Valentina .val to the project. If Loomit detects <detail> pieces,",
+    "it scaffolds one part per piece and records files.piece in each part. If",
+    "the file has draws but no pieces yet, Loomit prints guidance and adds",
+    "nothing. Otherwise it falls back to the legacy single-part prompt.",
+    "",
+    "Options:",
+    "  --help  Show this help."
+  ].join("\n") + "\n";
+}
+
+// 検出した draw / detail を取り込み前に見せる read-only な一覧を組む。draw が無ければ何も出さない
+// (undefined を返す)。detail 0 件の draw は「piece: none」と明示し、silent に見落とさせない。
+function formatDetectedDetails(detailList: {
+  readonly draws: readonly {
+    readonly drawName: string;
+    readonly details: readonly string[];
+  }[];
+  readonly totalDetails: number;
+}): string | undefined {
+  if (detailList.draws.length === 0) {
+    return undefined;
+  }
+
+  const lines = ["Detected Valentina details:"];
+
+  for (const draw of detailList.draws) {
+    lines.push(`  draw: ${draw.drawName}`);
+
+    if (draw.details.length === 0) {
+      lines.push("  pieces: none");
+      lines.push("  This .val has no <detail> pieces yet; Loomit can only show the draw for now.");
+      continue;
+    }
+
+    lines.push(`  pieces (${draw.details.length}):`);
+
+    for (const detail of draw.details) {
+      lines.push(`    - ${detail}`);
+    }
+  }
+
+  if (detailList.totalDetails > 0) {
+    lines.push(`  total pieces: ${detailList.totalDetails}`);
+  }
+
+  return `${lines.join("\n")}\n\n`;
+}
+
+// detail を割り出せない .val 向けの旧来経路。role を分けず(type を role として使う)1 part だけ生成する。
+async function addOnePart(
+  options: AddCommandOptions,
+  valPath: string,
+  answers: PartAnswers
+): Promise<number> {
   const result = await addPartToProject({
     projectPath: options.cwd,
     valPath,
@@ -122,31 +266,41 @@ export async function runAddCommand(
   return 0;
 }
 
-export function formatAddHelp(): string {
-  return [
-    "Usage: loom add <file.val>",
-    "",
-    "Add a Valentina .val to the project as a part. Interactively fills in the",
-    "metadata that cannot be derived from the .val (name, type, variant, joins),",
-    "generates parts/<name>/part.loom, and registers it in loomit.yml.",
-    "",
-    "Options:",
-    "  --help  Show this help."
-  ].join("\n") + "\n";
-}
-
 async function collectAnswers(
   prompter: Prompter,
   notify: (text: string) => void,
   defaultName: string,
   existingJoins: readonly ExistingJoin[]
 ): Promise<PartAnswers> {
-  const name = await promptSegment(prompter, notify, "Part name", defaultName);
+  const name = await promptName(prompter, notify, defaultName);
   const type = await promptType(prompter, notify);
   const variant = await prompter.input("Variant", { default: "v1" });
   const connectors = await promptConnectors(prompter, notify, existingJoins);
 
   return { name, type, variant, connectors };
+}
+
+// detail(ピース)1件分の回答を集める。role は detail 名を既定にするが、パス segment になるので安全な
+// ときだけ既定に置き、非安全(空白/日本語等)なら手入力必須にする。name はラベルなので detail 名を
+// そのまま既定に置き、安全 segment 制約は課さない(空白/日本語のラベルも許す)。
+async function collectDetailAnswers(
+  prompter: Prompter,
+  notify: (text: string) => void,
+  detailName: string,
+  existingJoins: readonly ExistingJoin[]
+): Promise<DetailPartAnswers> {
+  const role = await promptSegment(
+    prompter,
+    notify,
+    "Part role",
+    isSafePathSegment(detailName) ? detailName : undefined
+  );
+  const name = await promptName(prompter, notify, detailName);
+  const type = await promptType(prompter, notify);
+  const variant = await prompter.input("Variant", { default: "v1" });
+  const connectors = await promptConnectors(prompter, notify, existingJoins);
+
+  return { role, name, type, variant, connectors };
 }
 
 async function promptType(prompter: Prompter, notify: (text: string) => void): Promise<string> {
@@ -270,7 +424,49 @@ async function collectExistingJoins(projectPath: string): Promise<readonly Exist
     .map(([id, roles]) => ({ id, roles }));
 }
 
-// 単一 segment を満たすまで訊き直す。core も同じ検証をするが、失敗させる前にここで直せるようにする。
+// draw ごとの detail 一覧を、(draw 名, ピース名)の平らな列に均す。add はこの順にピースを訊いていく。
+function flattenDetectedPieces(detailList: {
+  readonly draws: readonly {
+    readonly drawName: string;
+    readonly details: readonly string[];
+  }[];
+}): readonly DetectedPiece[] {
+  return detailList.draws.flatMap((draw) =>
+    draw.details.map((pieceName) => ({ drawName: draw.drawName, pieceName }))
+  );
+}
+
+// 今どのピースを訊いているかを示す見出し。どの draw の detail かも添えて、複数ピースでも迷子にしない。
+function formatPiecePromptHeader(piece: DetectedPiece): string {
+  return `Piece: ${piece.pieceName} (draw: ${piece.drawName})\n`;
+}
+
+// 直前に足した part の join を候補一覧に反映する(1回の add で続けて足すピースが同じ join を選べるように)。
+// collectExistingJoins と同じく id 昇順で返し、同じ role の重複登録はしない。
+function mergeExistingJoins(
+  existingJoins: readonly ExistingJoin[],
+  role: string,
+  joinIds: readonly string[]
+): readonly ExistingJoin[] {
+  const rolesByJoinId = new Map(existingJoins.map((join) => [join.id, [...join.roles]]));
+
+  for (const joinId of joinIds) {
+    const roles = rolesByJoinId.get(joinId) ?? [];
+
+    if (!roles.includes(role)) {
+      roles.push(role);
+    }
+
+    rolesByJoinId.set(joinId, roles);
+  }
+
+  return [...rolesByJoinId.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([id, roles]) => ({ id, roles }));
+}
+
+// パス segment になる値(role / Custom type / New join 名)を、単一 segment を満たすまで訊き直す。
+// core も同じ検証をするが、失敗させる前にここで直せるようにする。
 async function promptSegment(
   prompter: Prompter,
   notify: (text: string) => void,
@@ -289,7 +485,26 @@ async function promptSegment(
 
     // isSafePathSegment が弾くのは「空 / "." / ".." / 区切り文字」。spaces は許容するので文言に含めない
     // (メッセージが実際の検証と食い違わないようにする)。
-    notify("Use a single name without slashes or \"..\".\n");
+    notify('Use a single name without slashes or "..".\n');
+  }
+}
+
+// name は part.loom のラベルで、パスにもキーにも使わない(schema は z.string().min(1) の自由文字列)。
+// role のような単一 segment 制約は課さず、detail 名の空白/日本語をそのまま既定として受け入れる。
+// 空だけは schema の min(1) に反するので、空にならないよう既定を持たせて訊き、空回答は問い直す。
+async function promptName(
+  prompter: Prompter,
+  notify: (text: string) => void,
+  defaultValue: string
+): Promise<string> {
+  for (;;) {
+    const value = await prompter.input("Part name", { default: defaultValue });
+
+    if (value.length > 0) {
+      return value;
+    }
+
+    notify("Enter a part name.\n");
   }
 }
 

@@ -97,6 +97,48 @@ describe("addPartToProject", () => {
     }
   });
 
+  it("registers a project role separately from part.type", async () => {
+    // 守る仕様: addPartToProject は role(front) と part.type(body) を別々に保存できる。
+    const projectRoot = await makeProject();
+    const valPath = join(projectRoot, "front.val");
+
+    try {
+      await writeFile(valPath, "front source\n", "utf8");
+
+      const result = await addPartToProject({
+        projectPath: projectRoot,
+        valPath,
+        name: "front",
+        role: "front",
+        type: "body",
+        variant: "v1",
+        piece: "front"
+      });
+
+      expect(result.ok).toBe(true);
+
+      if (!result.ok) {
+        return;
+      }
+
+      expect(result.value.role).toBe("front");
+      expect(result.value.part.type).toBe("body");
+      expect(result.value.part.files?.piece).toBe("front");
+      expect(result.value.project.parts).toEqual({ front: "./parts/front/part.loom" });
+      expect(await readFile(join(projectRoot, "parts/front/front.val"), "utf8")).toBe(
+        "front source\n"
+      );
+      expect(await readFile(join(projectRoot, "parts/front/part.loom"), "utf8")).toContain(
+        "type: body"
+      );
+      expect(await readFile(join(projectRoot, "parts/front/part.loom"), "utf8")).toContain(
+        "piece: front"
+      );
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
+
   it("consumes a .val that already lives inside parts/ (no leftover for check to flag)", async () => {
     // parts/ 内に置いた生 .val は、取り込み後に元を削除する(= 実質 move)。コピーのままだと
     // parts/waist.val と parts/body/waist.val の二重になり、check が「未登録の .val」と咎めてしまう。

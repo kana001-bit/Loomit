@@ -1,82 +1,71 @@
 # Loomit CLI Dictionary
 
-この文書は、`loom` CLI のコマンド辞書である。
-
-実装済みコマンドを中心に、
-
-- 何をするコマンドか
-- どういうときに使うか
-- 最低限の使い方は何か
-
-をすぐ確認できるようにまとめる。
+この文書は、`loom` コマンドが何をするか・いつ使うかをまとめたコマンド辞書である。
 
 ## Overview
 
-Loomit の CLI は、大きく次の役割に分かれる。
+Loomit の CLI は、大きく次のワークフローに分かれる。
 
-- project を作る: `init`, `fork`
-- part を用意する: `add`
-- project を検証する: `check`, `doctor`, `fit`, `suggest-tests`, `test`
-- project から成果物を作る: `build`
-- 変更を読む: `diff`
-- part を資産化して再利用する: `publish`, `library`
+- project を作る・複製する: `init`, `fork`
+- part を追加する・再利用する: `add`, `publish`, `library`
+- project の整合性を確認する: `check`, `doctor`, `fit`, `suggest-tests`, `test`
+- project から成果物を build する: `build`
+- 設計変更を比較する: `diff`
 
 ## `loom init`
 
-現在のディレクトリに Loomit project を初期化する。
+現在のディレクトリに新しい Loomit project を作成する。
 
 ```text
 loom init [--name name] [--garment garment]
 ```
 
-主な用途:
-
-- 新しい一着 project の作成
-- 空の scaffold の作成
-
 補足:
 
-- `git init` のように、**現在のディレクトリ**を初期化する
-- パス引数は取らない
-- `--name` を省略した場合はディレクトリ名が project 名になる
+- `git init` のように、**現在のディレクトリ**に project の scaffold を作る。
+- `--name` を省略した場合はディレクトリ名が project 名になる。
 
 ## `loom fork`
 
-既存 project を複製して、新しい一着の出発点にする。
+既存 project を複製して、新しい target ディレクトリに複製する。
 
 ```text
 loom fork <source> <target> [--name name]
 ```
 
-主な用途:
-
-- 過去の一着をベースに別案を始める
-- 元 project から独立した新しい作業ラインを作る
-
 補足:
 
-- fork 後の project は元 project と自動連動しない
-- `--name` を省略した場合は target ディレクトリ名が project 名になる
+- 元 project の構造をそのまま複製する（fork 後は元と自動連動しない）。
+- `--name` を省略した場合は target ディレクトリ名が project 名になる。
 
 ## `loom add`
 
-Valentina の `.val` を project の part として取り込む。
+Valentina の `.val` を project に取り込む。1着 = 1 `.val` = 複数ピースという実データに合わせ、`.val` の `<detail>`（裁断ピース）ごとに part を1つずつ用意する。
 
 ```text
 loom add <file.val>
 ```
 
-主な用途:
+挙動:
 
-- `.val` を用意しただけの状態から、最初の part を作る
-- `part.loom` を手で書かずに用意する
+- `.val` から `<detail>` ピースを検出したら、**ピースごとに part を1つ** scaffold する。
+- 生成した part は `parts/<role>/` に書き出す。
+- 生成した各 `part.loom` は `files.source`（共有 `.val`）と `files.piece`（担当する detail 名）を記録する。
+- `<draw>` はあるが `<detail>` が1つも無い `.val`（construction のみ）は、案内を表示して何も追加せずに終了する。
+- draw も detail も検出できない `.val` は、従来どおり単一 part の対話に倒す。
+
+対話で尋ねる項目:
+
+- detail 単位の add: `role`, `name`, `type`, `variant`, seam connector
+- 従来の単一 part の add: `name`, `type`, `variant`, seam connector
 
 補足:
 
-- `.val` から導出できない情報(name, type, variant, seam connector)は対話で尋ねる
-- `parts/<name>/` に `.val` をコピーし、`part.loom` を生成する
-- `loomit.yml` の `parts:` に登録するので、以後 `loom check` などが使える
-- 質問はパイプでも与えられる(例: `loom add body.val < answers.txt`)
+- `role` は project 側の part identity（例: `front`, `back`, `upper_sleeve`）で、`loomit.yml` の parts key かつ `parts/<role>/` のディレクトリになる。パス segment 制約がある。
+- `type` は粗分類（例: `body`, `sleeve`）で、role とは別軸。同じ type のピースが複数あってよい。
+- `name` は part.loom のラベルで、パスにもキーにも使わない。安全 segment 制約は課さないので、空白や日本語も使える。
+- 質問はパイプでも与えられる（例: `loom add body.val < answers.txt`）。
+- 取り込み後は `loom check` を実行する。
 
 ## `loom check`
 
@@ -86,188 +75,118 @@ project と part の整合性を検証する。
 loom check [path] [--format text|json]
 ```
 
-主な用途:
-
-- `loomit.yml` の構文や参照の確認
-- connector や `requires` の互換診断
-- build 前の基本チェック
-
 補足:
 
-- `path` を省略すると現在位置から project を探す
-- 出力形式は `text` または `json`
-- 仕上がり寸法ベースの互換性を扱い、geometry の rich check までは持たない
-- part が1つも無い(まだ `loom add` していない)ときは error で先に add するよう促す
-- `parts/` 配下に、どの part も参照していない `.val` があるときは warning で `loom add` を促す
-
-`loom build` も同様に、part が空なら error で止まる。
+- `loomit.yml` と参照している part を検証する。
+- connector や `requires` の互換を確認する。
+- `parts/` 配下に、どの part も参照していない `.val` があれば warning で知らせる。
 
 ## `loom doctor`
 
-`check` より詳しい診断説明を出す。
+`check` より詳しい説明つきの診断を出す。
 
 ```text
 loom doctor [path] [--format text|json]
 ```
 
-主な用途:
-
-- `check` の失敗理由を詳しく読みたいとき
-- どの part や rule が問題なのかを追いたいとき
-
 補足:
 
-- 基本入力は `check` と同じ
-- 「通るかどうか」より「どこが怪しいか」を読むためのコマンド
+- `check` と同じ検証を土台にする。
+- 「通るか」より「どこが怪しいか」を読みやすく示すためのコマンド。
 
 ## `loom build`
 
-参照 part を集めて `output/` に build 結果を書き出す。
+参照 part を集めて、設定された output ディレクトリに build 結果を書き出す。
 
 ```text
 loom build [path] [--format text|json]
 ```
 
-主な用途:
-
-- build 用ディレクトリの作成
-- manifest を含む出力の生成
-
 補足:
 
-- 実行前に project load、part resolve、`check` 相当の検証が走る
-- 互換エラーがある場合は build しない
+- part を解決し、`check` 相当の互換検証を走らせてから build 出力を書く。
+- 致命的でない問題は、逐一失敗させず可能なら warning で伝える。
 
 ## `loom diff`
 
-2つの part、または2つの project 内の同一 role part を比較して、意味のある設計差分を読む。
+2つの part、または2つの project 内の同一 role part を比較する。
 
 ```text
 loom diff <from-part.loom> <to-part.loom> [--format text|json]
 loom diff <from-project> <to-project> --part <role> [--format text|json]
 ```
 
-主な用途:
-
-- branch 間で sleeve や body の変更を比較する
-- raw file diff ではなく domain diff として読む
-- keep / discard の判断材料を得る
-
 補足:
 
-- `--part <role>` を使うと project 同士の同じ role を比較できる
-- darts 射影や prototype notes に関する診断も diff レポートに反映されることがある
-- Loomit 本体では、`diff` は単なる比較表示ではなく design review surface として位置付けている
+- raw file diff ではなく、ドメインを踏まえた変更として読む。
+- connector や requirement について recheck のヒントを含める。
 
 ## `loom fit`
 
-body profile と project を照合して、着用リスクを診断する。
+project を body profile と照合する。
 
 ```text
 loom fit [path] --profile <name|path> [--format text|json]
 ```
 
-主な用途:
-
-- profile に対してきつすぎないかを見る
-- garment の finished measurements と body profile を比較する
-
 補足:
 
-- `--profile` は必須
-- profile 名を渡した場合は project の `profiles` 定義、または `profiles/<name>.yml` を解決する
-- 断定ではなく risk / diagnostic を返す
+- 利用できる場合は project の finished measurements を使う。
+- 断定ではなく fit の診断・リスクを返す。
 
 ## `loom suggest-tests`
 
-現在の project で確認すべき movement test を提案する。
+project で確認すべき movement test を提案する。
 
 ```text
 loom suggest-tests [path] [--notes path] [--format text|json]
 ```
 
-主な用途:
-
-- 今回の服で見るべき動作シナリオを洗い出す
-- prototype notes を踏まえた test 候補を出す
-
 補足:
 
-- `--notes` を省略した場合は `notes/prototype-notes.yml` を自動で探す
-- notes が存在しなければ、notes なしで提案を続行する
+- prototype notes があれば、それを踏まえて提案する。
 
 ## `loom test`
 
-指定した movement test scenario に対するリスクを診断する。
+1つの movement test scenario を実行する。
 
 ```text
 loom test <scenario> [path] [--notes path] [--format text|json]
 ```
 
-主な用途:
-
-- `arm-raise` など特定動作の確認
-- suggestion で出たシナリオの個別チェック
-
 補足:
 
-- 最初の位置引数は scenario 名
-- `--notes` を省略した場合は `notes/prototype-notes.yml` を自動で探す
-- v0 では物理シミュレーションではなくルールベース診断を前提にする
+- `v0` では scenario の対応範囲を意図的に小さく保っている。
 
 ## `loom publish`
 
-作業中の part directory を Loomit library にコピーする。
+part ディレクトリを Loomit library に publish する。
 
 ```text
 loom publish <part-path> [--library path] [--name name]
 ```
 
-主な用途:
-
-- 気に入った part を再利用資産として保存する
-- project から library へ明示的に切り出す
-
 補足:
 
-- publish は自動ではなく明示操作
-- `--library` を省略した場合は `~/.loomit/library`
-- `--name` で library entry 名を上書きできる
+- 既存の part から再利用可能な library entry を切り出す（自動ではなく明示操作）。
 
 ## `loom library`
 
-published part の一覧表示や project への追加を行う。
+published part を一覧する、または project に追加する。
 
 ```text
 loom library list [--library path] [--type type] [--format text|json]
 loom library add <type/name> [project] [--library path] [--role role] [--as name] [--replace]
 ```
 
-主な用途:
-
-- library 内の part を一覧する
-- library から project に part をコピーする
-
-サブコマンド:
-
-- `list`: library の一覧表示
-- `add`: library part を project に追加
-
 補足:
 
-- `--role` は project 側での role 名を指定する
-- `--as` は local directory 名を指定する
-- `--replace` を付けると既存 role の置き換えを許可する
-- `--library` を省略した場合は `~/.loomit/library`
+- `list` は library 内の part を一覧する。
+- `add` は published part を project にコピーする。
 
 ## Output Formats
 
-いくつかのコマンドは `--format text|json` を持つ。
-
-- `text`: 人が terminal で読むための出力
-- `json`: 他ツール連携やテストで扱いやすい構造化出力
-
-現在 `--format` を持つ主なコマンド:
+次のコマンドは `--format text|json` を持つ。
 
 - `check`
 - `doctor`
@@ -280,6 +199,5 @@ loom library add <type/name> [project] [--library path] [--role role] [--as name
 
 ## Notes
 
-- この辞書は、現時点の `packages/cli/src/commands/` にある実装済みコマンドを基準にしている
-- 古い設計文書に登場する `graph` などは、まだこの辞書には含めていない
-- 将来 `seamlint` や `truer` が別ツールとして育つ場合も、ここでは Loomit 本体の `loom` コマンドだけを扱う
+- コマンドの実装は `packages/cli/src/commands/` にある。
+- Loomit は CLI を小さく、project 操作に絞って保つことを意図している。

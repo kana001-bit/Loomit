@@ -1,4 +1,3 @@
-import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import { getStatusForDiagnostics } from "../diagnostics/report.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import type { LoadFileResult } from "../filesystem/loadFileResult.js";
@@ -35,11 +34,6 @@ export async function resolveParts(
     }
 
     diagnostics.push(...partResult.diagnostics);
-
-    if (partResult.value.type !== role) {
-      diagnostics.push(createPartRoleTypeMismatchDiagnostic(role, partResult.value));
-    }
-
     parts[role] = {
       role,
       filePath,
@@ -63,14 +57,4 @@ export async function resolveParts(
     },
     diagnostics
   };
-}
-
-function createPartRoleTypeMismatchDiagnostic(role: string, part: Part): Diagnostic {
-  return createDiagnostic({
-    severity: "error",
-    code: "PART_ROLE_TYPE_MISMATCH",
-    message: `Project part role "${role}" points to a part with type "${part.type}".`,
-    target: `parts.${role}`,
-    suggestion: [`Use a part with type "${role}", or change the project role.`]
-  });
 }

@@ -13,6 +13,7 @@ describe("part schema", () => {
       status: "active",
       files: {
         source: "source.val",
+        piece: "upper_sleeve",
         preview: "preview.svg",
         print: "print.pdf"
       },
