@@ -905,6 +905,172 @@ describe("runCli", () => {
     }
   });
 
+  it("scaffolds one part per detected detail piece", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-details-"));
+    // 守る仕様: garment-aware add の最初の一歩として、.val の detail 一覧を read-only で見せてから対話を始める。
+
+    try {
+      await runCli(["node", "loom", "init", "--garment", "blouse"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io
+      });
+      await writeFile(
+        join(tempRoot, "waist.val"),
+        `<?xml version="1.0" encoding="UTF-8"?>
+<pattern>
+  <draw name="block">
+    <details>
+      <detail id="102" name="front"></detail>
+      <detail id="138" name="center_back"></detail>
+      <detail id="224" name="upper_sleeve"></detail>
+    </details>
+  </draw>
+</pattern>`,
+        "utf8"
+      );
+
+      const output = createOutputCollector();
+      const exitCode = await runCli(["node", "loom", "add", "waist.val"], {
+        cwd: tempRoot,
+        io: output.io,
+        prompter: createScriptedPrompter({
+          texts: [
+            "front",
+            "front",
+            "body",
+            "v1",
+            "center_back",
+            "center_back",
+            "body",
+            "v1",
+            "upper_sleeve",
+            "upper_sleeve",
+            "sleeve",
+            "v1"
+          ],
+          confirms: [false, false, false]
+        })
+      });
+
+      const stdout = output.stdout.join("");
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Detected Valentina details:");
+      expect(stdout).toContain("Piece: front (draw: block)");
+      expect(stdout).toContain("Piece: center_back (draw: block)");
+      expect(stdout).toContain("Piece: upper_sleeve (draw: block)");
+      expect(await readFile(join(tempRoot, "loomit.yml"), "utf8")).toContain(
+        "front: ./parts/front/part.loom"
+      );
+      expect(await readFile(join(tempRoot, "loomit.yml"), "utf8")).toContain(
+        "center_back: ./parts/center_back/part.loom"
+      );
+      expect(await readFile(join(tempRoot, "loomit.yml"), "utf8")).toContain(
+        "upper_sleeve: ./parts/upper_sleeve/part.loom"
+      );
+      expect(await readFile(join(tempRoot, "parts/front/part.loom"), "utf8")).toContain(
+        "piece: front"
+      );
+      expect(await readFile(join(tempRoot, "parts/center_back/part.loom"), "utf8")).toContain(
+        "piece: center_back"
+      );
+      expect(await readFile(join(tempRoot, "parts/upper_sleeve/part.loom"), "utf8")).toContain(
+        "piece: upper_sleeve"
+      );
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("imports every piece and consumes the source only after the last, even from inside parts/", async () => {
+    // 守る仕様: 1 .val→N part で元 .val が parts/ 内にあっても、最後のピースまで元を残す。
+    // 途中で元を消して後続ピースが PART_ADD_SOURCE_NOT_FOUND で落ち、部分取り込みになるのを防ぐ。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-consume-"));
+
+    try {
+      await runCli(["node", "loom", "init", "--garment", "blouse"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io
+      });
+      await mkdir(join(tempRoot, "parts"), { recursive: true });
+      await writeFile(
+        join(tempRoot, "parts/foo.val"),
+        `<?xml version="1.0" encoding="UTF-8"?>
+<pattern>
+  <draw name="block">
+    <details>
+      <detail id="1" name="front"></detail>
+      <detail id="2" name="back"></detail>
+    </details>
+  </draw>
+</pattern>`,
+        "utf8"
+      );
+
+      const output = createOutputCollector();
+      const exitCode = await runCli(["node", "loom", "add", "parts/foo.val"], {
+        cwd: tempRoot,
+        io: output.io,
+        prompter: createScriptedPrompter({
+          texts: ["front", "front", "body", "v1", "back", "back", "body", "v1"],
+          confirms: [false, false]
+        })
+      });
+
+      expect(exitCode).toBe(0);
+      const loomit = await readFile(join(tempRoot, "loomit.yml"), "utf8");
+      expect(loomit).toContain("front: ./parts/front/part.loom");
+      expect(loomit).toContain("back: ./parts/back/part.loom");
+      // v0 = per-part copy: 各ピースは自分の dir に .val コピーを持つ。
+      expect(await readFile(join(tempRoot, "parts/front/foo.val"), "utf8")).toContain("<detail");
+      expect(await readFile(join(tempRoot, "parts/back/foo.val"), "utf8")).toContain("<detail");
+      // 元 .val は全ピース取り込み後に1回だけ消費(削除)される。
+      await expect(readFile(join(tempRoot, "parts/foo.val"), "utf8")).rejects.toThrow();
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("calls out a draw with zero detail pieces and adds nothing", async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-zero-details-"));
+    // 守る仕様: 0-detail .val も「見つからなかった」で終わらせず、piece が無い draw として案内する。
+
+    try {
+      await runCli(["node", "loom", "init", "--garment", "blouse"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io
+      });
+      await writeFile(
+        join(tempRoot, "blouse.val"),
+        `<?xml version="1.0" encoding="UTF-8"?>
+<pattern>
+  <draw name="blouse">
+    <details/>
+  </draw>
+</pattern>`,
+        "utf8"
+      );
+
+      const output = createOutputCollector();
+      const exitCode = await runCli(["node", "loom", "add", "blouse.val"], {
+        cwd: tempRoot,
+        io: output.io
+      });
+
+      const stdout = output.stdout.join("");
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Detected Valentina details:");
+      expect(stdout).toContain("draw: blouse");
+      expect(stdout).toContain("pieces: none");
+      expect(stdout).toContain('This .val has no <detail> pieces yet');
+      expect(stdout).toContain("No detail pieces were added.");
+      await expect(readFile(join(tempRoot, "parts/blouse/part.loom"), "utf8")).rejects.toThrow();
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   it("suggests joins already declared by other parts when adding a connector", async () => {
     // 守る仕様: connector は「名前付きの join」で、check は同じ id を宣言し合うかでペアにする。
     // そこで2つ目以降のパーツを add するとき、既に他パーツが宣言している join を宣言元 role 付きで提示し、
@@ -1147,21 +1313,32 @@ describe("runCli", () => {
   });
 
   it("re-prompts with a message that matches the actual segment rule (no false 'spaces' claim)", async () => {
-    // 守る仕様: isSafePathSegment は slashes / "." / ".." を弾くが spaces は許す。再入力を促す文言も
-    // それに合わせ、実際には受け付ける spaces を「禁止」と偽らない。
+    // 守る仕様: role はパス segment になるので isSafePathSegment(slashes / "." / ".." を弾き spaces は許す)で
+    // 訊き直す。その再入力文言も規則に合わせ、実際には受け付ける spaces を「禁止」と偽らない。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-msg-"));
 
     try {
       await runCli(["node", "loom", "init"], { cwd: tempRoot, io: createOutputCollector().io });
-      await writeFile(join(tempRoot, "body.val"), "body source\n", "utf8");
+      await writeFile(
+        join(tempRoot, "waist.val"),
+        `<?xml version="1.0" encoding="UTF-8"?>
+<pattern>
+  <draw name="block">
+    <details>
+      <detail id="1" name="front"></detail>
+    </details>
+  </draw>
+</pattern>`,
+        "utf8"
+      );
 
       const output = createOutputCollector();
-      // 1回目の Part name にスラッシュ入り(無効)を渡し、2回目で有効名を渡す。
-      const exitCode = await runCli(["node", "loom", "add", "body.val"], {
+      // 1回目の Part role にスラッシュ入り(無効)を渡し、2回目で有効名を渡す。
+      const exitCode = await runCli(["node", "loom", "add", "waist.val"], {
         cwd: tempRoot,
         io: output.io,
         prompter: createScriptedPrompter({
-          texts: ["bad/name", "body", "body", "v1"],
+          texts: ["bad/name", "front", "front", "body", "v1"],
           confirms: [false]
         })
       });
@@ -1170,6 +1347,49 @@ describe("runCli", () => {
       expect(exitCode).toBe(0);
       expect(stdout).toContain('Use a single name without slashes or "..".');
       expect(stdout).not.toContain("spaces");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps the part name as a free label without a path-segment constraint", async () => {
+    // 守る仕様: name は part.loom のラベルで、パスにもキーにも使わない。role のような単一 segment 制約は
+    // 課さず、スラッシュ入りのような isSafePathSegment を通らないラベルもそのまま受け入れる(L59/L73 の決定)。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-name-"));
+
+    try {
+      await runCli(["node", "loom", "init"], { cwd: tempRoot, io: createOutputCollector().io });
+      await writeFile(
+        join(tempRoot, "waist.val"),
+        `<?xml version="1.0" encoding="UTF-8"?>
+<pattern>
+  <draw name="block">
+    <details>
+      <detail id="1" name="front"></detail>
+    </details>
+  </draw>
+</pattern>`,
+        "utf8"
+      );
+
+      const output = createOutputCollector();
+      // role="front"(安全 segment)、name="front/left"(スラッシュ入りの自由ラベル)。
+      const exitCode = await runCli(["node", "loom", "add", "waist.val"], {
+        cwd: tempRoot,
+        io: output.io,
+        prompter: createScriptedPrompter({
+          texts: ["front", "front/left", "body", "v1"],
+          confirms: [false]
+        })
+      });
+
+      const stdout = output.stdout.join("");
+      expect(exitCode).toBe(0);
+      expect(stdout).not.toContain('Use a single name without slashes or "..".');
+      expect(stdout).toContain('Added part "front/left" as role "front"');
+      expect(await readFile(join(tempRoot, "parts/front/part.loom"), "utf8")).toContain(
+        "name: front/left"
+      );
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }

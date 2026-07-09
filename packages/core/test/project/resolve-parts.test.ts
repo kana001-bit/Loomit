@@ -43,14 +43,15 @@ describe("resolveParts", () => {
     ]);
   });
 
-  it("reports a diagnostic when a project role points to a different part type", async () => {
+  it("keeps project role and part type as separate axes", async () => {
+    // 守る仕様: garment-aware add の受け皿として、part role(front/back) と part.type(body) は別軸で読める。
     const projectRoot = join(fixturesRoot, "valid-blouse");
     const project: Project = {
       schema: "loomit.project.v0",
-      name: "role-type-mismatch",
+      name: "role-type-split",
       garment: "blouse",
       parts: {
-        sleeve: "./parts/body/part.loom"
+        front: "./parts/body/part.loom"
       }
     };
     const loadedProject: LoadedProject = {
@@ -59,14 +60,20 @@ describe("resolveParts", () => {
     };
     const result = await resolveParts(loadedProject);
 
-    expect(result.ok).toBe(false);
-    expect(result.diagnostics).toContainEqual({
-      severity: "error",
-      code: "PART_ROLE_TYPE_MISMATCH",
-      message: 'Project part role "sleeve" points to a part with type "body".',
-      target: "parts.sleeve",
-      suggestion: ['Use a part with type "sleeve", or change the project role.']
-    });
+    expect(result.ok).toBe(true);
+
+    if (!result.ok) {
+      return;
+    }
+
+    expect(result.value.parts.front).toEqual(
+      expect.objectContaining({
+        role: "front",
+        part: expect.objectContaining({
+          type: "body"
+        })
+      })
+    );
   });
 });
 

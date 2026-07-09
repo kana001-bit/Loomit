@@ -126,6 +126,8 @@ export type {
 } from "./parts/addPartToProject.js";
 export { loadPartFile } from "./parts/loadPartFile.js";
 export { loadProjectedPart } from "./parts/loadProjectedPart.js";
+export { listValDetailsFromFile, listValDetailsFromText } from "./parts/listValDetails.js";
+export type { ValDetailList, ValDrawDetails } from "./parts/listValDetails.js";
 export { projectDartsFromValFile, projectDartsFromValText, projectPartDartsFromSource } from "./parts/projectDartsFromVal.js";
 export {
   projectNotchesFromValFile,
