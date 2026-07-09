@@ -113,6 +113,7 @@ export const partSchema = z
     files: z
       .object({
         source: relativePathSchema.optional(),
+        piece: z.string().min(1).optional(),
         preview: relativePathSchema.optional(),
         print: relativePathSchema.optional()
       })
