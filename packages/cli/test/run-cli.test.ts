@@ -861,10 +861,11 @@ describe("runCli", () => {
       const exitCode = await runCli(["node", "loom", "add", "body.val"], {
         cwd: projectPath,
         io: output.io,
-        // 回答順: name, type(select), variant, [connector追加?], seam(select), length(空=未測定), [もう1つ?]
+        // 回答順: name, type(select), variant, [connector追加?], seam type(select), join id, length(空=未測定), [もう1つ?]
+        // 新規 join は種類(type)と一意 id を分けて訊く。ここでは type=armhole・id=armhole を与える。
         // length は幾何の測定値で .val 評価が要るため、手入力を強制せず空 Enter(未測定)で先へ進める。
         prompter: createScriptedPrompter({
-          texts: ["body", "body", "v1", "armhole", ""],
+          texts: ["body", "body", "v1", "armhole", "armhole", ""],
           confirms: [true, false]
         })
       });
@@ -1085,14 +1086,14 @@ describe("runCli", () => {
       await writeFile(join(tempRoot, "body.val"), "body source\n", "utf8");
       await writeFile(join(tempRoot, "sleeve.val"), "sleeve source\n", "utf8");
 
-      // 1つ目(body): 既存 join が無いので新しい join "armhole" を名付ける。相手一覧は出ないはず。
-      // 回答順: name, type(select), variant, [connector追加?], New join name, length(空=未測定), [もう1つ?]
+      // 1つ目(body): 既存 join が無いので新しい join を作る(種類 type と一意 id を分けて訊く)。相手一覧は出ないはず。
+      // 回答順: name, type(select), variant, [connector追加?], seam type(select), join id, length(空=未測定), [もう1つ?]
       const bodyOut = createOutputCollector();
       const bodyExit = await runCli(["node", "loom", "add", "body.val"], {
         cwd: tempRoot,
         io: bodyOut.io,
         prompter: createScriptedPrompter({
-          texts: ["body", "body", "v1", "armhole", ""],
+          texts: ["body", "body", "v1", "armhole", "armhole", ""],
           confirms: [true, false]
         })
       });
@@ -1113,9 +1114,9 @@ describe("runCli", () => {
       });
 
       expect(sleeveExit).toBe(0);
-      // 既存 join が宣言元 role 付きで提示される(shape の taxonomy は出さない)。
+      // 既存 join が id・種類[type]・宣言元 role 付きで提示される(shape の taxonomy は出さない)。
       expect(sleeveOut.stdout.join("")).toContain("Existing joins");
-      expect(sleeveOut.stdout.join("")).toContain("armhole (body)");
+      expect(sleeveOut.stdout.join("")).toContain("armhole [armhole] (body)");
       // 選んだ join がそのまま connector id になり、body と同じ id で縫い合わせ相手になる。
       const sleevePart = await readFile(join(tempRoot, "parts/sleeve/part.loom"), "utf8");
       expect(sleevePart).toContain("armhole:");
@@ -1151,11 +1152,12 @@ describe("runCli", () => {
       await writeFile(join(tempRoot, "facing.val"), "facing source\n", "utf8");
 
       // body と sleeve が armhole を宣言し合い、armhole を「閉じた(2パーツ)」join にする。
+      // body は新規 join(seam type + join id)、sleeve は body の open armhole を選んで継承する。
       await runCli(["node", "loom", "add", "body.val"], {
         cwd: tempRoot,
         io: createOutputCollector().io,
         prompter: createScriptedPrompter({
-          texts: ["body", "body", "v1", "armhole", ""],
+          texts: ["body", "body", "v1", "armhole", "armhole", ""],
           confirms: [true, false]
         })
       });
@@ -1169,21 +1171,22 @@ describe("runCli", () => {
       });
 
       // 3つ目(facing): armhole は閉じているので候補に出ず、既存 join 一覧そのものが提示されない。
-      // openJoins が空なので promptJoin は直接「新しい join 名」を訊く。
+      // openJoins が空なので promptJoin は直接「新しい join」を作る(seam type + join id)。
       const facingOut = createOutputCollector();
       const facingExit = await runCli(["node", "loom", "add", "facing.val"], {
         cwd: tempRoot,
         io: facingOut.io,
         prompter: createScriptedPrompter({
-          texts: ["facing", "facing", "v1", "neckline", ""],
+          texts: ["facing", "facing", "v1", "neckline", "neckline", ""],
           confirms: [true, false]
         })
       });
 
       expect(facingExit).toBe(0);
-      // 閉じた armhole は再提示されない(一覧そのものが出ない)。
+      // 閉じた armhole は縫い合わせ候補として再提示されない(一覧そのものが出ない)。
+      // ※ seam type メニューには種類ラベルとしての "armhole" が出るので、join 一覧形式(`id [type]`)で判定する。
       expect(facingOut.stdout.join("")).not.toContain("Existing joins");
-      expect(facingOut.stdout.join("")).not.toContain("armhole");
+      expect(facingOut.stdout.join("")).not.toContain("armhole [");
       // facing は既存 armhole に相乗りせず、新しい join を宣言する。
       const facingPart = await readFile(join(tempRoot, "parts/facing/part.loom"), "utf8");
       expect(facingPart).toContain("neckline:");
@@ -1210,16 +1213,16 @@ describe("runCli", () => {
         cwd: tempRoot,
         io: createOutputCollector().io,
         prompter: createScriptedPrompter({
-          texts: ["body", "body", "v1", "armhole", ""],
+          texts: ["body", "body", "v1", "armhole", "armhole", ""],
           confirms: [true, false]
         })
       });
 
       // sleeve の join select で空 Enter を押す。回答順: name, type, variant, connector追加?(y),
-      // join select(空=default), New join name(sideseam), length(空), もう1つ?(空=false)。
+      // join select(空=default→新しい join), seam type(side), join id(sideseam), length(空), もう1つ?(空=false)。
       const output = createOutputCollector();
       const prompter = createReadlinePrompter(
-        Readable.from("sleeve\nsleeve\nv1\ny\n\nsideseam\n\n\n"),
+        Readable.from("sleeve\nsleeve\nv1\ny\n\nside\nsideseam\n\n\n"),
         new Writable({
           write(_chunk, _encoding, callback) {
             callback();
@@ -1256,12 +1259,12 @@ describe("runCli", () => {
       await writeFile(join(tempRoot, "body.val"), "body source\n", "utf8");
 
       const output = createOutputCollector();
-      // New join name にまず番兵そのものを渡す(拒否される)→ 続けて有効名 "hem" を渡す。
+      // seam type を選んだあと、join id にまず番兵そのものを渡す(拒否される)→ 続けて有効な id "hem" を渡す。
       const exitCode = await runCli(["node", "loom", "add", "body.val"], {
         cwd: tempRoot,
         io: output.io,
         prompter: createScriptedPrompter({
-          texts: ["body", "body", "v1", "(name a new join)", "hem", ""],
+          texts: ["body", "body", "v1", "hem", "(name a new join)", "hem", ""],
           confirms: [true, false]
         })
       });
@@ -1271,6 +1274,295 @@ describe("runCli", () => {
       const bodyPart = await readFile(join(tempRoot, "parts/body/part.loom"), "utf8");
       expect(bodyPart).toContain("hem:");
       expect(bodyPart).not.toContain("(name a new join)");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("records the seam type separately from the join id (id != type)", async () => {
+    // 守る仕様: 新規 join は種類(type)と一意 id を分けて訊き、connector には両方を別々に書く。
+    // id=type だった旧挙動(buildConnectors の type: input.id)を捨て、id≠type を表せることを固定する。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-idtype-"));
+
+    try {
+      await runCli(["node", "loom", "init", "--garment", "blouse"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io
+      });
+      await writeFile(join(tempRoot, "panel.val"), "panel source\n", "utf8");
+
+      // 回答順: name, type(select), variant, connector追加?(y), seam type(side), join id(side_left), length(空), もう1つ?(n)。
+      const output = createOutputCollector();
+      const exitCode = await runCli(["node", "loom", "add", "panel.val"], {
+        cwd: tempRoot,
+        io: output.io,
+        prompter: createScriptedPrompter({
+          texts: ["panel", "body", "v1", "side", "side_left", ""],
+          confirms: [true, false]
+        })
+      });
+
+      expect(exitCode).toBe(0);
+      const part = await readFile(join(tempRoot, "parts/body/part.loom"), "utf8");
+      // record キーは一意 id、type は種類ラベル。両者は別物として書かれる。
+      expect(part).toContain("side_left:");
+      expect(part).toContain("type: side");
+      expect(part).not.toContain("type: side_left");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("adds a second same-type seam to one part with a distinct default id (not dropped as a dup)", async () => {
+    // 守る仕様(回帰): 同じ part に同じ seam type を2本、既定値で足したとき、2本目の既定 id が side_2 になり
+    // 両方残る。add ループ中に選んだ id を taken 扱いしないと、2本目も side を提案され最後に duplicate として
+    // 黙って捨てられ、「同じ type でも別 id を自然に振れる」が成立しなくなる(その退行を防ぐ)。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-samepart-"));
+
+    try {
+      await runCli(["node", "loom", "init", "--garment", "blouse"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io
+      });
+      await writeFile(join(tempRoot, "panel.val"), "panel source\n", "utf8");
+
+      // すべて既定で進む(空 Enter)。confirm だけ y/空。既定を効かせたいので readline prompter を使う。
+      // 順: name, type, variant, add?(y), seam type(既定side), join id(既定side), length,
+      //     another?(y), seam type(既定side), join id(既定side_2), length, another?(空=false)。
+      const output = createOutputCollector();
+      const prompter = createReadlinePrompter(
+        Readable.from("\n\n\ny\n\n\n\ny\n\n\n\n\n"),
+        new Writable({
+          write(_chunk, _encoding, callback) {
+            callback();
+          }
+        })
+      );
+
+      const exitCode = await runCli(["node", "loom", "add", "panel.val"], {
+        cwd: tempRoot,
+        io: output.io,
+        prompter
+      });
+
+      expect(exitCode).toBe(0);
+      // 2本目は捨てられず、別 id(side_2)で残る。どちらも type=side。
+      expect(output.stdout.join("")).not.toContain("skipping duplicate");
+      const part = await readFile(join(tempRoot, "parts/body/part.loom"), "utf8");
+      expect(part).toContain("side:");
+      expect(part).toContain("side_2:");
+      expect(part).toContain("type: side");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects re-typing an id already added to the same part and re-prompts", async () => {
+    // 守る仕様: add ループ中に既に使った id を手入力で再度付けようとしたら弾く(自分自身との衝突なので
+    // 「一覧から選べ」ではなく別 id を促す)。scripted で確定的に確認する。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-samepart-clash-"));
+
+    try {
+      await runCli(["node", "loom", "init", "--garment", "blouse"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io
+      });
+      await writeFile(join(tempRoot, "panel.val"), "panel source\n", "utf8");
+
+      // 1本目: seam type=side, id=side。2本目: id に side を打つ(拒否)→ side_left。
+      const output = createOutputCollector();
+      const exitCode = await runCli(["node", "loom", "add", "panel.val"], {
+        cwd: tempRoot,
+        io: output.io,
+        prompter: createScriptedPrompter({
+          texts: ["panel", "body", "v1", "side", "side", "", "side", "side", "side_left", ""],
+          confirms: [true, true, false]
+        })
+      });
+
+      expect(exitCode).toBe(0);
+      expect(output.stdout.join("")).toContain("already added to this part");
+      const part = await readFile(join(tempRoot, "parts/body/part.loom"), "utf8");
+      expect(part).toContain("side:");
+      expect(part).toContain("side_left:");
+      expect(output.stdout.join("")).not.toContain("skipping duplicate");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("lets two seams of the same type keep distinct ids without over-pairing", async () => {
+    // 守る仕様(本 task の核心): 同じ type("side")の縫い目が2本あっても、id を分ければ check は
+    // それぞれ2パーツの健全なペアとして扱い、CONNECTOR_JOIN_OVERPAIRED を出さない。id を潰していた
+    // 旧挙動なら 3+ パーツが同一 id を宣言して over-pair していたケースを回帰から守る。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-sametype-"));
+
+    try {
+      await runCli(["node", "loom", "init", "--garment", "blouse"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io
+      });
+      await writeFile(join(tempRoot, "front.val"), "front source\n", "utf8");
+      await writeFile(join(tempRoot, "side_panel.val"), "side_panel source\n", "utf8");
+      await writeFile(join(tempRoot, "back.val"), "back source\n", "utf8");
+
+      // part type は旧経路(1着1val)では role になる。ここでは role を分けたいので type=other→役割名にする
+      // (脇パネルの part type と、縫い目の seam type="side" は別軸であることに注意)。
+      // front: 新規 join seam type=side id=side_front(open)。
+      await runCli(["node", "loom", "add", "front.val"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io,
+        prompter: createScriptedPrompter({
+          texts: ["front", "other", "front", "v1", "side", "side_front", ""],
+          confirms: [true, false]
+        })
+      });
+
+      // side_panel: 既存 side_front を選んで閉じ、さらに新規 join seam type=side id=side_back(open)を足す。
+      // 1パーツが同じ seam type の縫い目を2本持つ(脇パネルが前後に接ぐ)実データ的な形。
+      await runCli(["node", "loom", "add", "side_panel.val"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io,
+        prompter: createScriptedPrompter({
+          texts: [
+            "side_panel",
+            "other",
+            "side_panel",
+            "v1",
+            "side_front",
+            "",
+            "(name a new join)",
+            "side",
+            "side_back",
+            ""
+          ],
+          confirms: [true, true, false]
+        })
+      });
+
+      // back: 既存 side_back を選んで閉じる。
+      await runCli(["node", "loom", "add", "back.val"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io,
+        prompter: createScriptedPrompter({
+          texts: ["back", "other", "back", "v1", "side_back", ""],
+          confirms: [true, false]
+        })
+      });
+
+      const checkOut = createOutputCollector();
+      const checkExit = await runCli(["node", "loom", "check", tempRoot], {
+        cwd: workspaceRoot,
+        io: checkOut.io
+      });
+      const checkText = checkOut.stdout.join("") + checkOut.stderr.join("");
+
+      // 2本とも2パーツの健全なペア。over-pair は出ず、check は通る。
+      expect(checkExit).toBe(0);
+      expect(checkText).not.toContain("OVERPAIRED");
+      expect(checkText).toContain("side_front");
+      expect(checkText).toContain("side_back");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a new join id that collides with a closed seam and re-prompts", async () => {
+    // 守る仕様(打ち手 a): 既に2パーツで縫い合わせ済み(closed)の join id に「新しい join」として同名を
+    // 付けさせない。相乗りは over-pair の事故になるので弾き、別 id を促す。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-clash-"));
+
+    try {
+      await runCli(["node", "loom", "init", "--garment", "blouse"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io
+      });
+      await writeFile(join(tempRoot, "front.val"), "front source\n", "utf8");
+      await writeFile(join(tempRoot, "side_panel.val"), "side_panel source\n", "utf8");
+      await writeFile(join(tempRoot, "back.val"), "back source\n", "utf8");
+
+      // front と side_panel が hem を宣言し合い、hem を closed にする。role を分けるため type=other→役割名。
+      await runCli(["node", "loom", "add", "front.val"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io,
+        prompter: createScriptedPrompter({
+          texts: ["front", "other", "front", "v1", "hem", "hem", ""],
+          confirms: [true, false]
+        })
+      });
+      await runCli(["node", "loom", "add", "side_panel.val"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io,
+        prompter: createScriptedPrompter({
+          texts: ["side_panel", "other", "side_panel", "v1", "hem", ""],
+          confirms: [true, false]
+        })
+      });
+
+      // back: 新規 join の id に closed の "hem" を渡す(拒否される)→ 別 id "hem_back" を渡す。
+      const output = createOutputCollector();
+      const exitCode = await runCli(["node", "loom", "add", "back.val"], {
+        cwd: tempRoot,
+        io: output.io,
+        prompter: createScriptedPrompter({
+          texts: ["back", "other", "back", "v1", "hem", "hem", "hem_back", ""],
+          confirms: [true, false]
+        })
+      });
+
+      expect(exitCode).toBe(0);
+      // 衝突は closed seam として案内され、別 id を促される。
+      expect(output.stdout.join("")).toContain("closed seam");
+      const backPart = await readFile(join(tempRoot, "parts/back/part.loom"), "utf8");
+      expect(backPart).toContain("hem_back:");
+      expect(backPart).toContain("type: hem");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("inherits the seam type from the existing open join when connecting to it", async () => {
+    // 守る仕様: 既存 open join に繋ぐ第2の当事者は、相手の id と type を継ぐ(同じ縫い目=同じ種類)。
+    // 第2の当事者に type を訊き直さないので、id と type が別値(shoulder_lr / shoulder)でも食い違わない。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-inherit-"));
+
+    try {
+      await runCli(["node", "loom", "init", "--garment", "blouse"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io
+      });
+      await writeFile(join(tempRoot, "front.val"), "front source\n", "utf8");
+      await writeFile(join(tempRoot, "back.val"), "back source\n", "utf8");
+
+      // front: 新規 join seam type=shoulder id=shoulder_lr(id と type が別値)。role を分けるため type=other→役割名。
+      await runCli(["node", "loom", "add", "front.val"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io,
+        prompter: createScriptedPrompter({
+          texts: ["front", "other", "front", "v1", "shoulder", "shoulder_lr", ""],
+          confirms: [true, false]
+        })
+      });
+
+      // back: 既存 open join shoulder_lr を選ぶだけ(seam type は訊かれず継承される)。
+      const output = createOutputCollector();
+      const exitCode = await runCli(["node", "loom", "add", "back.val"], {
+        cwd: tempRoot,
+        io: output.io,
+        prompter: createScriptedPrompter({
+          texts: ["back", "other", "back", "v1", "shoulder_lr", ""],
+          confirms: [true, false]
+        })
+      });
+
+      expect(exitCode).toBe(0);
+      // 一覧は id・種類[type]・宣言元 role を見せる。
+      expect(output.stdout.join("")).toContain("shoulder_lr [shoulder] (front)");
+      const backPart = await readFile(join(tempRoot, "parts/back/part.loom"), "utf8");
+      // id は選んだ shoulder_lr、type は継いだ shoulder(id にフォールバックしない)。
+      expect(backPart).toContain("shoulder_lr:");
+      expect(backPart).toContain("type: shoulder");
+      expect(backPart).not.toContain("type: shoulder_lr");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }

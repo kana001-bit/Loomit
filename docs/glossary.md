@@ -124,7 +124,13 @@ Loomit では Part が互換判定・再利用・Diff の基本単位になる�
 ## Connector
 
 Loomit が縫い合わせ可能な境界として扱う情報。
-例:
+
+Connector は **id** と **type** の2軸を持つ。
+
+- **id**（record キー）は縫い目ごとに一意な rendezvous。縫い合う2パーツが同じ id を宣言することで繋がり、`loom check` はこの id でペアを判定する。同じ id を3パーツ以上が宣言すると over-pair（`CONNECTOR_JOIN_OVERPAIRED`）になる。
+- **type** は縫い目の種類ラベル。ペアリングには使われない分類語で、同じ type の縫い目が複数あってよい（その区別は id が担う）。
+
+type の例（**種類の例であって id ではない**）:
 
 - armhole
 - neckline
@@ -132,7 +138,10 @@ Loomit が縫い合わせ可能な境界として扱う情報。
 - side seam
 - waist
 - hem
-  Connector には長さや接続条件などの情報が含まれ、互換判定の対象になる。
+
+例えば脇の縫い目が左右に2本あるとき、type はどちらも `side`（同じ種類）だが、id は `side_left` / `side_right` のように別（別の縫い目）にする。
+
+Connector には長さや接続条件などの情報が含まれ、互換判定の対象になる。
 
 ---
 
