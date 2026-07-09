@@ -97,6 +97,43 @@ describe("addPartToProject", () => {
     }
   });
 
+  it("writes the connector type separately from the record-key id", async () => {
+    // 守る仕様: connector の id(record キー=一意な rendezvous)と type(種類ラベル)は別軸。type を渡すと
+    // id とは独立に書かれ、同じ type の別の縫い目を一意 id を保ったまま表せる(type: input.id の旧挙動を捨てる)。
+    const projectRoot = await makeProject();
+    const valPath = join(projectRoot, "body.val");
+
+    try {
+      await writeFile(valPath, "body source\n", "utf8");
+
+      const result = await addPartToProject({
+        projectPath: projectRoot,
+        valPath,
+        name: "body",
+        type: "body",
+        variant: "v1",
+        connectors: [
+          { id: "side_left", type: "side" },
+          { id: "side_right", type: "side" }
+        ]
+      });
+
+      expect(result.ok).toBe(true);
+
+      if (!result.ok) {
+        return;
+      }
+
+      // id はそれぞれ別の record キー、type はどちらも "side"(同じ種類の別の縫い目)。
+      expect(result.value.part.connectors).toEqual({
+        side_left: { type: "side" },
+        side_right: { type: "side" }
+      });
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
+
   it("registers a project role separately from part.type", async () => {
     // 守る仕様: addPartToProject は role(front) と part.type(body) を別々に保存できる。
     const projectRoot = await makeProject();
