@@ -530,6 +530,18 @@ function diffConnectorFields(before: Connector, after: Connector): readonly Part
       beforeRange.allowance_mm,
       afterRange.allowance_mm
     );
+    pushFieldChange(
+      changes,
+      `ranges.${rangeId}.ease_ratio_min`,
+      beforeRange.ease_ratio_min,
+      afterRange.ease_ratio_min
+    );
+    pushFieldChange(
+      changes,
+      `ranges.${rangeId}.ease_ratio_max`,
+      beforeRange.ease_ratio_max,
+      afterRange.ease_ratio_max
+    );
   }
 
   return changes;
@@ -615,8 +627,14 @@ function formatRangeSummary(range: {
   readonly to: number;
   readonly behavior: string;
   readonly allowance_mm?: number;
+  readonly ease_ratio_min?: number;
+  readonly ease_ratio_max?: number;
 }): string {
-  return `from=${range.from}, to=${range.to}, behavior=${range.behavior}, allowance_mm=${range.allowance_mm ?? "<missing>"}`;
+  const easeBand =
+    range.ease_ratio_min === undefined || range.ease_ratio_max === undefined
+      ? "<missing>"
+      : `[${range.ease_ratio_min}, ${range.ease_ratio_max}]`;
+  return `from=${range.from}, to=${range.to}, behavior=${range.behavior}, allowance_mm=${range.allowance_mm ?? "<missing>"}, ease_ratio=${easeBand}`;
 }
 
 function getPartDiffStatus(
