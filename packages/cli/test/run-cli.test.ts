@@ -2040,6 +2040,39 @@ describe("runCli", () => {
     expect(stdout).toContain("ARM_RAISE_FITTED_ARMHOLE_RISK");
     expect(output.stderr).toEqual([]);
   });
+
+  it("records a prototype note through the note command wiring", async () => {
+    // 守る仕様: runCli の dispatch が loom note を配線し、対話回答が notes/prototype-notes.yml に書かれる。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-note-"));
+
+    try {
+      await runCli(["node", "loom", "init", "--garment", "blouse"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io
+      });
+
+      const output = createOutputCollector();
+      // 回答順: Result(select=failed), Issue(input), label/observation/suggested(空), 記録?(confirm=false)。
+      const exitCode = await runCli(["node", "loom", "note"], {
+        cwd: tempRoot,
+        io: output.io,
+        prompter: createScriptedPrompter({
+          texts: ["failed", "waist gaps at center back"],
+          confirms: [false]
+        })
+      });
+
+      expect(exitCode).toBe(0);
+      expect(output.stdout.join("")).toContain("Recorded prototype note");
+      expect(output.stderr).toEqual([]);
+
+      const notes = await readFile(join(tempRoot, "notes/prototype-notes.yml"), "utf8");
+      expect(notes).toContain("result: failed");
+      expect(notes).toContain("issue: waist gaps at center back");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 // 対話ウィザードを決定的にテストするための Prompter。input/select は texts を、confirm は confirms を

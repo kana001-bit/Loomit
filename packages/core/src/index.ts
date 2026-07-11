@@ -136,6 +136,12 @@ export {
 } from "./parts/projectNotchesFromVal.js";
 export { loadProfileFile } from "./profile/loadProfile.js";
 export { loadPrototypeNotesFile } from "./prototype-notes/loadPrototypeNotes.js";
+export { addPrototypeNote } from "./prototype-notes/addPrototypeNote.js";
+export type {
+  AddPrototypeNoteInput,
+  AddPrototypeNoteLeftoverFabricInput,
+  AddedPrototypeNote
+} from "./prototype-notes/addPrototypeNote.js";
 export { createProject } from "./project/createProject.js";
 export type { CreatedProject, CreateProjectOptions } from "./project/createProject.js";
 export { collectProjectReadinessDiagnostics } from "./project/collectProjectReadiness.js";
