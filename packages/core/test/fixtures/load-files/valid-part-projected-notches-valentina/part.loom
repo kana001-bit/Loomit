@@ -1,0 +1,7 @@
+schema: loomit.part.v0
+name: knickers-front
+variant: cycling-v1
+type: front
+status: active
+files:
+  source: source.val
