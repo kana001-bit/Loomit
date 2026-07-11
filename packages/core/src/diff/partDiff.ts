@@ -1,5 +1,6 @@
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
+import { indexConnectorRanges } from "../schema/connectorRanges.js";
 import type { PrototypeNotes } from "../schema/prototype-notes.schema.js";
 import type { Connector, Dart, Notch, Part, Requirement } from "../schema/part.schema.js";
 
@@ -602,41 +603,6 @@ function diffRequirementFields(
 
 function normalizeStringArray(value: readonly string[] | undefined): readonly string[] | undefined {
   return value === undefined ? undefined : [...value].sort();
-}
-
-function indexConnectorRanges(
-  connector: Connector
-): Readonly<
-  Record<
-    string,
-    {
-      readonly from: number;
-      readonly to: number;
-      readonly behavior: string;
-      readonly allowance_mm?: number;
-    }
-  >
-> {
-  const ranges: Record<
-    string,
-    {
-      readonly from: number;
-      readonly to: number;
-      readonly behavior: string;
-      readonly allowance_mm?: number;
-    }
-  > = {};
-
-  for (const range of connector.ranges ?? []) {
-    ranges[range.id] = {
-      from: range.from,
-      to: range.to,
-      behavior: range.behavior,
-      ...(range.allowance_mm === undefined ? {} : { allowance_mm: range.allowance_mm })
-    };
-  }
-
-  return ranges;
 }
 
 function formatRangeSummary(range: {

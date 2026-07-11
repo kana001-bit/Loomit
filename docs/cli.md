@@ -107,6 +107,21 @@ loom build [path] [--format text|json]
 - part を解決し、`check` 相当の互換検証を走らせてから build 出力を書く。
 - 致命的でない問題は、逐一失敗させず可能なら warning で伝える。
 
+## `loom seamlint-request`
+
+project から Seamlint へ渡す geometry request（handoff）を組み立てる。
+
+```text
+loom seamlint-request [path] [--format text|json]
+```
+
+補足:
+
+- `loomit.yml` と part を読み、check と同じ readiness 判定をしたうえで `parts` / `checks` からなる request を出力する。
+- part の geometry source は `files.geometry` を優先し、無ければ `files.preview` を使う。
+- `path_ref` や geometry source が欠けている seam は diagnostic を出して skip する。
+- warning のみであれば、exit code 0 のまま report status `warning` を返す。
+
 ## `loom diff`
 
 2つの part、または2つの project 内の同一 role part を比較する。
@@ -196,6 +211,7 @@ loom library add <type/name> [project] [--library path] [--role role] [--as name
 - `suggest-tests`
 - `test`
 - `library list`
+- `seamlint-request`
 
 ## Notes
 

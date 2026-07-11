@@ -149,6 +149,20 @@ export { resolveProjectPaths } from "./project/resolveProjectPaths.js";
 export type { LoadedProject } from "./project/loadProject.js";
 export type { ResolvedProject, ResolvedProjectPart } from "./project/resolveParts.js";
 export type { ResolvedProjectPaths } from "./project/resolveProjectPaths.js";
+export { createSeamlintGeometryRequest } from "./seamlint/createGeometryRequest.js";
+export type {
+  SeamlintGeometryCheckRange,
+  SeamlintGeometryCheckRequest,
+  SeamlintGeometryCheckSpec,
+  SeamlintGeometryMarkerRange,
+  SeamlintGeometryMarkerRef,
+  SeamlintGeometryPartRef,
+  SeamlintGeometryRequestBuildResult,
+  SeamlintGeometrySourceFormat,
+  SeamlintGeometryTarget,
+  SeamlintGeometryTolerance,
+  SeamlintJoinKind
+} from "./seamlint/createGeometryRequest.js";
 export {
   connectorSchema,
   dartSchema,

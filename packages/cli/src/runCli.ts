@@ -8,6 +8,7 @@ import { runForkCommand } from "./commands/fork.js";
 import { runInitCommand } from "./commands/init.js";
 import { runLibraryCommand } from "./commands/library.js";
 import { runPublishCommand } from "./commands/publish.js";
+import { runSeamlintRequestCommand } from "./commands/seamlintRequest.js";
 import { runSuggestTestsCommand } from "./commands/suggestTests.js";
 import { runTestCommand } from "./commands/test.js";
 import type { Prompter } from "./prompter.js";
@@ -111,6 +112,14 @@ export async function runCli(
     });
   }
 
+  if (command === "seamlint-request") {
+    return runSeamlintRequestCommand(args.slice(1), {
+      cwd,
+      stdout: io.stdout,
+      stderr: io.stderr
+    });
+  }
+
   if (command === "suggest-tests") {
     return runSuggestTestsCommand(args.slice(1), {
       cwd,
@@ -162,6 +171,7 @@ export function formatMainHelp(): string {
     "  init   Create a Loomit project in the current directory.",
     "  library List published Loomit library parts.",
     "  publish Copy a part into the Loomit library.",
+    "  seamlint-request Build a geometry request handoff for Seamlint.",
     "  suggest-tests Suggest movement tests for a project.",
     "  test   Run a movement test risk check.",
     "",

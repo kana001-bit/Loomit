@@ -115,6 +115,11 @@ export const partSchema = z
         source: relativePathSchema.optional(),
         piece: z.string().min(1).optional(),
         preview: relativePathSchema.optional(),
+        // 設計判断: geometry は測定用の幾何 artifact(DXF-ASTM 等)への part 相対パス。preview(視覚用 SVG)とは
+        // 別立てにする。SVG は detail identity も notch も落とすが、DXF(ASTM)は BLOCK 名=detail と縫い線
+        // (layer 14)を保持するため、Seamlint に「どの座標を測るか」を渡せる。意味(identity)は .val/.loom 側の
+        // 責務のまま変えない(docs/seamlint-dxf-export-request.md)。
+        geometry: relativePathSchema.optional(),
         print: relativePathSchema.optional()
       })
       .strict()
