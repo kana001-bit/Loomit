@@ -76,7 +76,7 @@ export function projectNotchesFromValText(
   const diagnostics: Diagnostic[] = [];
 
   projectSeamPathNotches(source, options, notches, diagnostics);
-  projectDetailNotches(source, notches);
+  projectDetailNotches(source, options, notches, diagnostics);
 
   return {
     notches,
@@ -161,7 +161,20 @@ function projectSeamPathNotches(
 // 幾何であり DXF export→Seamlint が解決するため、ここでは発明しない(A案)。
 // .val は複数の <draw> を持ちうるため、seam-path 走査(方言1)や listValDetails と同じく draw ごとに <details> を
 // 辿る。最初の <details> だけを見ると 2つ目以降の draw の合印を丸ごと落とす。
-function projectDetailNotches(source: string, notches: Record<string, Notch>): void {
+//
+// 契約: detail(piece)名は .val 全体で一意でなければならない。piece 名は DXF export の BLOCK 名(=Seamlint への
+// 突き合わせ identity)であり、DXF の BLOCK 名は一意なので、同名 detail が複数あると「どの物理ピースの合印か」を
+// 特定できず handoff が成立しない。複数 draw を辿るようになったことで同名 detail が別 draw に現れると notch キー
+// (val:<piece>:notch:<node>)が衝突しうる。draw をキーに含めても piece が重複したままでは handoff が曖昧なので、
+// 損失回避にならない。よって最初の detail を採用し、以降の同名 detail は黙って上書きせず warning で知らせて捨てる。
+function projectDetailNotches(
+  source: string,
+  options: { readonly filePath: string },
+  notches: Record<string, Notch>,
+  diagnostics: Diagnostic[]
+): void {
+  const seenPieces = new Set<string>();
+
   for (const drawBlock of collectBlocks(source, "draw")) {
     const detailsBlock = collectFirstBlock(drawBlock.content, "details");
 
@@ -176,6 +189,25 @@ function projectDetailNotches(source: string, notches: Record<string, Notch>): v
       if (pieceName === undefined || pieceName.trim() === "") {
         continue;
       }
+
+      // 同名 detail は契約違反(piece 名は一意)。最初を採用し、以降は warning を出して捨てる(黙って上書きしない)。
+      if (seenPieces.has(pieceName)) {
+        diagnostics.push(
+          createDiagnostic({
+            severity: "warning",
+            code: "PART_SOURCE_VAL_NOTCH_DUPLICATE_PIECE",
+            message:
+              "同じ名前の detail(型紙ピース)が複数見つかりました。piece 名は DXF BLOCK の identity として一意である必要があるため、最初の detail の合印だけを採用しました。 / Found more than one detail with the same name; piece names must be unique because they identify DXF blocks, so only the first detail's notches were kept.",
+            target: `${options.filePath}#${pieceName}`,
+            suggestion: [
+              "各型紙ピースの detail 名を .val 全体で一意にしてください。 / Give every pattern piece a detail name that is unique across the .val."
+            ]
+          })
+        );
+        continue;
+      }
+
+      seenPieces.add(pieceName);
 
       const nodesBlock = collectFirstBlock(detail.content, "nodes");
 
