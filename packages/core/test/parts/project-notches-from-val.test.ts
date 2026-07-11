@@ -324,6 +324,45 @@ describe("projectNotchesFromValText", () => {
     });
   });
 
+  it("warns and keeps the first detail when a piece name repeats across draws", () => {
+    // 守る仕様(契約): piece(detail)名は DXF BLOCK の identity なので .val 全体で一意でなければならない。
+    //           複数 draw に同名 detail があると notch キー(val:<piece>:notch:<node>)が衝突するため、黙って
+    //           上書きせず最初の detail を採用し、以降の同名 detail は warning を出して捨てる(silent data loss を防ぐ)。
+    const result = projectNotchesFromValText(
+      `<?xml version="1.0" encoding="UTF-8"?>
+<pattern>
+  <draw name="main">
+    <details>
+      <detail id="1" name="front">
+        <nodes>
+          <node idObject="10" passmark="true" passmarkLine="vMark" type="NodePoint"/>
+        </nodes>
+      </detail>
+    </details>
+  </draw>
+  <draw name="lining">
+    <details>
+      <detail id="2" name="front">
+        <nodes>
+          <node idObject="10" passmark="true" passmarkLine="tMark" type="NodePoint"/>
+        </nodes>
+      </detail>
+    </details>
+  </draw>
+</pattern>`,
+      {
+        filePath: "fixture.val"
+      }
+    );
+
+    expect(result.notches).toEqual({
+      "val:front:notch:10": { piece: "front", order: 0, type: "vMark" }
+    });
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]?.code).toBe("PART_SOURCE_VAL_NOTCH_DUPLICATE_PIECE");
+    expect(result.diagnostics[0]?.target).toBe("fixture.val#front");
+  });
+
   it("assigns distinct order to multiple same-type passmarks in one piece", () => {
     // 守る仕様: 同一 piece に同種(vMark)の合印が複数あるとき、DXF の seam 順(layer4=V の POINT 列)と 1:1 対応
     //           づけるための order を contour(node)順で 0,1,2... と割り振り、順序情報を境界に残す。
