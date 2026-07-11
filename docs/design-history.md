@@ -249,6 +249,71 @@ check は元々 validator として生まれた機能で、その validator 時�
 
 始まりは「自己シームが表せない」という小さな不足だったが、辿ってみると connector の意味・check の役割・Seamlint との境界を、もう一度引き直す作業になっていた。
 
+## SVG では情報が足りない...
+
+Seamlint と連携することを考え始めた当初は、geometry の受け渡しには SVG を使うつもりだった。
+SVG は描画結果そのものなので、幾何を測るだけなら十分だろうと考えていた。
+しかし実際に Valentina の export を調べてみると、Loomit が必要としていた情報が思った以上に失われていた。
+特に困ったのは、以下の点。
+
+- `detail` の identity (`details_name` や `details_id`)
+- notch の情報
+- 「どの geometry がどのパーツなのか」を結び付けるための手掛かり
+
+描画結果としては正しくても、Loomit が意味を持って扱いたい情報までは残っていない。
+「SVG を唯一の受け渡し形式にする」という前提は、この時点で崩れた。
+
+### Valentina に pull request を出す？
+
+最初に思い浮かんだのは「Valentina に足せばいいのではないか」ということだった。
+Valentina は OSS なので、自分で修正して pull request を出せる。
+実際に develop ブランチや issue を調べ始めたところ、別の事実が見えてきた。
+
+洋裁 CAD の世界には、SVG とは別に DXF(AAMA / ASTM) という受け渡し形式があり、そちらには geometry と identity を結び付けるための情報が最初から含まれていた。
+自分が CAD の世界に既にある受け渡し形式を知らずに、デフォルトの出力形式にあった SVG を安直に選んでいただけだった。
+
+## SVG ではなく DXF(ASTM) にたどり着いた
+
+そこで Valentina が出力できる DXF(AAMA / ASTM) を実際に調べた。
+確認してみると、DXF(ASTM) には geometry だけでなく、`detail` の identity と結び付けられる情報も保持されていた。
+つまり、
+
+- `.val` は設計意図や意味を持つ正本
+- DXF(ASTM) は geometry の受け渡し
+- Loomit は両者を対応付ける橋渡し
+- Seamlint は geometry を測定する
+
+という責務分担が自然に成立することが分かった。
+ここで、SVG は「表示用 artifact」として扱い、geometry handoff は DXF(ASTM) を使うという方向が固まった。
+
+## geometry handoff が先に固まった
+
+本来、Loomit の中心として考えていたのは diff や snapshot のような Git 的な体験だった。
+しかし、Seamlint と接続するには「何を渡すのか」という境界を先に決めなければならなかった。
+geometry の責務が曖昧なままでは、diff を作っても、check を作っても、どこまでを Loomit が担当するのかが定まらない。
+結果として、Git 的な中心機能よりも先に geometry handoff の設計を固めることになった。
+
+## diff だけでは足りない — snapshot を誰が持つか
+
+diff が読めるようになって、もう一段深い欠落に気づいた。
+
+`loom diff` は「2つある状態を比べる」道具だが、**変更前の状態そのものを残す仕組みではない**。同じ `part.loom` や `.val` をその場で上書きすれば、比較元は消えて diff は取れない。fork はディレクトリの複製であって、内部の history ではない。
+
+つまり「変更を覚えておいて後で差分を読みたい」という要求は、実は「**前の snapshot を残しておきたい**」という要求だった。branch には枝分かれ元の過去状態が要るし、commit には「この時点の project state」を固定する単位が要る。diff はその後で、2つの snapshot を比べて初めて読める。
+
+ここで分岐は2つあった。
+
+- **A. history は Git に委譲する** — 変更前の保持・branch・commit・merge は Git が担い、Loomit は2つの commit / worktree / project を domain diff で読む。
+- **B. Loomit 自身が snapshot / revision を持つ** — `loom snapshot` のような操作で state を保存し、Loomit 内で changes / revision / branch を扱う。
+
+迷ったが、A を基本にすると決めた。
+
+理由は、Loomit の正本がすでにテキストファイル（`loomit.yml` / `part.loom`）だから。「files が正本」という方針は Git と素直に噛み合い、「同じ名前の `.loom` を上書きしても前の状態が残る」は Git の commit で自然に満たせる。B を選ぶと、snapshot 保存形式・親参照・branch pointer・GC・merge の責務まで設計が広がり、Git と二重の history を抱える。それは「files が正本」「CAD write は外部委譲」という今の方針と対立する。
+
+大事だったのは、**Loomit が再実装すべきなのは version control ではない**という線引きだ。branch engine を自前で持つより先に要るのは、「diff は snapshot 間の比較である」と整理を明示し、Loomit は洋裁の意味論（意味的 diff・互換・再利用）に集中することだった。history storage は枯れた Git に預ける。
+
+そのため、Loomit 単体で `commit` / `branch` を持つところまでは、あえて設計を閉じていない。次に自然なのは自前の revision store ではなく、`loom diff` を Git の2 revision と結びつけて呼べるようにする方向だと考えている。
+
 ## まだ途中にあるもの
 
 今の Loomit は、最初の発想だった「洋裁の git」に完全に到達したわけではない。
@@ -260,6 +325,7 @@ check は元々 validator として生まれた機能で、その validator 時�
 - prototype note の関連度をどう絞るか
 - Seamlint と Truer の境界をどう保つか
 - `connector-length` を宣言メタの sanity として残すか、Seamlint への check request に畳むか
+- `loom diff` を Git の revision とどう結びつけて呼ぶか（history は Git 委譲を基本にする）
 
 ただ、少なくとも今は、何が不足していて、なぜその不足が問題なのかを以前よりはっきり言えるようになった。
 
