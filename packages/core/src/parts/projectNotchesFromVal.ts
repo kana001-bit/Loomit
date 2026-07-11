@@ -55,11 +55,12 @@ export async function projectNotchesFromValFile(
 //     縫い線上の正規化位置(position 0..1)を .val が持つので、identity(seam＋node)＋param(位置＋深さ/幅)へ射影。
 //     位置は幾何計算せず属性をそのまま読む(read-only 射影)。
 //
-//   方言2 実 Valentina — <details>/<detail name>/<nodes> の <node passmark="true" passmarkLine=... passmarkAngle=...>。
+//   方言2 実 Valentina — <draw>/<details>/<detail name>/<nodes> の <node passmark="true" passmarkLine=... passmarkAngle=...>。
 //     合印は縫い線ではなく detail(型紙ピース)に属し、position を持たない(位置は仕上がり線の弧長=幾何で、DXF
 //     export→Seamlint が測って解決する。Loomit は幾何を計算しない=A案)。よって identity は piece(detail名=DXF
-//     BLOCK名)＋種別(passmarkLine=V/T)で表し、position/seam_ref は持たない。「どの .val passmark = どの DXF
-//     notch か」の突き合わせは piece＋種別で効く(docs/work/tasks/feature-seamlint-dxf-passmark-projection-integration.md)。
+//     BLOCK名)＋種別(passmarkLine=V/T)＋detail内順序(order)で表し、position/seam_ref は持たない。「どの .val
+//     passmark = どの DXF notch か」の突き合わせは piece＋種別＋順序で効く
+//     (docs/work/tasks/feature-seamlint-dxf-passmark-projection-integration.md)。
 //
 // 2方言は格納場所が排他(実 Valentina の passmark は modeling の seam path に載らず、Seamly2D fixture は
 // <details> の passmark="true" node を持たない)ため、両スキャナを流しても二重計上しない。
@@ -155,47 +156,59 @@ function projectSeamPathNotches(
   }
 }
 
-// 方言2: 実 Valentina の <details>/<detail name>/<nodes> 上の passmark="true" node を射影する。
-// position を持たない identity-only の合印(piece＋種別＋向き)として lift する。位置(縫い線上の弧長)は
+// 方言2: 実 Valentina の <draw>/<details>/<detail name>/<nodes> 上の passmark="true" node を射影する。
+// position を持たない identity-only の合印(piece＋種別＋向き＋順序)として lift する。位置(縫い線上の弧長)は
 // 幾何であり DXF export→Seamlint が解決するため、ここでは発明しない(A案)。
+// .val は複数の <draw> を持ちうるため、seam-path 走査(方言1)や listValDetails と同じく draw ごとに <details> を
+// 辿る。最初の <details> だけを見ると 2つ目以降の draw の合印を丸ごと落とす。
 function projectDetailNotches(source: string, notches: Record<string, Notch>): void {
-  const detailsBlock = collectFirstBlock(source, "details");
+  for (const drawBlock of collectBlocks(source, "draw")) {
+    const detailsBlock = collectFirstBlock(drawBlock.content, "details");
 
-  if (detailsBlock === undefined) {
-    return;
-  }
-
-  for (const detail of collectBlocks(detailsBlock.content, "detail")) {
-    const pieceName = detail.attrs.name;
-
-    // detail 名は piece の identity(=DXF BLOCK名)。無名 detail は突き合わせに使えないため対象外。
-    if (pieceName === undefined || pieceName.trim() === "") {
+    if (detailsBlock === undefined) {
       continue;
     }
 
-    const nodesBlock = collectFirstBlock(detail.content, "nodes");
+    for (const detail of collectBlocks(detailsBlock.content, "detail")) {
+      const pieceName = detail.attrs.name;
 
-    if (nodesBlock === undefined) {
-      continue;
-    }
-
-    collectSelfClosingTags(nodesBlock.content, "node").forEach((node, index) => {
-      if (node.attrs.passmark !== "true") {
-        return;
+      // detail 名は piece の identity(=DXF BLOCK名)。無名 detail は突き合わせに使えないため対象外。
+      if (pieceName === undefined || pieceName.trim() === "") {
+        continue;
       }
 
-      // identity は idObject(実 Valentina では点参照として常に付く)を安定キーに。無い場合のみ
-      // detail 内の node 並び順を fallback キーにする。
-      const nodeKey = node.attrs.idObject ?? `node${index}`;
+      const nodesBlock = collectFirstBlock(detail.content, "nodes");
 
-      notches[`val:${pieceName}:notch:${nodeKey}`] = {
-        piece: pieceName,
-        // passmarkLine(vMark/tMark 等)= 合印の種別。空なら種別なしとして省く(schema min 1)。
-        ...(node.attrs.passmarkLine ? { type: node.attrs.passmarkLine } : {}),
-        // passmarkAngle(straightforward 等)= 合印の向きの決め方。空なら省く。
-        ...(node.attrs.passmarkAngle ? { angle: node.attrs.passmarkAngle } : {})
-      };
-    });
+      if (nodesBlock === undefined) {
+        continue;
+      }
+
+      // order は同一 piece 内の passmark 並び順(contour/node 順で 0 始まり)。DXF は layer4=V/layer80=T の POINT を
+      // seam 順に持つので、同一 piece・同一種別の合印が複数あっても「piece＋種別＋この順序」で 1:1 対応づけられる。
+      // passmark でない contour node は DXF に対応点が無いため数に含めない。
+      let passmarkOrder = 0;
+
+      collectSelfClosingTags(nodesBlock.content, "node").forEach((node, index) => {
+        if (node.attrs.passmark !== "true") {
+          return;
+        }
+
+        // identity は idObject(実 Valentina では点参照として常に付く)を安定キーに。無い場合のみ
+        // detail 内の node 並び順を fallback キーにする。
+        const nodeKey = node.attrs.idObject ?? `node${index}`;
+        const order = passmarkOrder;
+        passmarkOrder += 1;
+
+        notches[`val:${pieceName}:notch:${nodeKey}`] = {
+          piece: pieceName,
+          order,
+          // passmarkLine(vMark/tMark 等)= 合印の種別。空なら種別なしとして省く(schema min 1)。
+          ...(node.attrs.passmarkLine ? { type: node.attrs.passmarkLine } : {}),
+          // passmarkAngle(straightforward 等)= 合印の向きの決め方。空なら省く。
+          ...(node.attrs.passmarkAngle ? { angle: node.attrs.passmarkAngle } : {})
+        };
+      });
+    }
   }
 }
 
