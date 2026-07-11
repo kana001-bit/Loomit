@@ -29,6 +29,9 @@ describe("buildProject", () => {
       expect(await readFile(join(tempRoot, "output/parts/body/preview/body.svg"), "utf8")).toBe(
         "<svg></svg>\n"
       );
+      expect(await readFile(join(tempRoot, "output/parts/body/geometry/body.dxf"), "utf8")).toBe(
+        "0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n"
+      );
 
       const manifest = JSON.parse(await readFile(join(tempRoot, "output/manifest.json"), "utf8")) as {
         readonly schema: string;
@@ -52,6 +55,13 @@ describe("buildProject", () => {
           kind: "preview",
           sourcePath: "parts/body/body.svg",
           outputPath: "output/parts/body/preview/body.svg"
+        },
+        {
+          role: "body",
+          partName: "build-body",
+          kind: "geometry",
+          sourcePath: "parts/body/body.dxf",
+          outputPath: "output/parts/body/geometry/body.dxf"
         }
       ]);
     } finally {
@@ -195,11 +205,17 @@ async function writeBuildFixture(
       "type: body",
       "files:",
       "  source: body.val",
-      "  preview: body.svg"
+      "  preview: body.svg",
+      "  geometry: body.dxf"
     ].join("\n"),
     "utf8"
   );
   await writeFile(join(projectRoot, "parts/body/body.val"), "body source\n", "utf8");
+  await writeFile(
+    join(projectRoot, "parts/body/body.dxf"),
+    "0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n",
+    "utf8"
+  );
 
   if (options.includePreview) {
     await writeFile(join(projectRoot, "parts/body/body.svg"), "<svg></svg>\n", "utf8");

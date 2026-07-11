@@ -736,6 +736,34 @@ describe("runCli", () => {
     expect(output.stderr).toEqual([]);
   });
 
+  it("runs seamlint-request with JSON output for a valid project", async () => {
+    const output = createOutputCollector();
+    const exitCode = await runCli(
+      ["node", "loom", "seamlint-request", join(fixturesRoot, "valid-blouse"), "--format", "json"],
+      {
+        cwd: workspaceRoot,
+        io: output.io
+      }
+    );
+
+    const report = JSON.parse(output.stdout.join("")) as {
+      readonly status: string;
+      readonly request: {
+        readonly checks: readonly { readonly kind: string; readonly id: string }[];
+      };
+    };
+
+    expect(exitCode).toBe(0);
+    expect(report.status).toBe("ok");
+    expect(report.request.checks).toEqual([
+      expect.objectContaining({
+        kind: "sewn-seam",
+        id: "sewn-seam:body.armhole/sleeve.armhole"
+      })
+    ]);
+    expect(output.stderr).toEqual([]);
+  });
+
   it("requires a profile for fit", async () => {
     const output = createOutputCollector();
     const exitCode = await runCli(["node", "loom", "fit", join(fixturesRoot, "valid-blouse")], {
