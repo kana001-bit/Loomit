@@ -26,13 +26,25 @@ export const dartSchema = z
 
 export const notchSchema = z
   .object({
-    // 設計判断: seam_ref は合印が載る縫い線への参照。notch は「この縫い線のここ」という合わせ目印であって、
-    // 幾何の座標そのものではない。
-    seam_ref: z.string().min(1),
-    // position は縫い線上の正規化位置(0=始点, 1=終点)。connector range の from/to と同じ約束にそろえる。
-    position: z.number().finite().min(0).max(1),
-    // type は合印の種類(single/double/slit 等)。任意。
+    // 設計判断: seam_ref は合印が載る縫い線への参照(Seamly2D 方言)。notch は「この縫い線のここ」という合わせ
+    // 目印であって幾何の座標そのものではない。実 Valentina では合印は detail 内の node であり、名前付き縫い線に
+    // 載らない(どの辺かは仕上がり線の幾何=下流の話)ため、seam_ref は持てない。よって optional にし、実
+    // Valentina 由来の合印は piece 側で識別する。
+    seam_ref: z.string().min(1).optional(),
+    // 設計判断: piece は合印が属する detail(型紙ピース)名 = DXF export の BLOCK 名。実 Valentina の合印は
+    // 縫い線ではなく detail に属し、これが「どの .val passmark = どの DXF notch か」を突き合わせる identity に
+    // なる。Seamly2D 方言(seam path)では seam_ref が identity を担うため piece は無くてよい。よって optional。
+    piece: z.string().min(1).optional(),
+    // position は縫い線上の正規化位置(0=始点, 1=終点)。connector range の from/to と同じ約束。Seamly2D 方言では
+    // .val が position を持つが、実 Valentina には存在しない(位置は仕上がり線の弧長=幾何で、Seamlint が DXF から
+    // 測って解決する)。Loomit は幾何を計算しない(A案)ので、実 Valentina 由来の合印は position を持たない。optional。
+    position: z.number().finite().min(0).max(1).optional(),
+    // type は合印の種類。Seamly2D の passmarkType(single/double/slit 等)、または実 Valentina の
+    // passmarkLine(vMark/tMark 等 = V合印/T合印)。DXF handoff の突き合わせは種別(V/T)を使う。任意。
     type: z.string().min(1).optional(),
+    // 設計判断: angle は実 Valentina の passmarkAngle(合印の向きの決め方: straightforward/bisector 等)。
+    // 「合印をどちら向きに入れるか」の編集フィーチャで、depth/width と同じく辺が合うか(接続整合)は変えない。任意。
+    angle: z.string().min(1).optional(),
     // 設計判断: depth_mm は合印を縫い代方向にどれだけ深く入れるか(クリップ量)を表す編集フィーチャの param で、
     // 幾何の点そのものではない。Seamly2D の notchLength に対応する。厚地では深いと縫い代が弱り、浅いと厚みで
     // 見えない、という縫製判断が乗る層。仕上がり寸法系と同じ mm 規約。0/負は寸法指定なしとして扱うため positive。
@@ -41,7 +53,12 @@ export const notchSchema = z
     // param であって、辺が合うかどうか(接続整合)は変えない。
     width_mm: z.number().finite().positive().optional()
   })
-  .strict();
+  .strict()
+  // 設計判断: 合印は「どこに属すか」の anchor が要る。Seamly2D 方言は seam_ref、実 Valentina 方言は piece が
+  // それを担う。両方欠けた合印は所属不明で identity を持てないため、正本 schema で弾く。
+  .refine((notch) => notch.seam_ref !== undefined || notch.piece !== undefined, {
+    message: "notch must anchor to a seam (seam_ref) or a piece (piece)"
+  });
 
 const connectorRangeSchema = z
   .object({
