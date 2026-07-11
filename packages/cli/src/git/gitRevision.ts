@@ -45,14 +45,41 @@ function runGit(args: readonly string[], cwd: string): Promise<GitResult> {
   });
 }
 
-// cwd が Git リポジトリ内なら repo root の絶対パスを返す。リポジトリ外や git 未検出なら undefined。
-export async function resolveGitRepoRoot(cwd: string): Promise<string | undefined> {
+// リポジトリ解決の結果。失敗は「git を起動できなかった(未検出/権限)」と「git は走ったが拒否した
+// (repo 外 / dubious ownership / 権限 等)」を分ける。呼び出し側が正しい直し方を提示するため。
+export type GitRepoRootResult =
+  | { readonly ok: true; readonly repoRoot: string }
+  | {
+      readonly ok: false;
+      readonly reason: "git-unavailable" | "git-failed";
+      readonly message: string;
+    };
+
+// cwd の Git repo root を解決する。失敗はすべて undefined に潰さず、理由と git の文面を添えて返す。
+export async function resolveGitRepoRoot(cwd: string): Promise<GitRepoRootResult> {
   const result = await runGit(["rev-parse", "--show-toplevel"], cwd);
-  if (!result.ok) {
-    return undefined;
+
+  if (result.ok) {
+    const root = result.stdout.trim();
+    if (root.length > 0) {
+      return { ok: true, repoRoot: root };
+    }
+    return { ok: false, reason: "git-failed", message: "git rev-parse returned no toplevel path." };
   }
-  const root = result.stdout.trim();
-  return root.length > 0 ? root : undefined;
+
+  // code === null は spawn 自体の失敗(git 未検出/権限)。それ以外は git が走って非0終了(repo 外等)。
+  if (result.code === null) {
+    return {
+      ok: false,
+      reason: "git-unavailable",
+      message: result.stderr.trim() || "Git could not be started."
+    };
+  }
+  return {
+    ok: false,
+    reason: "git-failed",
+    message: result.stderr.trim() || `git exited ${result.code}.`
+  };
 }
 
 // ref が commit として解決できれば SHA を返し、できなければ undefined。worktree を作る前に
