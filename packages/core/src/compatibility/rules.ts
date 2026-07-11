@@ -1,5 +1,6 @@
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { ResolvedProject, ResolvedProjectPart } from "../project/resolveParts.js";
+import { resolveJoinedConnectorToleranceMm } from "../schema/connectorTolerance.js";
 import type { Connector, Requirement } from "../schema/part.schema.js";
 import { createCompatibilityResult } from "./checkReport.js";
 import type { CompatibilityResult } from "./checkReport.js";
@@ -115,7 +116,7 @@ function comparePartConnectorLengths(
         fromLengthMm,
         toPart,
         toLengthMm,
-        toleranceMm: Math.max(fromConnector.tolerance_mm ?? 0, toConnector.tolerance_mm ?? 0)
+        toleranceMm: resolveJoinedConnectorToleranceMm(fromConnector, toConnector) ?? 0
       })
     );
   }

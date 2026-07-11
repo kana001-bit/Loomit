@@ -483,6 +483,52 @@ describe("runChecks", () => {
       expect.objectContaining({ rule: "connector-pairing" })
     );
   });
+  it("treats an explicit tolerance_mm of 0 as stricter than the other side's looser tolerance", async () => {
+    // 守る仕様: exact-match を要求する 0 tolerance は、相手側の緩い tolerance によって widen されない。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = getResolvedPart(resolvedProject, "body");
+    const sleeve = getResolvedPart(resolvedProject, "sleeve");
+    const bodyArmhole = body.part.connectors?.armhole;
+    const sleeveArmhole = sleeve.part.connectors?.armhole;
+
+    if (bodyArmhole === undefined || sleeveArmhole === undefined) {
+      throw new Error("Expected body and sleeve armhole connectors.");
+    }
+
+    const report = runChecks({
+      ...resolvedProject,
+      parts: {
+        body: {
+          ...body,
+          part: {
+            ...body.part,
+            connectors: { armhole: { ...bodyArmhole, tolerance_mm: 0 } },
+            requires: {}
+          }
+        },
+        sleeve: {
+          ...sleeve,
+          part: {
+            ...sleeve.part,
+            connectors: { armhole: { ...sleeveArmhole, tolerance_mm: 5 } },
+            requires: {}
+          }
+        }
+      }
+    });
+
+    expect(report.compatibility).toContainEqual(
+      expect.objectContaining({
+        rule: "connector-length",
+        expected: { toleranceMm: 0 },
+        diagnostics: [
+          expect.objectContaining({
+            code: "CONNECTOR_LENGTH_MISMATCH"
+          })
+        ]
+      })
+    );
+  });
 });
 
 async function loadResolvedFixture(fixtureName: string): Promise<ResolvedProject> {

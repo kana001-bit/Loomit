@@ -12,7 +12,7 @@ import type { DiagnosticReport } from "../diagnostics/report.js";
 import type { LoadFileResult } from "../filesystem/loadFileResult.js";
 import type { ResolvedProject, ResolvedProjectPart } from "../project/resolveParts.js";
 
-export type BuildAssetKind = "source" | "preview" | "print";
+export type BuildAssetKind = "source" | "preview" | "geometry" | "print";
 
 export interface BuildManifestAsset {
   readonly role: string;
@@ -41,7 +41,7 @@ interface PlannedBuildAsset extends BuildManifestAsset {
   readonly absoluteOutputPath: string;
 }
 
-const buildAssetKinds = ["source", "preview", "print"] as const;
+const buildAssetKinds = ["source", "preview", "geometry", "print"] as const;
 
 export async function buildProject(
   resolvedProject: ResolvedProject
