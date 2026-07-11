@@ -9,11 +9,11 @@ import {
   type PrototypeNotes
 } from "@loomit/core";
 import { access } from "node:fs/promises";
-import { resolve } from "node:path";
-import { join } from "node:path";
+import { join, relative, resolve } from "node:path";
 
 import { formatDiffJson } from "../formatters/diffJson.js";
 import { formatDiffText } from "../formatters/diffText.js";
+import { resolveGitRepoRoot, resolveRef, withRefWorktree } from "../git/gitRevision.js";
 
 export type DiffOutputFormat = "text" | "json";
 
@@ -23,12 +23,35 @@ export interface DiffCommandOptions {
   readonly stderr: (text: string) => void;
 }
 
-interface ParsedDiffArgs {
-  readonly help: boolean;
-  readonly format: DiffOutputFormat;
+// diff の入力は3系統: 既存のパス指定(part 2つ / project 2つ + --part)、Git revision range(A..B)、
+// 単一 revision(その版 ↔ 作業ツリー)。後者2つは project 差分なので --part を必須にする。
+type ParsedDiffArgs =
+  | {
+      readonly kind: "paths";
+      readonly format: DiffOutputFormat;
+      readonly fromPath: string;
+      readonly toPath: string;
+      readonly partRole?: string;
+    }
+  | {
+      readonly kind: "refRange";
+      readonly format: DiffOutputFormat;
+      readonly fromRef: string;
+      readonly toRef: string;
+      readonly partRole: string;
+    }
+  | {
+      readonly kind: "refWorktree";
+      readonly format: DiffOutputFormat;
+      readonly ref: string;
+      readonly partRole: string;
+    };
+
+interface ResolvedDiffPaths {
   readonly fromPath: string;
   readonly toPath: string;
-  readonly partRole?: string;
+  readonly prototypeNotes?: PrototypeNotes;
+  readonly notesDiagnostics: readonly Diagnostic[];
 }
 
 export async function runDiffCommand(
@@ -42,49 +65,124 @@ export async function runDiffCommand(
     return 2;
   }
 
-  if (parsedArgs.help) {
+  if (parsedArgs.kind === "help") {
     options.stdout(formatDiffHelp());
     return 0;
   }
 
-  const pathResult =
-    parsedArgs.partRole === undefined
-      ? {
-          ok: true as const,
-          value: {
-            fromPath: parsedArgs.fromPath,
-            toPath: parsedArgs.toPath,
-            prototypeNotes: undefined,
-            notesDiagnostics: [] as readonly Diagnostic[]
-          }
-        }
-      : await resolveProjectPartPaths(parsedArgs.fromPath, parsedArgs.toPath, parsedArgs.partRole);
+  if (parsedArgs.kind === "paths") {
+    return runPathDiff(parsedArgs, options);
+  }
+
+  return runRefDiff(parsedArgs, options);
+}
+
+async function runPathDiff(
+  parsedArgs: Extract<ParsedDiffArgs, { kind: "paths" }>,
+  options: DiffCommandOptions
+): Promise<number> {
+  if (parsedArgs.partRole !== undefined) {
+    return diffProjectPart(parsedArgs.fromPath, parsedArgs.toPath, parsedArgs.partRole, parsedArgs, options);
+  }
+
+  return diffResolvedParts(
+    { fromPath: parsedArgs.fromPath, toPath: parsedArgs.toPath, notesDiagnostics: [] },
+    parsedArgs,
+    options
+  );
+}
+
+async function runRefDiff(
+  parsedArgs: Extract<ParsedDiffArgs, { kind: "refRange" | "refWorktree" }>,
+  options: DiffCommandOptions
+): Promise<number> {
+  const repoRoot = await resolveGitRepoRoot(options.cwd);
+  if (repoRoot === undefined) {
+    options.stderr(
+      `loom diff with a Git revision must run inside a Git repository (could not run git in ${options.cwd}).\n\n${formatDiffHelp()}`
+    );
+    return 2;
+  }
+
+  // worktree を作る前に revision を検証して、不正な ref を明快な usage エラーにする。
+  const refs = parsedArgs.kind === "refRange" ? [parsedArgs.fromRef, parsedArgs.toRef] : [parsedArgs.ref];
+  for (const ref of refs) {
+    if ((await resolveRef(repoRoot, ref)) === undefined) {
+      options.stderr(`Not a Git revision: ${ref}.\n\n${formatDiffHelp()}`);
+      return 2;
+    }
+  }
+
+  // 対象の一着は cwd 側とみなし、repo root からの相対位置を各 worktree に投影する。
+  const projectRelPath = relative(repoRoot, options.cwd);
+
+  try {
+    if (parsedArgs.kind === "refRange") {
+      return await withRefWorktree(repoRoot, parsedArgs.fromRef, (fromWorktree) =>
+        withRefWorktree(repoRoot, parsedArgs.toRef, (toWorktree) =>
+          diffProjectPart(
+            join(fromWorktree, projectRelPath),
+            join(toWorktree, projectRelPath),
+            parsedArgs.partRole,
+            parsedArgs,
+            options
+          )
+        )
+      );
+    }
+
+    // 単一 ref: その ref を from、作業ツリー(cwd)を to にして「その版から何を変えたか」を出す。
+    return await withRefWorktree(repoRoot, parsedArgs.ref, (refWorktree) =>
+      diffProjectPart(join(refWorktree, projectRelPath), options.cwd, parsedArgs.partRole, parsedArgs, options)
+    );
+  } catch (error) {
+    options.stderr(`${error instanceof Error ? error.message : String(error)}\n`);
+    return 1;
+  }
+}
+
+async function diffProjectPart(
+  fromProjectPath: string,
+  toProjectPath: string,
+  partRole: string,
+  parsedArgs: ParsedDiffArgs,
+  options: DiffCommandOptions
+): Promise<number> {
+  const pathResult = await resolveProjectPartPaths(fromProjectPath, toProjectPath, partRole);
 
   if (!pathResult.ok) {
     writeReport(
-      createPartLoadFailureReport(parsedArgs.fromPath, parsedArgs.toPath, pathResult.diagnostics),
+      createPartLoadFailureReport(fromProjectPath, toProjectPath, pathResult.diagnostics),
       parsedArgs,
       options
     );
     return 1;
   }
 
-  const fromResult = await loadProjectedPart(pathResult.value.fromPath);
+  return diffResolvedParts(pathResult.value, parsedArgs, options);
+}
+
+async function diffResolvedParts(
+  value: ResolvedDiffPaths,
+  parsedArgs: ParsedDiffArgs,
+  options: DiffCommandOptions
+): Promise<number> {
+  const fromResult = await loadProjectedPart(value.fromPath);
 
   if (!fromResult.ok) {
     writeReport(
-      createPartLoadFailureReport(pathResult.value.fromPath, pathResult.value.toPath, fromResult.diagnostics),
+      createPartLoadFailureReport(value.fromPath, value.toPath, fromResult.diagnostics),
       parsedArgs,
       options
     );
     return 1;
   }
 
-  const toResult = await loadProjectedPart(pathResult.value.toPath);
+  const toResult = await loadProjectedPart(value.toPath);
 
   if (!toResult.ok) {
     writeReport(
-      createPartLoadFailureReport(pathResult.value.fromPath, pathResult.value.toPath, toResult.diagnostics),
+      createPartLoadFailureReport(value.fromPath, value.toPath, toResult.diagnostics),
       parsedArgs,
       options
     );
@@ -94,15 +192,13 @@ export async function runDiffCommand(
   // 前段で出た診断を diff レポートに載せて status にも反映する:
   // notes の読み込み失敗(壊れている/読めない)と、darts 射影(source.val が読めない・未対応形状)。
   const inputDiagnostics = [
-    ...pathResult.value.notesDiagnostics,
+    ...value.notesDiagnostics,
     ...fromResult.diagnostics,
     ...toResult.diagnostics
   ];
 
   const report = diffParts(fromResult.value, toResult.value, {
-    ...(pathResult.value.prototypeNotes === undefined
-      ? {}
-      : { prototypeNotes: pathResult.value.prototypeNotes }),
+    ...(value.prototypeNotes === undefined ? {} : { prototypeNotes: value.prototypeNotes }),
     ...(inputDiagnostics.length === 0 ? {} : { inputDiagnostics })
   });
   writeReport(report, parsedArgs, options);
@@ -114,17 +210,24 @@ export function formatDiffHelp(): string {
   return [
     "Usage: loom diff <from-part.loom> <to-part.loom> [--format text|json]",
     "       loom diff <from-project> <to-project> --part <role> [--format text|json]",
+    "       loom diff <from-rev>..<to-rev> --part <role> [--format text|json]",
+    "       loom diff <rev> --part <role> [--format text|json]",
     "",
-    "Compare two Loomit part files and show semantic feature changes.",
+    "Compare two Loomit parts and show semantic feature changes.",
+    "The revision forms diff the current project across Git history (run inside the repo);",
+    "<rev> on its own compares that revision against the working tree.",
     "",
     "Options:",
-    "  --part <role>       Compare the same project part role across two projects.",
+    "  --part <role>       Compare the same project part role (required for revision diffs).",
     "  --format text|json  Output format. Defaults to text.",
     "  --help              Show this help."
   ].join("\n") + "\n";
 }
 
-function parseDiffArgs(args: readonly string[], cwd: string): ParsedDiffArgs | string {
+function parseDiffArgs(
+  args: readonly string[],
+  cwd: string
+): ParsedDiffArgs | { readonly kind: "help" } | string {
   let format: DiffOutputFormat = "text";
   let help = false;
   let partRole: string | undefined;
@@ -167,22 +270,55 @@ function parseDiffArgs(args: readonly string[], cwd: string): ParsedDiffArgs | s
     }
 
     if (arg !== undefined) {
-      positional.push(resolve(cwd, arg));
+      // Git revision と path を区別するため、ここでは resolve せず生のまま貯める。
+      positional.push(arg);
     }
   }
 
   // --help は位置引数の検証より先に確定させる。他コマンドと同様、loom diff --help をヘルプ表示にする。
-  if (!help && positional.length !== 2) {
-    return "Expected exactly two part file paths.";
+  if (help) {
+    return { kind: "help" };
   }
 
-  return {
-    help,
-    format,
-    ...(partRole === undefined ? {} : { partRole }),
-    fromPath: positional[0] ?? "",
-    toPath: positional[1] ?? ""
-  };
+  // A..B: 単一の位置引数に ".." が含まれていれば Git revision range として読む。
+  if (positional.length === 1 && positional[0] !== undefined && positional[0].includes("..")) {
+    const raw = positional[0];
+    const separator = raw.indexOf("..");
+    const fromRef = raw.slice(0, separator);
+    const toRef = raw.slice(separator + 2);
+
+    if (fromRef.length === 0 || toRef.length === 0) {
+      return "Expected a Git revision range like main..HEAD.";
+    }
+
+    if (partRole === undefined) {
+      return "A Git-revision diff needs --part <role> (for example: loom diff main..HEAD --part body).";
+    }
+
+    return { kind: "refRange", format, fromRef, toRef, partRole };
+  }
+
+  // 単一の位置引数(".." 無し): その revision と作業ツリーを比べる。
+  if (positional.length === 1 && positional[0] !== undefined) {
+    if (partRole === undefined) {
+      return "Pass two part files, or <revision> --part <role> to diff a revision against the working tree.";
+    }
+
+    return { kind: "refWorktree", format, ref: positional[0], partRole };
+  }
+
+  // 2 つの位置引数: 従来どおりのパス指定(part file 2つ、または project 2つ + --part)。
+  if (positional.length === 2) {
+    return {
+      kind: "paths",
+      format,
+      ...(partRole === undefined ? {} : { partRole }),
+      fromPath: resolve(cwd, positional[0] ?? ""),
+      toPath: resolve(cwd, positional[1] ?? "")
+    };
+  }
+
+  return "Expected two part file paths, or a Git revision (main..HEAD or <revision>) with --part <role>.";
 }
 
 async function resolveProjectPartPaths(
