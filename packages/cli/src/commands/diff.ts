@@ -96,30 +96,41 @@ async function runRefDiff(
   parsedArgs: Extract<ParsedDiffArgs, { kind: "refRange" | "refWorktree" }>,
   options: DiffCommandOptions
 ): Promise<number> {
-  const repoRoot = await resolveGitRepoRoot(options.cwd);
-  if (repoRoot === undefined) {
-    options.stderr(
-      `loom diff with a Git revision must run inside a Git repository (could not run git in ${options.cwd}).\n\n${formatDiffHelp()}`
-    );
+  const repo = await resolveGitRepoRoot(options.cwd);
+  if (!repo.ok) {
+    if (repo.reason === "git-unavailable") {
+      // git 自体を起動できなかった。「repo 外」ではなく「git が無い」と告げて正しい直し方に向ける。
+      options.stderr(
+        `Git was not found — loom diff <revision> needs Git on PATH${repo.message ? ` (${repo.message})` : ""}.\n`
+      );
+      return 1;
+    }
+    // git は走ったが拒否した(repo 外 / dubious ownership / 権限 等)。git 自身の文面をそのまま見せて
+    // 実際の直し方に向ける(canned な「repo 内で実行しろ」で誤誘導しない。文字列マッチは locale 依存なので避ける)。
+    options.stderr(`Could not use Git in ${options.cwd}: ${repo.message}\n\n${formatDiffHelp()}`);
     return 2;
   }
-
-  // worktree を作る前に revision を検証して、不正な ref を明快な usage エラーにする。
-  const refs = parsedArgs.kind === "refRange" ? [parsedArgs.fromRef, parsedArgs.toRef] : [parsedArgs.ref];
-  for (const ref of refs) {
-    if ((await resolveRef(repoRoot, ref)) === undefined) {
-      options.stderr(`Not a Git revision: ${ref}.\n\n${formatDiffHelp()}`);
-      return 2;
-    }
-  }
+  const repoRoot = repo.repoRoot;
 
   // 対象の一着は cwd 側とみなし、repo root からの相対位置を各 worktree に投影する。
   const projectRelPath = relative(repoRoot, options.cwd);
 
-  try {
-    if (parsedArgs.kind === "refRange") {
-      return await withRefWorktree(repoRoot, parsedArgs.fromRef, (fromWorktree) =>
-        withRefWorktree(repoRoot, parsedArgs.toRef, (toWorktree) =>
+  // revision は worktree を作る前に解決し、返った SHA をそのまま worktree に使う。symbolic ref
+  // (HEAD/branch)を後段で解決し直すと、間に ref が動いたとき検証した版と別の commit を diff しうる
+  // (TOCTOU)。SHA は不変なので、検証した版をそのまま固定できる。
+  if (parsedArgs.kind === "refRange") {
+    const fromSha = await resolveRef(repoRoot, parsedArgs.fromRef);
+    if (fromSha === undefined) {
+      return notARevision(parsedArgs.fromRef, options);
+    }
+    const toSha = await resolveRef(repoRoot, parsedArgs.toRef);
+    if (toSha === undefined) {
+      return notARevision(parsedArgs.toRef, options);
+    }
+
+    try {
+      return await withRefWorktree(repoRoot, fromSha, (fromWorktree) =>
+        withRefWorktree(repoRoot, toSha, (toWorktree) =>
           diffProjectPart(
             join(fromWorktree, projectRelPath),
             join(toWorktree, projectRelPath),
@@ -129,16 +140,34 @@ async function runRefDiff(
           )
         )
       );
+    } catch (error) {
+      return refDiffError(error, options);
     }
+  }
 
-    // 単一 ref: その ref を from、作業ツリー(cwd)を to にして「その版から何を変えたか」を出す。
-    return await withRefWorktree(repoRoot, parsedArgs.ref, (refWorktree) =>
+  // 単一 ref: 解決済み SHA を from、作業ツリー(cwd)を to にして「その版から何を変えたか」を出す。
+  const refSha = await resolveRef(repoRoot, parsedArgs.ref);
+  if (refSha === undefined) {
+    return notARevision(parsedArgs.ref, options);
+  }
+
+  try {
+    return await withRefWorktree(repoRoot, refSha, (refWorktree) =>
       diffProjectPart(join(refWorktree, projectRelPath), options.cwd, parsedArgs.partRole, parsedArgs, options)
     );
   } catch (error) {
-    options.stderr(`${error instanceof Error ? error.message : String(error)}\n`);
-    return 1;
+    return refDiffError(error, options);
   }
+}
+
+function notARevision(ref: string, options: DiffCommandOptions): number {
+  options.stderr(`Not a Git revision: ${ref}.\n\n${formatDiffHelp()}`);
+  return 2;
+}
+
+function refDiffError(error: unknown, options: DiffCommandOptions): number {
+  options.stderr(`${error instanceof Error ? error.message : String(error)}\n`);
+  return 1;
 }
 
 async function diffProjectPart(

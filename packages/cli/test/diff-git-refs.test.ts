@@ -168,7 +168,8 @@ describe("loom diff <revision>", () => {
       });
 
       expect(exitCode).toBe(2);
-      expect(output.stderr.join("")).toContain("must run inside a Git repository");
+      // git は走ったが repo 外と拒否したケース。canned 文言ではなく git の文面を見せる方針。
+      expect(output.stderr.join("")).toContain("Could not use Git");
     } finally {
       await rm(notARepo, { recursive: true, force: true });
     }
