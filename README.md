@@ -14,9 +14,9 @@ Loomit is a local-first CLI that brings a Git-inspired workflow to pattern makin
 
 Early, local-first, and honest about scope:
 
-- **Built today** — compatibility `check`, semantic `diff`, fit / movement-test diagnostics, and part reuse (`fork`, `publish`, `library`).
-- **Delegated to Git, by design** — snapshots, branches, and history. Loomit's source of truth is plain text (`loomit.yml`, `part.loom`), so a project lives naturally inside a Git repo. Loomit adds a sewing-aware layer on top instead of reimplementing version control.
-- **On the roadmap** — a closer `loom diff` ↔ Git-revision integration, more `fit` rules, and Loomit Studio (UI).
+- **Built today** — compatibility `check`, semantic `diff` (including across Git revisions, e.g. `loom diff main..HEAD --part body`), fit / movement-test diagnostics, and part reuse (`fork`, `publish`, `library`).
+- **Delegated to Git, by design** — snapshots, branches, and history. Loomit's source of truth is plain text (`loomit.yml`, `part.loom`), so a project lives naturally inside a Git repo. `loom diff` reads any two revisions as sewing-level design changes instead of reimplementing version control.
+- **On the roadmap** — more `fit` rules, richer diff explanations, and Loomit Studio (UI).
 
 ## Motivation
 
