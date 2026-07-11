@@ -1,4 +1,5 @@
-import { basename, dirname, relative, resolve } from "node:path";
+import { access } from "node:fs/promises";
+import { basename, dirname, join, relative, resolve } from "node:path";
 
 import {
   addPartToProject,
@@ -23,6 +24,8 @@ export interface AddCommandOptions {
 
 interface ParsedAddArgs {
   readonly help: boolean;
+  // --yes: 対話をせず、検出した全ピースをデフォルトで一括生成する(連結なし)。
+  readonly yes: boolean;
   readonly valPath?: string;
 }
 
@@ -140,6 +143,12 @@ export async function runAddCommand(
     return 0;
   }
 
+  // --yes: 対話をせず、検出した全ピースをデフォルトで一括生成する。prompter を作る前に分岐して
+  // stdin を開かない(パイプ / CI でも動く)。連結の候補集めも要らないので collectExistingJoins より前で返す。
+  if (parsedArgs.yes) {
+    return await addAllPiecesWithDefaults(options, valPath, detectedPieces, defaultName);
+  }
+
   // 縫い合わせ相手の候補として、プロジェクト内の他パーツが既に宣言している join(connector id)を集める。
   // 取得できなくても add は続行する(最初のパーツや壊れた project では単に候補なしで新規命名に倒す)。
   // 1回の add で複数ピースを足すときは、直前に足したピースの join も候補に加えていく(mergeExistingJoins)。
@@ -215,7 +224,7 @@ export async function runAddCommand(
 
 export function formatAddHelp(): string {
   return [
-    "Usage: loom add <file.val>",
+    "Usage: loom add <file.val> [--yes]",
     "",
     "Add a Valentina .val to the project. If Loomit detects <detail> pieces,",
     "it scaffolds one part per piece and records files.piece in each part. If",
@@ -223,7 +232,13 @@ export function formatAddHelp(): string {
     "nothing. Otherwise it falls back to the legacy single-part prompt.",
     "",
     "Options:",
-    "  --help  Show this help."
+    "  --yes, -y  Scaffold every detected piece with defaults (role = piece name,",
+    "             type \"body\", no connectors) without prompting. Fastest way to",
+    "             turn a multi-piece .val into a checkable project. If a detail name",
+    "             collides with a part role, it asks for a distinct role only in an",
+    "             interactive terminal; in a non-interactive shell it fails cleanly",
+    "             (writing nothing) instead of prompting.",
+    "  --help     Show this help."
   ].join("\n") + "\n";
 }
 
@@ -287,6 +302,290 @@ async function addOnePart(
 
   options.stdout(formatAddSuccess(result.value));
   return 0;
+}
+
+// --yes: 対話せず、検出した全ピースをデフォルトで一括生成する。role=ピース名 / name=ピース名 /
+// type="body" / variant="v1" / 連結なし。7ピースの add を質問ゼロにするための経路(まず check が通る
+// 足場を最短で作るのが狙い)。連結や type の調整は生成後に part.loom を編集して行う。
+async function addAllPiecesWithDefaults(
+  options: AddCommandOptions,
+  valPath: string,
+  detectedPieces: readonly DetectedPiece[],
+  defaultName: string
+): Promise<number> {
+  // detail を割り出せない .val は旧来の 1 part 経路にデフォルトで倒す。
+  if (detectedPieces.length === 0) {
+    return addOnePart(options, valPath, {
+      name: defaultName,
+      type: "body",
+      variant: "v1",
+      connectors: []
+    });
+  }
+
+  // role はパス segment になるので、安全な名前のピースだけ自動追加する。安全でない名前は prompt できない
+  // ので skip し、どれを手動で足すべきか明示する(--yes でも黙って取りこぼさない)。
+  const addable = detectedPieces.filter((piece) => isSafePathSegment(piece.pieceName));
+  // skip したピースがあるか。ある場合は元 .val を消費(削除)しない ── 案内どおり後から手動追加するには
+  // 取り込み元が要るため。消してしまうと skip 分の .val 参照先が失われ「--yes なしで再実行」ができなくなる。
+  const hasSkips = addable.length !== detectedPieces.length;
+
+  for (const piece of detectedPieces) {
+    if (!isSafePathSegment(piece.pieceName)) {
+      options.stdout(
+        `Skipped "${piece.pieceName}": name is not a safe role. Add it with loom add (no --yes) to name its role.\n`
+      );
+    }
+  }
+
+  if (addable.length === 0) {
+    options.stderr(
+      "No pieces could be added automatically. Run loom add without --yes to name roles by hand.\n"
+    );
+    return 1;
+  }
+
+  // role 衝突(同名 detail)は書き込み前に解決する。衝突しないピースは role=ピース名 で自動生成し、衝突した
+  // ピースだけ distinct な role を対話で訊く(B)。判定は実 FS の case 感度に合わせ(正本 loomit.yml をプローブ)、
+  // 既存 project の part role も衝突対象に含める。全 role を書き込み前に確定するので、入力途中で失敗しても
+  // part を1つも書かない(部分適用しない)。
+  const loaded = await loadProject(options.cwd);
+  const caseInsensitive = loaded.ok
+    ? await isCaseInsensitiveFsAt(loaded.value.paths.projectFilePath)
+    : true; // 読めないなら add 自体が失敗する。判定材料が無いので安全側(衝突を拾う)に倒す。
+  const normalizeRoleKey = (role: string): string => (caseInsensitive ? role.toLowerCase() : role);
+
+  // 既に使われている role(既存 part)を seed。new piece がこれと衝突しても書き込み前に別 role を要求する。
+  const takenRoleKeys = new Set<string>();
+  if (loaded.ok) {
+    for (const existingRole of Object.keys(loaded.value.project.parts)) {
+      takenRoleKeys.add(normalizeRoleKey(existingRole));
+    }
+  }
+
+  // role 衝突(既存 part / 先行ピース / detail 重複)するピースを書き込み前に洗い出す。
+  const collidingPieceNames = collectCollidingPieceNames(addable, takenRoleKeys, normalizeRoleKey);
+
+  // --yes は automation を止めない契約。衝突の解決には role 入力が要るが、非対話(TTY でない CI / パイプ)では
+  // stdin を開かず、書き込みも一切せずに clean fail する。対話端末(または注入 prompter)のときだけ衝突分を訊く。
+  const prompter =
+    collidingPieceNames.length === 0
+      ? undefined
+      : (options.prompter ?? (process.stdin.isTTY === true ? createReadlinePrompter() : undefined));
+
+  if (collidingPieceNames.length > 0 && prompter === undefined) {
+    options.stderr(
+      `Detail names collide as part roles (${collidingPieceNames.join(", ")}), and --yes does not prompt in a non-interactive shell. ` +
+        "Run loom add in an interactive terminal to name the colliding roles, or give each piece a distinct detail name in Valentina.\n"
+    );
+    return 1;
+  }
+
+  // 自分で開いた readline だけ後で閉じる(注入された prompter は呼び手/テストの持ち物なので閉じない)。
+  const ownPrompter = prompter !== undefined && prompter !== options.prompter;
+
+  const resolvedRoles: { readonly piece: DetectedPiece; readonly role: string }[] = [];
+
+  try {
+    for (const piece of addable) {
+      const key = normalizeRoleKey(piece.pieceName);
+
+      if (!takenRoleKeys.has(key)) {
+        takenRoleKeys.add(key);
+        resolvedRoles.push({ piece, role: piece.pieceName });
+        continue;
+      }
+
+      // 衝突。上のガードにより、衝突があるなら prompter は必ず存在する(この分岐は collidingPieceNames > 0 のときのみ到達)。
+      if (prompter === undefined) {
+        throw new Error("internal: expected a prompter to resolve a role collision");
+      }
+
+      // safe segment かつ未使用になるまで distinct な role を訊く。
+      const role = await promptDistinctRole(
+        prompter,
+        options.stdout,
+        piece.pieceName,
+        takenRoleKeys,
+        normalizeRoleKey
+      );
+      takenRoleKeys.add(normalizeRoleKey(role));
+      resolvedRoles.push({ piece, role });
+    }
+  } catch (error) {
+    // 対話中に入力が尽きたとき。role は書き込み前に確定するので、まだ1件も書いておらず部分適用は無い。
+    if (error instanceof EndOfInputError) {
+      options.stderr(
+        "Input ended before all colliding roles were provided.\n" +
+          "Give each colliding piece a distinct role, or run it in an interactive terminal.\n"
+      );
+      return 1;
+    }
+
+    throw error;
+  } finally {
+    if (ownPrompter) {
+      prompter?.close();
+    }
+  }
+
+  // 完全同名(綴りまで同じ)の detail は files.piece が同一 = 同じピースを指す part になる。role は分けたが
+  // 幾何ソースは同じ、という曖昧さを黙って通さないよう警告する。
+  const repeatedNames = findCollidingRoleNames(
+    addable.map((piece) => piece.pieceName),
+    false
+  );
+  if (repeatedNames.length > 0) {
+    options.stdout(
+      `Note: detail names (${repeatedNames.join(", ")}) repeat in the .val, so those parts point at the same piece. ` +
+        "Rename them in Valentina if they are meant to be different pieces.\n"
+    );
+  }
+
+  for (const [index, { piece, role }] of resolvedRoles.entries()) {
+    // 元 .val の消費(parts/ 内なら削除)は、全ピースを足しきる最後の1件だけに任せる(途中で消して後続が
+    // PART_ADD_SOURCE_NOT_FOUND で落ちるのを防ぐ)。ただし skip が1件でもあれば消費しない(hasSkips。
+    // skip 分の手動追加に元 .val が要る)。
+    const isLastPiece = index === resolvedRoles.length - 1;
+
+    const result = await addPartToProject({
+      projectPath: options.cwd,
+      valPath,
+      name: piece.pieceName,
+      role,
+      type: "body",
+      variant: "v1",
+      piece: piece.pieceName,
+      keepSource: hasSkips || !isLastPiece
+    });
+
+    if (!result.ok) {
+      options.stderr(`${formatDiagnosticsText(result.diagnostics).join("\n")}\n`);
+      return 1;
+    }
+
+    options.stdout(formatAddSuccess(result.value));
+  }
+
+  const skipNote = hasSkips
+    ? " Skipped pieces above still need a manual loom add (their source .val was kept)."
+    : "";
+  options.stdout(
+    `\nAdded ${resolvedRoles.length} parts (type "body", no connectors).${skipNote}\n` +
+      "Declare seam connectors by editing each part.loom when ready. Next: loom check\n"
+  );
+  return 0;
+}
+
+// role 衝突する(= 同じ parts/ ディレクトリ / loomit.yml キーに解決される)ピース名を、書き込み前に洗い出す。
+// seededKeys(既存 part の role)と、先行するピースの role の両方と照合する。判定用のコピーで回し seededKeys は破壊しない。
+function collectCollidingPieceNames(
+  pieces: readonly DetectedPiece[],
+  seededKeys: ReadonlySet<string>,
+  normalizeRoleKey: (role: string) => string
+): readonly string[] {
+  const simulated = new Set(seededKeys);
+  const colliding: string[] = [];
+
+  for (const piece of pieces) {
+    const key = normalizeRoleKey(piece.pieceName);
+
+    if (simulated.has(key)) {
+      colliding.push(piece.pieceName);
+    } else {
+      simulated.add(key);
+    }
+  }
+
+  return colliding;
+}
+
+// role 衝突したピースに distinct な role を訊く(B: --yes でも衝突分だけ対話する)。safe segment かつ、実 FS の
+// case 感度で正規化して未使用になるまで訊き直す(既存 part や先に決めた role と重ならないよう takenRoleKeys で判定)。
+async function promptDistinctRole(
+  prompter: Prompter,
+  notify: (text: string) => void,
+  pieceName: string,
+  takenRoleKeys: ReadonlySet<string>,
+  normalizeRoleKey: (role: string) => string
+): Promise<string> {
+  notify(`Detail "${pieceName}" collides with another part role; enter a distinct role for it.\n`);
+
+  for (;;) {
+    const role = await promptSegment(prompter, notify, `Part role for "${pieceName}"`, undefined);
+
+    if (takenRoleKeys.has(normalizeRoleKey(role))) {
+      notify(`Role "${role}" is already taken; choose a distinct role.\n`);
+      continue;
+    }
+
+    return role;
+  }
+}
+
+// 実ファイルシステムが大文字小文字を区別するかを、プロジェクト正本 loomit.yml を綴り違いの名前で引けるか
+// 試して判定する。プラットフォーム固定(macOS を一律 case-insensitive とする等)は case-sensitive な
+// APFS/HFS+ を誤判定し、--yes が Front/front を不要に弾く。実 FS を直接見ることでそれを避ける。判定材料が
+// 無いときは衝突を拾う側(insensitive)に倒す(部分適用を防ぐ方を優先)。
+async function isCaseInsensitiveFsAt(projectFilePath: string): Promise<boolean> {
+  const base = basename(projectFilePath);
+  const flipped = flipAlphaCase(base);
+
+  // 反転できる英字が無ければ判定材料が無い(loomit.yml では通常起きない)。安全側に倒す。
+  if (flipped === base) {
+    return true;
+  }
+
+  try {
+    await access(join(dirname(projectFilePath), flipped));
+    return true; // 綴り違いで引けた = 区別しない FS
+  } catch {
+    return false; // 引けない = 区別する FS(正本の存在は loadProject で確認済み)
+  }
+}
+
+// 英字だけ大文字↔小文字を反転する(FS の case 感度プローブ用)。
+function flipAlphaCase(value: string): string {
+  let flipped = "";
+
+  for (const ch of value) {
+    const lower = ch.toLowerCase();
+    flipped += ch === lower ? ch.toUpperCase() : lower;
+  }
+
+  return flipped;
+}
+
+// role に使う名前のうち、role として衝突する(= 同じ parts/ ディレクトリ / loomit.yml キーに解決される)
+// ものを、原文の綴りのまま初出順で返す。addPartToProject は完全一致で role を登録し、ディレクトリ生成は
+// FS の case 感度に従うので、caseInsensitive=true のときは小文字化して比較し大文字小文字違いも衝突として拾う
+// (false=case-sensitive な Linux 等では完全一致のみ)。純関数にして両モードを決定的にテストできるようにする。
+export function findCollidingRoleNames(
+  names: readonly string[],
+  caseInsensitive: boolean
+): readonly string[] {
+  const firstByKey = new Map<string, string>();
+  const colliding: string[] = [];
+
+  for (const name of names) {
+    const key = caseInsensitive ? name.toLowerCase() : name;
+    const first = firstByKey.get(key);
+
+    if (first === undefined) {
+      firstByKey.set(key, name);
+      continue;
+    }
+
+    // 衝突。最初に見た綴りと今の綴りの両方を報告に含める(ケース違いも一目で分かるように)。
+    if (!colliding.includes(first)) {
+      colliding.push(first);
+    }
+    if (!colliding.includes(name)) {
+      colliding.push(name);
+    }
+  }
+
+  return colliding;
 }
 
 async function collectAnswers(
@@ -711,11 +1010,17 @@ function formatAddSuccess(added: AddedPart): string {
 
 function parseAddArgs(args: readonly string[]): ParsedAddArgs | string {
   let help = false;
+  let yes = false;
   const positional: string[] = [];
 
   for (const arg of args) {
     if (arg === "--help" || arg === "-h") {
       help = true;
+      continue;
+    }
+
+    if (arg === "--yes" || arg === "-y") {
+      yes = true;
       continue;
     }
 
@@ -732,7 +1037,7 @@ function parseAddArgs(args: readonly string[]): ParsedAddArgs | string {
 
   const valPath = positional[0];
 
-  return valPath === undefined ? { help } : { help, valPath };
+  return valPath === undefined ? { help, yes } : { help, yes, valPath };
 }
 
 function stripExtension(fileName: string): string {
