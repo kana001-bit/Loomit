@@ -107,12 +107,12 @@ loom build [path] [--format text|json]
 - part を解決し、`check` 相当の互換検証を走らせてから build 出力を書く。
 - 致命的でない問題は、逐一失敗させず可能なら warning で伝える。
 
-## `loom seamlint-request`
+## `loom slnt request`
 
-project から Seamlint へ渡す geometry request（handoff）を組み立てる。
+project から Seamlint へ渡す geometry request（handoff）を組み立てる。`slnt` は Seamlint 連携の名前空間で、`request` はその動詞。
 
 ```text
-loom seamlint-request [path] [--format text|json]
+loom slnt request [path] [--format text|json]
 ```
 
 補足:
@@ -121,6 +121,22 @@ loom seamlint-request [path] [--format text|json]
 - part の geometry source は `files.geometry` を優先し、無ければ `files.preview` を使う。
 - `path_ref` や geometry source が欠けている seam は diagnostic を出して skip する。
 - warning のみであれば、exit code 0 のまま report status `warning` を返す。
+
+## `loom slnt check`
+
+`loom slnt request` で組み立てた geometry request を、実際に Seamlint に渡して seam を測定する end-to-end。
+
+```text
+loom slnt check [path] [--slnt <path>] [--format text|json]
+```
+
+補足:
+
+- request を組み立て、各 part の geometry source（`files.geometry` 優先、無ければ `files.preview`）を読んで request に inline し、self-contained な JSON を作る。
+- その JSON を `slnt check-request --json` に stdin で渡し、返ってきた `GeometryRequestReport`（seam ごとの pass/fail・長さ）を Loomit 側の診断と合わせて表示する。
+- Seamlint 実行ファイルは `--slnt <path>`、環境変数 `LOOMIT_SLNT`、PATH 上の `slnt` の順で解決する。見つからなければ error（`SEAMLINT_NOT_FOUND`）にして、インストールか `--slnt` 指定を促す。
+- 測る seam が1つも無ければ Seamlint は呼ばず、`seamlint: skipped` を返す。
+- responsibility 分担は不変（Loomit=構造とグラフ＋request 発行、Seamlint=幾何測定）。Loomit は幾何を計算しない。
 
 ## `loom diff`
 
@@ -211,7 +227,8 @@ loom library add <type/name> [project] [--library path] [--role role] [--as name
 - `suggest-tests`
 - `test`
 - `library list`
-- `seamlint-request`
+- `slnt request`
+- `slnt check`
 
 ## Notes
 

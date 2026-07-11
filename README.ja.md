@@ -10,9 +10,47 @@ _English version: [`README.md`](README.md)_
 
 Loomit は、型紙づくりに Git ライクなワークフローを持ち込むローカルファースト CLI です。設計の反復管理、互換性の検証、意味のある変更の記録、パーツの再利用に注力し、CAD 編集は Valentina のような外部ツールに任せます。
 
+## Status
+
+まだ初期段階・ローカルファースト。スコープは正直に書きます。
+
+- **今できること** — 互換 `check`、意味的 `diff`、fit / movement-test 診断、パーツ再利用（`fork`, `publish`, `library`）。
+- **Git に委譲（設計判断）** — snapshot・branch・履歴。Loomit の正本はテキスト（`loomit.yml`, `part.loom`）なので、プロジェクトは Git リポジトリの中で自然に動きます。バージョン管理を再実装せず、その上に**洋裁向けの層**を足す方針です。
+- **これから** — `loom diff` と Git revision のより緊密な統合、`fit` ルールの拡充、Loomit Studio（UI）。
+
 ## Motivation
 
 服作りでは、問題が見つかるのが遅すぎることがよくあります——縫うと合わないパーツ、小さな変更のたびの試作やり直し、何をなぜ変えたか分からなくなる、など。Loomit は試作を、より意図的で、説明可能で、無駄の少ないものにします。
+
+## Example
+
+布を裁つ前に、一着のパーツがまだ縫い合わせられるかを確認します。
+
+```console
+$ loom check my-blouse
+Loomit check: ok
+
+Compatibility:
+  [ok] connector-length body.armhole -> sleeve.armhole
+  [ok] requirement-range body.requires.sleeve.armhole.length_mm -> sleeve.armhole.length_mm
+  [ok] requirement-range sleeve.requires.body.armhole.length_mm -> body.armhole.length_mm
+```
+
+シームが合わなくなったときは、「×」だけでなく理由つきで検出します。
+
+```console
+$ loom check my-blouse            # exit code 1
+Loomit check: error
+
+Compatibility:
+  [error] connector-length body.armhole -> sleeve.armhole
+  [error] CONNECTOR_LENGTH_MISMATCH sleeve.armhole
+    コネクタの仕上がり線の長さが許容差を超えています。/ Connector finished seam lengths exceed the tolerance.
+    suggestion: body.armhole and sleeve.armhole differ by 11mm; allowed tolerance is 3mm.
+  …
+```
+
+診断は構造化データです。人向けには日英併記、CI 向けには `--format json` と非0 exit code を返します。`loom doctor` は同じ内容を文章で説明します。各チェックは「何を保証しないか」も明示します（[Core Concepts](docs/core-concepts.md)）。
 
 ## For People Who Make Clothes
 
