@@ -736,10 +736,10 @@ describe("runCli", () => {
     expect(output.stderr).toEqual([]);
   });
 
-  it("runs seamlint-request with JSON output for a valid project", async () => {
+  it("runs slnt request with JSON output for a valid project", async () => {
     const output = createOutputCollector();
     const exitCode = await runCli(
-      ["node", "loom", "seamlint-request", join(fixturesRoot, "valid-blouse"), "--format", "json"],
+      ["node", "loom", "slnt", "request", join(fixturesRoot, "valid-blouse"), "--format", "json"],
       {
         cwd: workspaceRoot,
         io: output.io
@@ -761,6 +761,48 @@ describe("runCli", () => {
         id: "sewn-seam:body.armhole/sleeve.armhole"
       })
     ]);
+    expect(output.stderr).toEqual([]);
+  });
+
+  it("reports a usage error for an unknown slnt subcommand", async () => {
+    const output = createOutputCollector();
+    const exitCode = await runCli(["node", "loom", "slnt", "bogus"], {
+      cwd: workspaceRoot,
+      io: output.io
+    });
+
+    expect(exitCode).toBe(2);
+    expect(output.stdout).toEqual([]);
+    expect(output.stderr.join("")).toContain("Unknown slnt subcommand: bogus");
+  });
+
+  it("routes slnt check through the injected Seamlint runner", async () => {
+    const output = createOutputCollector();
+    const seamlintReport = {
+      status: "ok" as const,
+      target: "geometry-request",
+      diagnostics: [],
+      reports: [{ status: "ok" as const, target: "body.armhole/sleeve.armhole", lengthMm: 460, diagnostics: [] }]
+    };
+    const exitCode = await runCli(
+      ["node", "loom", "slnt", "check", join(fixturesRoot, "valid-blouse"), "--format", "json"],
+      {
+        cwd: workspaceRoot,
+        io: output.io,
+        seamlintRunner: {
+          run: async () => ({ ok: true, report: seamlintReport, exitCode: 0 })
+        }
+      }
+    );
+
+    const report = JSON.parse(output.stdout.join("")) as {
+      readonly status: string;
+      readonly seamlint: { readonly kind: string };
+    };
+
+    expect(exitCode).toBe(0);
+    expect(report.status).toBe("ok");
+    expect(report.seamlint.kind).toBe("ran");
     expect(output.stderr).toEqual([]);
   });
 

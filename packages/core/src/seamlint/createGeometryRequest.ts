@@ -75,6 +75,9 @@ export interface SeamlintGeometryPartRef {
   readonly scale: 1;
   readonly paths: Readonly<Record<string, string>>;
   readonly markers?: Readonly<Record<string, SeamlintGeometryMarkerRef>>;
+  // 測定用ソースの本文を inline で持つ(materializeSeamlintGeometry が埋める)。self-contained に
+  // することで、Seamlint を subprocess で呼ぶとき相手に filesystem access を要求しなくて済む。
+  readonly geometryText?: string;
 }
 
 export interface SeamlintGeometryCheckRequest {
@@ -135,7 +138,7 @@ export function createSeamlintGeometryRequest(
 
   for (const [joinId, participants] of collectPartsByJoinId(resolvedProject)) {
     // connector id を共有する part がちょうど2つでない場合は、黙って捨てず理由を診断で示す。
-    // loom check の connector-pairing と同じ状況を、seamlint-request 単独実行でも取りこぼさない。
+    // loom check の connector-pairing と同じ状況を、slnt request 単独実行でも取りこぼさない。
     if (participants.length === 1) {
       const only = participants[0];
       diagnostics.push(
