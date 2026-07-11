@@ -71,12 +71,37 @@ const connectorRangeSchema = z
     from: z.number().finite().min(0).max(1),
     to: z.number().finite().min(0).max(1),
     behavior: z.string().min(1),
-    allowance_mm: z.number().finite().nonnegative().optional()
+    allowance_mm: z.number().finite().nonnegative().optional(),
+    // 設計判断: ease_ratio_min / ease_ratio_max は ease seam の「意図した長さ差」を許容する帯(下限/上限)。
+    // ease seam は両辺の長さが ease 分だけわざと異なるので、その差を「間違い」ではなく「意図した ease」として
+    // 通すために Seamlint へ渡す帯。Loomit は幾何を計算しない(A案)ので比は測れず、人/上流が authored する値
+    // (Seamlint の easeRatio と同義で diff/baseLength の許容範囲、0 <= min <= max)。片側だけでは帯にならない
+    // ため、下の refine で両方揃えて宣言することを要求する。単位は無次元(比)なので mm 系の allowance_mm とは別立て。
+    ease_ratio_min: z.number().finite().nonnegative().optional(),
+    ease_ratio_max: z.number().finite().nonnegative().optional()
   })
   .strict()
   .refine((range) => range.from <= range.to, {
     message: "connector range start must be less than or equal to end"
-  });
+  })
+  // ease 帯は下限と上限が対でひとつの帯になる。片方だけでは Seamlint に渡す [min, max] を作れないので、
+  // 両方あるか両方無いかのどちらかに限る。
+  .refine(
+    (range) => (range.ease_ratio_min === undefined) === (range.ease_ratio_max === undefined),
+    {
+      message: "connector range ease_ratio_min and ease_ratio_max must be set together"
+    }
+  )
+  // 帯は下限 <= 上限。逆転した帯は Seamlint 側で無効化されるので、正本 schema で先に弾く。
+  .refine(
+    (range) =>
+      range.ease_ratio_min === undefined ||
+      range.ease_ratio_max === undefined ||
+      range.ease_ratio_min <= range.ease_ratio_max,
+    {
+      message: "connector range ease_ratio_min must be less than or equal to ease_ratio_max"
+    }
+  );
 
 export const connectorSchema = z
   .object({

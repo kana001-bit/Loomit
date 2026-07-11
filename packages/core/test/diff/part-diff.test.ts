@@ -541,7 +541,7 @@ describe("diffParts", () => {
           },
           {
             field: "ranges.ease-window",
-            after: "from=0.76, to=0.84, behavior=ease, allowance_mm=<missing>"
+            after: "from=0.76, to=0.84, behavior=ease, allowance_mm=<missing>, ease_ratio=<missing>"
           },
           {
             field: "ranges.sleeve-cap-gather.from",
@@ -1129,6 +1129,39 @@ describe("diffParts", () => {
       connectionRisk: "none",
       prototypeNoteSignal: "none"
     });
+  });
+
+  it("reports an ease band change on a connector range as a field change", () => {
+    // 守る仕様: ease_ratio_min/max の変更を diff で拾う。帯は allowance と同じく range 単位の diffable な値。
+    const before = createBodyPart({
+      connectors: {
+        armhole: {
+          type: "armhole",
+          ranges: [{ id: "ease", from: 0, to: 1, behavior: "ease", ease_ratio_min: 0, ease_ratio_max: 0.05 }]
+        }
+      }
+    });
+    const after = createBodyPart({
+      connectors: {
+        armhole: {
+          type: "armhole",
+          ranges: [{ id: "ease", from: 0, to: 1, behavior: "ease", ease_ratio_min: 0, ease_ratio_max: 0.08 }]
+        }
+      }
+    });
+
+    const report = diffParts(before, after);
+
+    expect(report.changes).toContainEqual(
+      expect.objectContaining({
+        feature: "connector",
+        kind: "modified",
+        id: "armhole",
+        changes: expect.arrayContaining([
+          { field: "ranges.ease.ease_ratio_max", before: 0.05, after: 0.08 }
+        ])
+      })
+    );
   });
 });
 

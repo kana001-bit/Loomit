@@ -6,7 +6,11 @@ import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import type { ResolvedProject, ResolvedProjectPart } from "../project/resolveParts.js";
 import { resolveJoinedConnectorToleranceMm } from "../schema/connectorTolerance.js";
 import { indexConnectorRanges } from "../schema/connectorRanges.js";
+import type { IndexedConnectorRange } from "../schema/connectorRanges.js";
 import type { Connector } from "../schema/part.schema.js";
+
+// from/to が厳密に 0/1 でなく 0.001/0.999 で書き出される実データも「seam 全体を覆う」とみなす境界許容。
+const WHOLE_SEAM_EPSILON = 0.001;
 
 export type SeamlintJoinKind =
   | "smooth-continuation"
@@ -240,12 +244,13 @@ export function createSeamlintGeometryRequest(
     }
 
     if (hasConnectorRanges(from.connector) || hasConnectorRanges(to.connector)) {
-      // range を宣言した connector は whole-seam の sewn-seam check を出さない。かつ gathered-seam は
-      // どちらがギャザー元(source)か Loomit には測れず、向き未確定のまま check を出すと Seamlint に逆向きの
-      // semantics を渡してしまう(警告は diagnostics 止まりで request.checks には乗らない)。よって現状は
-      // gathered-seam check を emit しない。結果としてこの seam は必ず無検査になるので、ambiguous な geometry を
-      // 渡さないよう part も commit せず(参照されない path を残さない)、range 診断と無検査になる旨だけ出す。
-      diagnoseConnectorRanges({
+      // range を宣言した connector は whole-seam の sewn-seam check を出さない。代わりに range の behavior を見て
+      // 出せる check だけを組み立てる。現状 emit できるのは「seam 全体を覆う ease range 1本＋両側一致の ease 帯」を
+      // eased-seam にするケースだけ(planConnectorRanges が返す)。gathered は向き(ギャザー元/縫い先)を Loomit が
+      // 測れず、逆向きの semantics を渡しかねないため出さない。subrange ease / 帯欠落 / mismatch も ambiguous なので
+      // 出さない。emit できる check が1つも無ければ、参照されない path を残さないよう geometry も commit せず、
+      // この seam を無検査として報告する。
+      const rangeChecks = planConnectorRanges({
         joinId,
         fromPart: from.part,
         toPart: to.part,
@@ -253,18 +258,27 @@ export function createSeamlintGeometryRequest(
         toConnector: to.connector,
         diagnostics
       });
-      diagnostics.push(
-        createDiagnostic({
-          severity: "warning",
-          code: "SEAMLINT_CONNECTOR_LEFT_UNCHECKED",
-          message:
-            `Connector "${joinId}" declares connector ranges but Loomit emitted no Seamlint check for it, so this seam is left entirely unchecked.`,
-          target: `${from.part.role}.${joinId}/${to.part.role}.${joinId}`,
-          suggestion: [
-            `Resolve the accompanying range diagnostic, or remove the ranges so the seam falls back to a plain sewn-seam check.`
-          ]
-        })
-      );
+
+      if (rangeChecks.length === 0) {
+        diagnostics.push(
+          createDiagnostic({
+            severity: "warning",
+            code: "SEAMLINT_CONNECTOR_LEFT_UNCHECKED",
+            message:
+              `Connector "${joinId}" declares connector ranges but Loomit emitted no Seamlint check for it, so this seam is left entirely unchecked.`,
+            target: `${from.part.role}.${joinId}/${to.part.role}.${joinId}`,
+            suggestion: [
+              `Resolve the accompanying range diagnostic, or remove the ranges so the seam falls back to a plain sewn-seam check.`
+            ]
+          })
+        );
+        continue;
+      }
+
+      // emit する check があるので、片側だけ孤立させないよう両側を commit してから push する。
+      commitGeometrySide(geometryParts, fromSide);
+      commitGeometrySide(geometryParts, toSide);
+      checks.push(...rangeChecks);
       continue;
     }
 
@@ -480,17 +494,20 @@ function normalizePathRefForSeamlint(pathRef: string): string {
   return pathRef.startsWith("#") ? pathRef.slice(1) : pathRef;
 }
 
-// connector range の整合を診断する。現状は check を1つも emit しない(diagnostics 専用):gathered-seam は
-// 向き未確定で出せず(下記)、それ以外の behavior はまだ非対応のため。向き(gathered_source)を表せる
-// メタデータを導入したら、ここで gathered-seam check を組み立てて emit する経路を足す。
-function diagnoseConnectorRanges(input: {
+// connector range を見て、この seam に対して emit できる Seamlint check を組み立てて返す。あわせて emit
+// できない range(subrange ease / gathered / ease 帯欠落 / mismatch …)の理由を diagnostics に積む。
+// 現状 emit できるのは「seam 全体を覆う ease range 1本＋両側で一致した ease 帯」= eased-seam だけ。gathered は
+// 向き未確定(下記)で出せず、それ以外の behavior はまだ非対応。向き(gathered_source)を表せるメタデータを
+// 入れたら、ここに gathered-seam check を組み立てる経路を足す。
+function planConnectorRanges(input: {
   readonly joinId: string;
   readonly fromPart: ResolvedProjectPart;
   readonly toPart: ResolvedProjectPart;
   readonly fromConnector: Connector;
   readonly toConnector: Connector;
   readonly diagnostics: Diagnostic[];
-}): void {
+}): SeamlintGeometryCheckSpec[] {
+  const checks: SeamlintGeometryCheckSpec[] = [];
   const fromRanges = indexConnectorRanges(input.fromConnector);
   const toRanges = indexConnectorRanges(input.toConnector);
   const fromIds = new Set(Object.keys(fromRanges));
@@ -498,6 +515,8 @@ function diagnoseConnectorRanges(input: {
   const sharedIds = [...fromIds].filter((id) => toIds.has(id)).sort((left, right) =>
     left.localeCompare(right)
   );
+  // ease を whole-seam として emit できるのは、両側とも range がこの1本きり(subrange と混在しない)のとき。
+  const isSoleRange = fromIds.size === 1 && toIds.size === 1;
 
   for (const rangeId of sharedIds) {
     const fromRange = fromRanges[rangeId];
@@ -523,57 +542,45 @@ function diagnoseConnectorRanges(input: {
       continue;
     }
 
-    if (fromRange.behavior !== "gathered") {
-      input.diagnostics.push(
-        createDiagnostic({
-          severity: "warning",
-          code: "SEAMLINT_CONNECTOR_RANGE_BEHAVIOR_UNSUPPORTED",
-          message:
-            `Connector range "${rangeId}" on join "${input.joinId}" uses behavior "${fromRange.behavior}", but this adapter only auto-builds gathered subrange checks so far.`,
-          target: `${input.fromPart.role}.${input.joinId}/${input.toPart.role}.${input.joinId}`,
-          suggestion: [
-            `Keep "${rangeId}" as a plain whole-seam check, or extend the adapter before treating behavior "${fromRange.behavior}" as a Seamlint range check.`
-          ]
-        })
-      );
+    if (fromRange.behavior === "ease") {
+      const easeCheck = planWholeSeamEase({
+        joinId: input.joinId,
+        rangeId,
+        fromPart: input.fromPart,
+        toPart: input.toPart,
+        fromRange,
+        toRange,
+        isSoleRange,
+        diagnostics: input.diagnostics
+      });
+      if (easeCheck !== undefined) {
+        checks.push(easeCheck);
+      }
       continue;
     }
 
-    // allowance_mm が両側で食い違うのは、ギャザー分量の意図が揃っていないということ。現状の Seamlint
-    // request にはギャザー量を載せる場が無い(contract 未確定)ので、少なくとも不一致は警告で拾う。
-    if (
-      fromRange.allowance_mm !== undefined &&
-      toRange.allowance_mm !== undefined &&
-      fromRange.allowance_mm !== toRange.allowance_mm
-    ) {
-      input.diagnostics.push(
-        createDiagnostic({
-          severity: "warning",
-          code: "SEAMLINT_CONNECTOR_RANGE_ALLOWANCE_MISMATCH",
-          message:
-            `Gathered range "${rangeId}" on join "${input.joinId}" declares different allowance_mm on ${input.fromPart.role} (${fromRange.allowance_mm}) and ${input.toPart.role} (${toRange.allowance_mm}).`,
-          target: `${input.fromPart.role}.${input.joinId}.${rangeId}/${input.toPart.role}.${input.joinId}.${rangeId}`,
-          suggestion: [
-            `Align allowance_mm for range "${rangeId}" on both parts so the intended gather amount is unambiguous.`
-          ]
-        })
-      );
+    if (fromRange.behavior === "gathered") {
+      diagnoseGatheredRange({
+        joinId: input.joinId,
+        rangeId,
+        fromPart: input.fromPart,
+        toPart: input.toPart,
+        fromRange,
+        toRange,
+        diagnostics: input.diagnostics
+      });
+      continue;
     }
 
-    // Seamlint 契約では gathered-seam の from=ギャザー元 / to=縫い先で、gatherRatio = source / target。
-    // だが Loomit は仕上がり幾何を測らない(A案)ため、どちらが実際にギャザーされる(=長い)側かを確定できない。
-    // 向き未確定のまま check を出すと Seamlint に逆向きの semantics を渡してしまい、しかもこの警告は
-    // diagnostics 止まりで request.checks には乗らない(機械側には伝わらない)。よって向きが確定できるように
-    // なるまで gathered-seam check は emit せず、警告だけ出す(seam は呼び出し側で LEFT_UNCHECKED になる)。
     input.diagnostics.push(
       createDiagnostic({
         severity: "warning",
-        code: "SEAMLINT_GATHER_DIRECTION_UNRESOLVED",
+        code: "SEAMLINT_CONNECTOR_RANGE_BEHAVIOR_UNSUPPORTED",
         message:
-          `Gathered range "${rangeId}" on join "${input.joinId}" (${input.fromPart.role} / ${input.toPart.role}) has no recorded gather direction and Loomit cannot measure which side is gathered, so it did not emit a gathered-seam check (the seam is reported as unchecked instead).`,
-        target: `${input.fromPart.role}.${input.joinId}.${rangeId}/${input.toPart.role}.${input.joinId}.${rangeId}`,
+          `Connector range "${rangeId}" on join "${input.joinId}" uses behavior "${fromRange.behavior}", which this adapter does not map to a Seamlint check yet.`,
+        target: `${input.fromPart.role}.${input.joinId}/${input.toPart.role}.${input.joinId}`,
         suggestion: [
-          `Record which side is the gathered (fuller) edge for range "${rangeId}" so Loomit can hand Seamlint a correctly-oriented gathered-seam check.`
+          `Keep "${rangeId}" as a plain whole-seam check, or extend the adapter before treating behavior "${fromRange.behavior}" as a Seamlint range check.`
         ]
       })
     );
@@ -597,4 +604,181 @@ function diagnoseConnectorRanges(input: {
       })
     );
   }
+
+  return checks;
+}
+
+// whole-seam ease を eased-seam check に落とす。落とせないケース(subrange / 帯欠落 / mismatch)は理由を
+// 診断して undefined を返す。Seamlint の eased-seam は seam 全体の長さ比しか見ないので、subrange ease は
+// 受け皿が無く出せない。帯(ease_ratio)が無いと Seamlint は sewn-seam と同じ厳格長さ許容で測ってしまい、
+// 意図した ease をまさに flag するため、帯が無ければ出さず authored な帯を促す(安全側)。
+function planWholeSeamEase(input: {
+  readonly joinId: string;
+  readonly rangeId: string;
+  readonly fromPart: ResolvedProjectPart;
+  readonly toPart: ResolvedProjectPart;
+  readonly fromRange: IndexedConnectorRange;
+  readonly toRange: IndexedConnectorRange;
+  readonly isSoleRange: boolean;
+  readonly diagnostics: Diagnostic[];
+}): SeamlintGeometryCheckSpec | undefined {
+  const { joinId, rangeId, fromPart, toPart, fromRange, toRange } = input;
+  const seamTarget = `${fromPart.role}.${joinId}/${toPart.role}.${joinId}`;
+  const rangeTarget = `${fromPart.role}.${joinId}.${rangeId}/${toPart.role}.${joinId}.${rangeId}`;
+
+  if (!input.isSoleRange || !isWholeSeamRange(fromRange) || !isWholeSeamRange(toRange)) {
+    input.diagnostics.push(
+      createDiagnostic({
+        severity: "warning",
+        code: "SEAMLINT_CONNECTOR_RANGE_EASE_SUBRANGE_UNSUPPORTED",
+        message:
+          `Connector range "${rangeId}" on join "${joinId}" applies ease to part of the seam (or alongside other ranges), but Seamlint only checks ease across the whole seam, so Loomit did not build an eased-seam check for it.`,
+        target: seamTarget,
+        suggestion: [
+          `Declare the ease as a single range covering the whole seam (from 0 to 1), or wait for subrange-ease support before handing "${rangeId}" to Seamlint.`
+        ]
+      })
+    );
+    return undefined;
+  }
+
+  const fromMin = fromRange.ease_ratio_min;
+  const fromMax = fromRange.ease_ratio_max;
+  const toMin = toRange.ease_ratio_min;
+  const toMax = toRange.ease_ratio_max;
+
+  if (fromMin === undefined || fromMax === undefined || toMin === undefined || toMax === undefined) {
+    const anyBand =
+      fromMin !== undefined || fromMax !== undefined || toMin !== undefined || toMax !== undefined;
+    input.diagnostics.push(
+      anyBand
+        ? easeRatioMismatchDiagnostic({ joinId, rangeId, fromPart, toPart, fromRange, toRange, rangeTarget })
+        : createDiagnostic({
+            severity: "warning",
+            code: "SEAMLINT_EASE_RATIO_UNRESOLVED",
+            message:
+              `Whole-seam ease range "${rangeId}" on join "${joinId}" has no ease_ratio_min/ease_ratio_max, so Loomit cannot tell Seamlint how much length difference to accept and did not emit an eased-seam check (the seam is reported as unchecked instead).`,
+            target: rangeTarget,
+            suggestion: [
+              `Set ease_ratio_min and ease_ratio_max on range "${rangeId}" (matching on both parts) so Loomit can hand Seamlint an eased-seam check with an ease band.`
+            ]
+          })
+    );
+    return undefined;
+  }
+
+  if (fromMin !== toMin || fromMax !== toMax) {
+    input.diagnostics.push(
+      easeRatioMismatchDiagnostic({ joinId, rangeId, fromPart, toPart, fromRange, toRange, rangeTarget })
+    );
+    return undefined;
+  }
+
+  // 両側で一致した ease 帯があるので eased-seam を emit する。partId=role, pathRef/connectorId=joinId は
+  // sewn-seam と同じ(paths[joinId] に normalize 済みの path が commit 側で入る)。
+  return {
+    id: `eased-seam:${fromPart.role}.${joinId}/${toPart.role}.${joinId}`,
+    kind: "eased-seam",
+    from: {
+      partId: fromPart.role,
+      pathRef: joinId,
+      connectorId: joinId
+    },
+    to: {
+      partId: toPart.role,
+      pathRef: joinId,
+      connectorId: joinId
+    },
+    tolerance: {
+      ease_ratio: [fromMin, fromMax]
+    }
+  };
+}
+
+// gathered range の整合を診断する。check は出さない(向き未確定・下記)。
+function diagnoseGatheredRange(input: {
+  readonly joinId: string;
+  readonly rangeId: string;
+  readonly fromPart: ResolvedProjectPart;
+  readonly toPart: ResolvedProjectPart;
+  readonly fromRange: IndexedConnectorRange;
+  readonly toRange: IndexedConnectorRange;
+  readonly diagnostics: Diagnostic[];
+}): void {
+  const { joinId, rangeId, fromPart, toPart, fromRange, toRange } = input;
+
+  // allowance_mm が両側で食い違うのは、ギャザー分量の意図が揃っていないということ。現状の Seamlint
+  // request にはギャザー量を載せる場が無い(contract 未確定)ので、少なくとも不一致は警告で拾う。
+  if (
+    fromRange.allowance_mm !== undefined &&
+    toRange.allowance_mm !== undefined &&
+    fromRange.allowance_mm !== toRange.allowance_mm
+  ) {
+    input.diagnostics.push(
+      createDiagnostic({
+        severity: "warning",
+        code: "SEAMLINT_CONNECTOR_RANGE_ALLOWANCE_MISMATCH",
+        message:
+          `Gathered range "${rangeId}" on join "${joinId}" declares different allowance_mm on ${fromPart.role} (${fromRange.allowance_mm}) and ${toPart.role} (${toRange.allowance_mm}).`,
+        target: `${fromPart.role}.${joinId}.${rangeId}/${toPart.role}.${joinId}.${rangeId}`,
+        suggestion: [
+          `Align allowance_mm for range "${rangeId}" on both parts so the intended gather amount is unambiguous.`
+        ]
+      })
+    );
+  }
+
+  // Seamlint 契約では gathered-seam の from=ギャザー元 / to=縫い先で、gatherRatio = source / target。
+  // だが Loomit は仕上がり幾何を測らない(A案)ため、どちらが実際にギャザーされる(=長い)側かを確定できない。
+  // 向き未確定のまま check を出すと Seamlint に逆向きの semantics を渡してしまい、しかもこの警告は
+  // diagnostics 止まりで request.checks には乗らない(機械側には伝わらない)。よって向きが確定できるように
+  // なるまで gathered-seam check は emit せず、警告だけ出す(seam は呼び出し側で LEFT_UNCHECKED になる)。
+  input.diagnostics.push(
+    createDiagnostic({
+      severity: "warning",
+      code: "SEAMLINT_GATHER_DIRECTION_UNRESOLVED",
+      message:
+        `Gathered range "${rangeId}" on join "${joinId}" (${fromPart.role} / ${toPart.role}) has no recorded gather direction and Loomit cannot measure which side is gathered, so it did not emit a gathered-seam check (the seam is reported as unchecked instead).`,
+      target: `${fromPart.role}.${joinId}.${rangeId}/${toPart.role}.${joinId}.${rangeId}`,
+      suggestion: [
+        `Record which side is the gathered (fuller) edge for range "${rangeId}" so Loomit can hand Seamlint a correctly-oriented gathered-seam check.`
+      ]
+    })
+  );
+}
+
+// seam 全体を覆う range か(from≈0 かつ to≈1)。0.001/0.999 の実データも許容する。
+function isWholeSeamRange(range: IndexedConnectorRange): boolean {
+  return range.from <= WHOLE_SEAM_EPSILON && range.to >= 1 - WHOLE_SEAM_EPSILON;
+}
+
+// ease 帯を人が読める形にする。未設定側は "unset"。
+function formatEaseBand(range: IndexedConnectorRange): string {
+  if (range.ease_ratio_min === undefined || range.ease_ratio_max === undefined) {
+    return "unset";
+  }
+  return `[${range.ease_ratio_min}, ${range.ease_ratio_max}]`;
+}
+
+// 両側の ease 帯が揃わない(片側だけ / 値違い)ときの警告。emit を止める2箇所で共有する。
+function easeRatioMismatchDiagnostic(input: {
+  readonly joinId: string;
+  readonly rangeId: string;
+  readonly fromPart: ResolvedProjectPart;
+  readonly toPart: ResolvedProjectPart;
+  readonly fromRange: IndexedConnectorRange;
+  readonly toRange: IndexedConnectorRange;
+  readonly rangeTarget: string;
+}): Diagnostic {
+  const { joinId, rangeId, fromPart, toPart, fromRange, toRange } = input;
+  return createDiagnostic({
+    severity: "warning",
+    code: "SEAMLINT_CONNECTOR_RANGE_EASE_RATIO_MISMATCH",
+    message:
+      `Whole-seam ease range "${rangeId}" on join "${joinId}" declares different ease bands on ${fromPart.role} (${formatEaseBand(fromRange)}) and ${toPart.role} (${formatEaseBand(toRange)}), so Loomit cannot pick one ease band for Seamlint.`,
+    target: input.rangeTarget,
+    suggestion: [
+      `Align ease_ratio_min/ease_ratio_max for range "${rangeId}" on both parts so the ease band is unambiguous.`
+    ]
+  });
 }
