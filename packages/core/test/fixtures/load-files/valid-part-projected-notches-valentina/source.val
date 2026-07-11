@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pattern>
+  <version>0.8.11</version>
+  <unit>cm</unit>
+  <draw name="knickers">
+    <calculation>
+      <point id="1" name="A" type="single"/>
+    </calculation>
+    <modeling>
+      <point id="126" idObject="65" inUse="true" type="modeling"/>
+    </modeling>
+    <details>
+      <detail id="62" name="front" seamAllowance="true" version="2" width="2">
+        <data/>
+        <nodes>
+          <node idObject="65" type="NodePoint"/>
+          <node idObject="169" passmark="true" passmarkAngle="straightforward" passmarkLine="vMark" type="NodePoint"/>
+          <node idObject="141" passmark="true" passmarkAngle="straightforward" passmarkLine="tMark" type="NodePoint"/>
+        </nodes>
+      </detail>
+    </details>
+  </draw>
+</pattern>
