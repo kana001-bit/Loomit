@@ -140,17 +140,22 @@ loom slnt check [path] [--slnt <path>] [--format text|json]
 
 ## `loom diff`
 
-2つの part、または2つの project 内の同一 role part を比較する。
+2つの part、2つの project 内の同一 role part、または **Git の revision 間**で同一 role part を比較する。
 
 ```text
 loom diff <from-part.loom> <to-part.loom> [--format text|json]
 loom diff <from-project> <to-project> --part <role> [--format text|json]
+loom diff <from-rev>..<to-rev> --part <role> [--format text|json]
+loom diff <rev> --part <role> [--format text|json]
 ```
 
 補足:
 
 - raw file diff ではなく、ドメインを踏まえた変更として読む。
 - connector や requirement について recheck のヒントを含める。
+- **revision 形式**は現在の一着（cwd の project）を Git 履歴の版と比較する。history は Git に委譲する方針（[design-history.md](design-history.md) 参照）で、Loomit は各 revision を一時 worktree に展開してから既存の意味差分に流す。git shell は CLI 層に閉じ、core の diff は pure なまま。
+  - `main..HEAD` は2つの revision を比較。`<rev>` 単体はその版と作業ツリー（未コミット含む）を比較。
+  - どちらも project 差分なので `--part <role>` が必須。repo 内で実行する。不正な revision や repo 外実行は usage エラー（exit 2）。
 
 ## `loom fit`
 

@@ -1,0 +1,94 @@
+import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+// git を shell 無しの args 配列で呼ぶ。git は本物の実行ファイル(Windows でも git.exe)なので
+// slnt のような .cmd shim 問題は無く、PATH 解決に shell を要さない。stdout を集めて返す。
+// history を Git に委譲する方針(design-history 参照)上、git 連携は環境の副作用なので core ではなく
+// この CLI 層に置き、core の diff は pure なまま保つ。
+interface GitResult {
+  readonly ok: boolean;
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly code: number | null;
+}
+
+function runGit(args: readonly string[], cwd: string): Promise<GitResult> {
+  return new Promise<GitResult>((resolve) => {
+    const child = spawn("git", args, { cwd });
+
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    const settle = (result: GitResult): void => {
+      if (!settled) {
+        settled = true;
+        resolve(result);
+      }
+    };
+
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+    });
+
+    // git 未検出(ENOENT)等は非0終了ではなく error イベントで来るので、失敗として畳む。
+    child.on("error", (error: NodeJS.ErrnoException) => {
+      settle({ ok: false, stdout, stderr: error.message, code: null });
+    });
+    child.on("close", (code) => {
+      settle({ ok: code === 0, stdout, stderr, code });
+    });
+  });
+}
+
+// cwd が Git リポジトリ内なら repo root の絶対パスを返す。リポジトリ外や git 未検出なら undefined。
+export async function resolveGitRepoRoot(cwd: string): Promise<string | undefined> {
+  const result = await runGit(["rev-parse", "--show-toplevel"], cwd);
+  if (!result.ok) {
+    return undefined;
+  }
+  const root = result.stdout.trim();
+  return root.length > 0 ? root : undefined;
+}
+
+// ref が commit として解決できれば SHA を返し、できなければ undefined。worktree を作る前に
+// 不正な revision を弾いて、明快なエラーにするために使う(`^{commit}` で tag/branch も commit に寄せる)。
+export async function resolveRef(repoRoot: string, ref: string): Promise<string | undefined> {
+  const result = await runGit(["rev-parse", "--verify", "--quiet", `${ref}^{commit}`], repoRoot);
+  if (!result.ok) {
+    return undefined;
+  }
+  const sha = result.stdout.trim();
+  return sha.length > 0 ? sha : undefined;
+}
+
+// ref をデタッチした一時 worktree に展開し、その path で fn を実行してから必ず後始末する。
+// 既存の project/part loader をそのままそのパスに向けられるので、diff 本体を再実装せず revision 差分を作れる。
+export async function withRefWorktree<T>(
+  repoRoot: string,
+  ref: string,
+  fn: (worktreePath: string) => Promise<T>
+): Promise<T> {
+  // worktree add は「存在しない or 空」の path を要求するので、mkdir せず一意名だけ作って git に作らせる。
+  const worktreePath = join(tmpdir(), `loomit-diff-${randomUUID()}`);
+  const added = await runGit(
+    ["worktree", "add", "--detach", "--quiet", worktreePath, ref],
+    repoRoot
+  );
+  if (!added.ok) {
+    throw new Error(
+      `Could not create a Git worktree for "${ref}": ${added.stderr.trim() || `git exited ${added.code ?? "null"}`}`
+    );
+  }
+
+  try {
+    return await fn(worktreePath);
+  } finally {
+    // 後始末はベストエフォート。失敗しても diff 結果は返す(tmp に残るだけ)。
+    await runGit(["worktree", "remove", "--force", worktreePath], repoRoot);
+  }
+}
