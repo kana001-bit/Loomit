@@ -149,7 +149,7 @@ describe("runSeamlintRequestCommand", () => {
       expect(report.request.checks).toEqual([]);
       expect(report.diagnostics).toEqual([
         expect.objectContaining({
-          code: "SEAMLINT_CONNECTOR_RANGE_BEHAVIOR_UNSUPPORTED"
+          code: "SEAMLINT_CONNECTOR_RANGE_EASE_SUBRANGE_UNSUPPORTED"
         }),
         expect.objectContaining({
           code: "SEAMLINT_CONNECTOR_LEFT_UNCHECKED"

@@ -314,6 +314,71 @@ describe("part schema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("accepts an ease range with a full ease_ratio band", () => {
+    // 守る仕様: ease seam の許容帯は下限/上限を対で持てる(0 <= min <= max)。
+    const result = partSchema.safeParse({
+      schema: "loomit.part.v0",
+      name: "eased-sleeve",
+      variant: "v1",
+      type: "sleeve",
+      connectors: {
+        armhole: {
+          type: "armhole",
+          ranges: [
+            {
+              id: "ease",
+              from: 0,
+              to: 1,
+              behavior: "ease",
+              ease_ratio_min: 0,
+              ease_ratio_max: 0.05
+            }
+          ]
+        }
+      }
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an ease band with only one of min/max set", () => {
+    // 守る仕様: 片側だけの帯では Seamlint に渡す [min, max] を作れないので、両方揃えて宣言させる。
+    const result = partSchema.safeParse({
+      schema: "loomit.part.v0",
+      name: "eased-sleeve",
+      variant: "v1",
+      type: "sleeve",
+      connectors: {
+        armhole: {
+          type: "armhole",
+          ranges: [{ id: "ease", from: 0, to: 1, behavior: "ease", ease_ratio_max: 0.05 }]
+        }
+      }
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an ease band whose min exceeds its max", () => {
+    // 守る仕様: 逆転した帯は Seamlint 側で無効化されるので、正本 schema で先に弾く。
+    const result = partSchema.safeParse({
+      schema: "loomit.part.v0",
+      name: "eased-sleeve",
+      variant: "v1",
+      type: "sleeve",
+      connectors: {
+        armhole: {
+          type: "armhole",
+          ranges: [
+            { id: "ease", from: 0, to: 1, behavior: "ease", ease_ratio_min: 0.08, ease_ratio_max: 0.05 }
+          ]
+        }
+      }
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it("rejects darts without both leg references", () => {
     // 守る仕様: dart は stable identity に紐づく apex と左右の leg 参照を持ち、片側だけ欠けた形は許可しない。
     const result = partSchema.safeParse({

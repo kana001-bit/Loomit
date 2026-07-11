@@ -310,84 +310,165 @@ describe("createSeamlintGeometryRequest", () => {
     ]);
   });
 
-  it("warns and skips unsupported non-gathered connector ranges", async () => {
+  it("emits an eased-seam check for a whole-seam ease range with a matching ease band", async () => {
+    // 守る仕様: seam 全体を覆う ease range が両側で1本ずつあり、ease_ratio 帯が一致するとき、
+    // eased-seam check を Seamlint の tolerance.ease_ratio 付きで自動生成する(sewn-seam と同じ両側 commit)。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
-    const body = resolvedProject.parts.body;
-    const sleeve = resolvedProject.parts.sleeve;
+    const withWholeSeamEase = withArmholeRanges(resolvedProject, {
+      from: [{ id: "ease", from: 0, to: 1, behavior: "ease", ease_ratio_min: 0, ease_ratio_max: 0.05 }],
+      to: [{ id: "ease", from: 0, to: 1, behavior: "ease", ease_ratio_min: 0, ease_ratio_max: 0.05 }]
+    });
 
-    if (body === undefined || sleeve === undefined) {
-      throw new Error("Expected valid-blouse to resolve body and sleeve parts.");
-    }
+    const result = createSeamlintGeometryRequest(withWholeSeamEase);
 
-    const bodyArmhole = body.part.connectors?.armhole;
-    const sleeveArmhole = sleeve.part.connectors?.armhole;
-
-    if (bodyArmhole === undefined || sleeveArmhole === undefined) {
-      throw new Error("Expected body and sleeve armhole connectors.");
-    }
-
-    const withEaseRanges: ResolvedProject = {
-      ...resolvedProject,
-      parts: {
-        ...resolvedProject.parts,
-        body: {
-          ...body,
-          part: {
-            ...body.part,
-            connectors: {
-              armhole: {
-                type: bodyArmhole.type,
-                length_mm: bodyArmhole.length_mm,
-                tolerance_mm: bodyArmhole.tolerance_mm,
-                path_ref: bodyArmhole.path_ref,
-                ranges: [
-                  {
-                    id: "ease-window",
-                    from: 0.25,
-                    to: 0.65,
-                    behavior: "ease"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        sleeve: {
-          ...sleeve,
-          part: {
-            ...sleeve.part,
-            connectors: {
-              armhole: {
-                type: sleeveArmhole.type,
-                length_mm: sleeveArmhole.length_mm,
-                tolerance_mm: sleeveArmhole.tolerance_mm,
-                path_ref: sleeveArmhole.path_ref,
-                ranges: [
-                  {
-                    id: "ease-window",
-                    from: 0.2,
-                    to: 0.6,
-                    behavior: "ease"
-                  }
-                ]
-              }
-            }
-          }
-        }
+    expect(result.diagnostics).toEqual([]);
+    expect(result.request.parts).toEqual([
+      {
+        partId: "body",
+        geometrySource: join(fixturesRoot, "valid-blouse/parts/body/body.svg"),
+        format: "svg",
+        unit: "mm",
+        scale: 1,
+        paths: { armhole: "body-armhole" }
+      },
+      {
+        partId: "sleeve",
+        geometrySource: join(fixturesRoot, "valid-blouse/parts/sleeve/sleeve.svg"),
+        format: "svg",
+        unit: "mm",
+        scale: 1,
+        paths: { armhole: "sleeve-armhole" }
       }
-    };
+    ]);
+    expect(result.request.checks).toEqual([
+      {
+        id: "eased-seam:body.armhole/sleeve.armhole",
+        kind: "eased-seam",
+        from: { partId: "body", pathRef: "armhole", connectorId: "armhole" },
+        to: { partId: "sleeve", pathRef: "armhole", connectorId: "armhole" },
+        tolerance: { ease_ratio: [0, 0.05] }
+      }
+    ]);
+  });
 
-    const result = createSeamlintGeometryRequest(withEaseRanges);
+  it("accepts near-0/near-1 endpoints as whole-seam ease (boundary epsilon)", async () => {
+    // 守る仕様: 実データの 0.001/0.999 も seam 全体扱いにする(厳密 0/1 を要求しない)。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const withNearWhole = withArmholeRanges(resolvedProject, {
+      from: [{ id: "ease", from: 0.001, to: 0.999, behavior: "ease", ease_ratio_min: 0.01, ease_ratio_max: 0.04 }],
+      to: [{ id: "ease", from: 0, to: 1, behavior: "ease", ease_ratio_min: 0.01, ease_ratio_max: 0.04 }]
+    });
 
-    // ranged connector は check を出せないため、参照されない part path を残さないよう geometry も commit しない。
+    const result = createSeamlintGeometryRequest(withNearWhole);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.request.checks).toEqual([
+      expect.objectContaining({
+        id: "eased-seam:body.armhole/sleeve.armhole",
+        kind: "eased-seam",
+        tolerance: { ease_ratio: [0.01, 0.04] }
+      })
+    ]);
+  });
+
+  it("does not emit an eased-seam check when the whole-seam ease range has no ease band", async () => {
+    // 守る仕様: 帯が無い eased-seam は Seamlint 側で sewn-seam と同じ厳格長さ許容に落ち、意図した ease を
+    // flag してしまう。よって帯が無ければ check を出さず、authored な帯を促す(seam は無検査になる)。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const withoutBand = withArmholeRanges(resolvedProject, {
+      from: [{ id: "ease", from: 0, to: 1, behavior: "ease" }],
+      to: [{ id: "ease", from: 0, to: 1, behavior: "ease" }]
+    });
+
+    const result = createSeamlintGeometryRequest(withoutBand);
+
     expect(result.request.parts).toEqual([]);
     expect(result.request.checks).toEqual([]);
-    // subrange が1つも check にならないと、その seam は whole-seam check も出ないので完全に無検査になる。
-    // その退行を黙認しないことを明示する。
     expect(result.diagnostics).toEqual([
       expect.objectContaining({
         severity: "warning",
-        code: "SEAMLINT_CONNECTOR_RANGE_BEHAVIOR_UNSUPPORTED",
+        code: "SEAMLINT_EASE_RATIO_UNRESOLVED",
+        target: "body.armhole.ease/sleeve.armhole.ease"
+      }),
+      expect.objectContaining({
+        severity: "warning",
+        code: "SEAMLINT_CONNECTOR_LEFT_UNCHECKED",
+        target: "body.armhole/sleeve.armhole"
+      })
+    ]);
+  });
+
+  it("does not emit an eased-seam check when the two sides declare different ease bands", async () => {
+    // 守る仕様: 片側だけ帯があったり値が食い違うと、Seamlint に渡す1本の帯を選べない。emit せず警告する。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const withBandMismatch = withArmholeRanges(resolvedProject, {
+      from: [{ id: "ease", from: 0, to: 1, behavior: "ease", ease_ratio_min: 0, ease_ratio_max: 0.05 }],
+      to: [{ id: "ease", from: 0, to: 1, behavior: "ease", ease_ratio_min: 0, ease_ratio_max: 0.08 }]
+    });
+
+    const result = createSeamlintGeometryRequest(withBandMismatch);
+
+    expect(result.request.parts).toEqual([]);
+    expect(result.request.checks).toEqual([]);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        severity: "warning",
+        code: "SEAMLINT_CONNECTOR_RANGE_EASE_RATIO_MISMATCH",
+        target: "body.armhole.ease/sleeve.armhole.ease"
+      }),
+      expect.objectContaining({
+        severity: "warning",
+        code: "SEAMLINT_CONNECTOR_LEFT_UNCHECKED",
+        target: "body.armhole/sleeve.armhole"
+      })
+    ]);
+  });
+
+  it("warns and skips subrange ease because Seamlint only checks ease across the whole seam", async () => {
+    // 守る仕様: from>0 / to<1 の ease は Seamlint に受け皿(whole-path のみ)が無いので出せない。専用の
+    // subrange-unsupported 警告で、汎用 UNSUPPORTED から具体化する。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const withSubrangeEase = withArmholeRanges(resolvedProject, {
+      from: [{ id: "ease-window", from: 0.25, to: 0.65, behavior: "ease", ease_ratio_min: 0, ease_ratio_max: 0.05 }],
+      to: [{ id: "ease-window", from: 0.2, to: 0.6, behavior: "ease", ease_ratio_min: 0, ease_ratio_max: 0.05 }]
+    });
+
+    const result = createSeamlintGeometryRequest(withSubrangeEase);
+
+    // subrange が1つも check にならないと、その seam は whole-seam check も出ないので完全に無検査になる。
+    // その退行を黙認しないことを明示する。
+    expect(result.request.parts).toEqual([]);
+    expect(result.request.checks).toEqual([]);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        severity: "warning",
+        code: "SEAMLINT_CONNECTOR_RANGE_EASE_SUBRANGE_UNSUPPORTED",
+        target: "body.armhole/sleeve.armhole"
+      }),
+      expect.objectContaining({
+        severity: "warning",
+        code: "SEAMLINT_CONNECTOR_LEFT_UNCHECKED",
+        target: "body.armhole/sleeve.armhole"
+      })
+    ]);
+  });
+
+  it("keeps the behavior-mismatch guard when only one side is ease", async () => {
+    // 守る仕様: 片側 ease / 片側他 behavior は既存の behavior-mismatch guard のまま(ease 経路に入れない)。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const withBehaviorMismatch = withArmholeRanges(resolvedProject, {
+      from: [{ id: "whole", from: 0, to: 1, behavior: "ease", ease_ratio_min: 0, ease_ratio_max: 0.05 }],
+      to: [{ id: "whole", from: 0, to: 1, behavior: "gathered" }]
+    });
+
+    const result = createSeamlintGeometryRequest(withBehaviorMismatch);
+
+    expect(result.request.parts).toEqual([]);
+    expect(result.request.checks).toEqual([]);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        severity: "warning",
+        code: "SEAMLINT_CONNECTOR_RANGE_BEHAVIOR_MISMATCH",
         target: "body.armhole/sleeve.armhole"
       }),
       expect.objectContaining({
@@ -807,6 +888,58 @@ describe("createSeamlintGeometryRequest", () => {
     ]);
   });
 });
+
+interface RangeInput {
+  id: string;
+  from: number;
+  to: number;
+  behavior: string;
+  allowance_mm?: number;
+  ease_ratio_min?: number;
+  ease_ratio_max?: number;
+}
+
+// valid-blouse の body.armhole / sleeve.armhole に range をだけ差し替える。他の connector プロパティ
+// (type/length_mm/tolerance_mm/path_ref)は元のまま残す。range 診断系テストの重複を1関数に集約する。
+function withArmholeRanges(
+  resolvedProject: ResolvedProject,
+  ranges: { from: RangeInput[]; to: RangeInput[] }
+): ResolvedProject {
+  const body = resolvedProject.parts.body;
+  const sleeve = resolvedProject.parts.sleeve;
+
+  if (body === undefined || sleeve === undefined) {
+    throw new Error("Expected valid-blouse to resolve body and sleeve parts.");
+  }
+
+  const bodyArmhole = body.part.connectors?.armhole;
+  const sleeveArmhole = sleeve.part.connectors?.armhole;
+
+  if (bodyArmhole === undefined || sleeveArmhole === undefined) {
+    throw new Error("Expected body and sleeve armhole connectors.");
+  }
+
+  return {
+    ...resolvedProject,
+    parts: {
+      ...resolvedProject.parts,
+      body: {
+        ...body,
+        part: {
+          ...body.part,
+          connectors: { armhole: { ...bodyArmhole, ranges: ranges.from } }
+        }
+      },
+      sleeve: {
+        ...sleeve,
+        part: {
+          ...sleeve.part,
+          connectors: { armhole: { ...sleeveArmhole, ranges: ranges.to } }
+        }
+      }
+    }
+  };
+}
 
 async function loadResolvedFixture(fixtureName: string): Promise<ResolvedProject> {
   const loadedProject = await loadProject(join(fixturesRoot, fixtureName));
