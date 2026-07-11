@@ -7,6 +7,7 @@ import { runFitCommand } from "./commands/fit.js";
 import { runForkCommand } from "./commands/fork.js";
 import { runInitCommand } from "./commands/init.js";
 import { runLibraryCommand } from "./commands/library.js";
+import { runNoteCommand } from "./commands/note.js";
 import { runPublishCommand } from "./commands/publish.js";
 import { runSlntCommand } from "./commands/slnt.js";
 import { runSuggestTestsCommand } from "./commands/suggestTests.js";
@@ -55,6 +56,16 @@ export async function runCli(
       stdout: io.stdout,
       stderr: io.stderr,
       // exactOptionalPropertyTypes: 未指定の prompter は渡さず、add 側の readline default に委ねる。
+      ...(options.prompter === undefined ? {} : { prompter: options.prompter })
+    });
+  }
+
+  if (command === "note") {
+    return runNoteCommand(args.slice(1), {
+      cwd,
+      stdout: io.stdout,
+      stderr: io.stderr,
+      // exactOptionalPropertyTypes: 未指定の prompter は渡さず、note 側の readline default に委ねる。
       ...(options.prompter === undefined ? {} : { prompter: options.prompter })
     });
   }
@@ -174,6 +185,7 @@ export function formatMainHelp(): string {
     "  fork   Copy an existing Loomit project.",
     "  init   Create a Loomit project in the current directory.",
     "  library List published Loomit library parts.",
+    "  note   Record a prototype note into notes/prototype-notes.yml.",
     "  publish Copy a part into the Loomit library.",
     "  slnt   Geometry checks via Seamlint (loom slnt request|check).",
     "  suggest-tests Suggest movement tests for a project.",
