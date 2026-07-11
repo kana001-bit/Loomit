@@ -163,6 +163,15 @@ export type {
   SeamlintGeometryTolerance,
   SeamlintJoinKind
 } from "./seamlint/createGeometryRequest.js";
+export { materializeSeamlintGeometry } from "./seamlint/materializeGeometry.js";
+export type { SeamlintMaterializeResult } from "./seamlint/materializeGeometry.js";
+export { parseSeamlintGeometryReport } from "./seamlint/geometryReport.js";
+export type {
+  SeamlintGeometryCheckReport,
+  SeamlintGeometryDiagnostic,
+  SeamlintGeometryReportStatus,
+  SeamlintGeometryRequestReport
+} from "./seamlint/geometryReport.js";
 export {
   connectorSchema,
   dartSchema,

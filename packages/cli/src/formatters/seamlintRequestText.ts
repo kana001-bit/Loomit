@@ -2,7 +2,7 @@ import { formatDiagnosticsText } from "./diagnosticsText.js";
 import type { SeamlintRequestReport } from "../commands/seamlintRequest.js";
 
 export function formatSeamlintRequestText(report: SeamlintRequestReport): string {
-  const lines = [`Loomit seamlint-request: ${report.status}`];
+  const lines = [`Loomit slnt request: ${report.status}`];
 
   lines.push(`parts: ${report.request.parts.length}`);
   lines.push(`checks: ${report.request.checks.length}`);
