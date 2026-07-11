@@ -244,6 +244,109 @@ describe("projectNotchesFromValText", () => {
     });
   });
 
+  it("projects real Valentina detail passmarks into identity-only notches (piece + type + angle, no position)", () => {
+    // 守る仕様(方言2): 実 Valentina は合印を <details>/<detail name>/<nodes> の passmark="true" node に持つ。
+    //           position を持たない(位置は仕上がり線の弧長=幾何で下流が解決)ため、piece(detail名=DXF BLOCK名)＋
+    //           種別(passmarkLine=V/T)＋向き(passmarkAngle)だけの identity-only notch へ射影し、warning は出さない。
+    const result = projectNotchesFromValText(
+      `<?xml version="1.0" encoding="UTF-8"?>
+<pattern>
+  <unit>cm</unit>
+  <draw name="knickers">
+    <calculation/>
+    <modeling>
+      <point id="126" idObject="65" inUse="true" type="modeling"/>
+    </modeling>
+    <details>
+      <detail id="62" name="front" seamAllowance="true" version="2" width="2">
+        <data/>
+        <nodes>
+          <node idObject="65" type="NodePoint"/>
+          <node idObject="169" passmark="true" passmarkAngle="straightforward" passmarkLine="vMark" type="NodePoint"/>
+          <node idObject="141" passmark="true" passmarkAngle="straightforward" passmarkLine="tMark" type="NodePoint"/>
+        </nodes>
+      </detail>
+      <detail id="111" name="back" seamAllowance="true" version="2" width="2">
+        <nodes>
+          <node idObject="173" passmark="true" passmarkAngle="straightforward" passmarkLine="vMark" type="NodePoint"/>
+        </nodes>
+      </detail>
+    </details>
+  </draw>
+</pattern>`,
+      {
+        filePath: "fixture.val"
+      }
+    );
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.notches).toEqual({
+      "val:front:notch:169": { piece: "front", type: "vMark", angle: "straightforward" },
+      "val:front:notch:141": { piece: "front", type: "tMark", angle: "straightforward" },
+      "val:back:notch:173": { piece: "back", type: "vMark", angle: "straightforward" }
+    });
+  });
+
+  it("ignores non-passmark detail nodes and unnamed details", () => {
+    // 守る仕様: detail の contour node のうち passmark="true" のものだけを合印にする。passmark 無し node は無視し、
+    //           detail 名(identity=DXF BLOCK名)が無い detail は突き合わせに使えないため丸ごと対象外。
+    const result = projectNotchesFromValText(
+      `<?xml version="1.0" encoding="UTF-8"?>
+<pattern>
+  <draw name="knickers">
+    <details>
+      <detail id="62" name="front">
+        <nodes>
+          <node idObject="65" type="NodePoint"/>
+          <node idObject="169" passmark="true" passmarkLine="vMark" type="NodePoint"/>
+        </nodes>
+      </detail>
+      <detail id="99">
+        <nodes>
+          <node idObject="200" passmark="true" passmarkLine="vMark" type="NodePoint"/>
+        </nodes>
+      </detail>
+    </details>
+  </draw>
+</pattern>`,
+      {
+        filePath: "fixture.val"
+      }
+    );
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.notches).toEqual({
+      "val:front:notch:169": { piece: "front", type: "vMark" }
+    });
+  });
+
+  it("keys a detail passmark by node order when idObject is absent", () => {
+    // 守る仕様: idObject が無い場合のみ detail 内の node 並び順を fallback キーにする(実 Valentina では常に付くが防御的に)。
+    const result = projectNotchesFromValText(
+      `<?xml version="1.0" encoding="UTF-8"?>
+<pattern>
+  <draw name="knickers">
+    <details>
+      <detail id="62" name="front">
+        <nodes>
+          <node type="NodePoint"/>
+          <node passmark="true" passmarkLine="tMark" type="NodePoint"/>
+        </nodes>
+      </detail>
+    </details>
+  </draw>
+</pattern>`,
+      {
+        filePath: "fixture.val"
+      }
+    );
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.notches).toEqual({
+      "val:front:notch:node1": { piece: "front", type: "tMark" }
+    });
+  });
+
   it("omits notch depth_mm/width_mm when the dimensions are absent or non-positive", () => {
     // 守る仕様: 寸法未設定・0・負は「指定なし」として黙って省く(Seamly2D は既定値運用があり、書かれていないのは正常系)。
     //           位置さえ読めれば合印自体は射影する。
