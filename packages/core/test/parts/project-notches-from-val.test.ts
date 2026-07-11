@@ -281,9 +281,79 @@ describe("projectNotchesFromValText", () => {
 
     expect(result.diagnostics).toEqual([]);
     expect(result.notches).toEqual({
-      "val:front:notch:169": { piece: "front", type: "vMark", angle: "straightforward" },
-      "val:front:notch:141": { piece: "front", type: "tMark", angle: "straightforward" },
-      "val:back:notch:173": { piece: "back", type: "vMark", angle: "straightforward" }
+      "val:front:notch:169": { piece: "front", order: 0, type: "vMark", angle: "straightforward" },
+      "val:front:notch:141": { piece: "front", order: 1, type: "tMark", angle: "straightforward" },
+      "val:back:notch:173": { piece: "back", order: 0, type: "vMark", angle: "straightforward" }
+    });
+  });
+
+  it("projects detail passmarks across multiple draws", () => {
+    // 守る仕様: .val は複数の <draw> を持ちうる(本体+裏地など)。各 draw の <details> を走査し、最初の draw
+    //           以外の合印を落とさない(collectFirstBlock で最初の <details> だけを見るリグレッションの防止)。
+    const result = projectNotchesFromValText(
+      `<?xml version="1.0" encoding="UTF-8"?>
+<pattern>
+  <draw name="knickers">
+    <details>
+      <detail id="62" name="front">
+        <nodes>
+          <node idObject="169" passmark="true" passmarkLine="vMark" type="NodePoint"/>
+        </nodes>
+      </detail>
+    </details>
+  </draw>
+  <draw name="lining">
+    <details>
+      <detail id="70" name="pocket">
+        <nodes>
+          <node idObject="200" passmark="true" passmarkLine="tMark" type="NodePoint"/>
+        </nodes>
+      </detail>
+    </details>
+  </draw>
+</pattern>`,
+      {
+        filePath: "fixture.val"
+      }
+    );
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.notches).toEqual({
+      "val:front:notch:169": { piece: "front", order: 0, type: "vMark" },
+      "val:pocket:notch:200": { piece: "pocket", order: 0, type: "tMark" }
+    });
+  });
+
+  it("assigns distinct order to multiple same-type passmarks in one piece", () => {
+    // 守る仕様: 同一 piece に同種(vMark)の合印が複数あるとき、DXF の seam 順(layer4=V の POINT 列)と 1:1 対応
+    //           づけるための order を contour(node)順で 0,1,2... と割り振り、順序情報を境界に残す。
+    const result = projectNotchesFromValText(
+      `<?xml version="1.0" encoding="UTF-8"?>
+<pattern>
+  <draw name="knickers">
+    <details>
+      <detail id="62" name="front">
+        <nodes>
+          <node idObject="169" passmark="true" passmarkLine="vMark" type="NodePoint"/>
+          <node idObject="65" type="NodePoint"/>
+          <node idObject="170" passmark="true" passmarkLine="vMark" type="NodePoint"/>
+          <node idObject="171" passmark="true" passmarkLine="vMark" type="NodePoint"/>
+        </nodes>
+      </detail>
+    </details>
+  </draw>
+</pattern>`,
+      {
+        filePath: "fixture.val"
+      }
+    );
+
+    expect(result.diagnostics).toEqual([]);
+    // 非 passmark node(65)は order に数えない。passmark だけが 0,1,2 と並ぶ。
+    expect(result.notches).toEqual({
+      "val:front:notch:169": { piece: "front", order: 0, type: "vMark" },
+      "val:front:notch:170": { piece: "front", order: 1, type: "vMark" },
+      "val:front:notch:171": { piece: "front", order: 2, type: "vMark" }
     });
   });
 
@@ -316,7 +386,7 @@ describe("projectNotchesFromValText", () => {
 
     expect(result.diagnostics).toEqual([]);
     expect(result.notches).toEqual({
-      "val:front:notch:169": { piece: "front", type: "vMark" }
+      "val:front:notch:169": { piece: "front", order: 0, type: "vMark" }
     });
   });
 
@@ -343,7 +413,7 @@ describe("projectNotchesFromValText", () => {
 
     expect(result.diagnostics).toEqual([]);
     expect(result.notches).toEqual({
-      "val:front:notch:node1": { piece: "front", type: "tMark" }
+      "val:front:notch:node1": { piece: "front", order: 0, type: "tMark" }
     });
   });
 

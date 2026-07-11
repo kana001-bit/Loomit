@@ -56,8 +56,8 @@ describe("loadProjectedPart", () => {
 
     expect(result.ok).toBe(true);
     expect(result.ok ? result.value.notches : {}).toEqual({
-      "val:front:notch:169": { piece: "front", type: "vMark", angle: "straightforward" },
-      "val:front:notch:141": { piece: "front", type: "tMark", angle: "straightforward" }
+      "val:front:notch:169": { piece: "front", order: 0, type: "vMark", angle: "straightforward" },
+      "val:front:notch:141": { piece: "front", order: 1, type: "tMark", angle: "straightforward" }
     });
     expect(result.diagnostics).toEqual([]);
 

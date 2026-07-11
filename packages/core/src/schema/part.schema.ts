@@ -35,6 +35,11 @@ export const notchSchema = z
     // 縫い線ではなく detail に属し、これが「どの .val passmark = どの DXF notch か」を突き合わせる identity に
     // なる。Seamly2D 方言(seam path)では seam_ref が identity を担うため piece は無くてよい。よって optional。
     piece: z.string().min(1).optional(),
+    // 設計判断: order は同一 piece 内での passmark の並び順(0始まり・contour/node 順)。実 Valentina 由来の合印は
+    // position(幾何)を持たないため、DXF export(layer4=V/layer80=T の POINT を seam 順に並べたもの)と「piece＋
+    // 種別＋この順序」で 1:1 対応させる突き合わせキーになる。同一 piece に同種の合印が複数あっても区別できる。
+    // Seamly2D 方言(position 保持)では設定しない。任意。
+    order: z.number().int().nonnegative().optional(),
     // position は縫い線上の正規化位置(0=始点, 1=終点)。connector range の from/to と同じ約束。Seamly2D 方言では
     // .val が position を持つが、実 Valentina には存在しない(位置は仕上がり線の弧長=幾何で、Seamlint が DXF から
     // 測って解決する)。Loomit は幾何を計算しない(A案)ので、実 Valentina 由来の合印は position を持たない。optional。

@@ -395,6 +395,9 @@ function diffNotchFields(before: Notch, after: Notch): readonly PartDiffFieldCha
   pushFieldChange(changes, "angle", before.angle, after.angle);
   pushFieldChange(changes, "depth_mm", before.depth_mm, after.depth_mm);
   pushFieldChange(changes, "width_mm", before.width_mm, after.width_mm);
+  // 設計判断: order は DXF 突き合わせ用の構造キー(piece 内の並び順)であって人が直接いじる編集フィーチャでは
+  // ないため diff しない。合印を1つ挿入/削除すると後続の order が繰り上がる「番号ズレ」で全 notch が modified
+  // に見えるノイズを避ける(追加・削除そのものは added/removed で出るので取りこぼさない)。
 
   return changes;
 }
