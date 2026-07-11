@@ -8,9 +8,10 @@ import { runForkCommand } from "./commands/fork.js";
 import { runInitCommand } from "./commands/init.js";
 import { runLibraryCommand } from "./commands/library.js";
 import { runPublishCommand } from "./commands/publish.js";
-import { runSeamlintRequestCommand } from "./commands/seamlintRequest.js";
+import { runSlntCommand } from "./commands/slnt.js";
 import { runSuggestTestsCommand } from "./commands/suggestTests.js";
 import { runTestCommand } from "./commands/test.js";
+import type { SeamlintRunner } from "./commands/seamlintCheck.js";
 import type { Prompter } from "./prompter.js";
 
 export interface CliIo {
@@ -23,6 +24,8 @@ export interface RunCliOptions {
   readonly io?: CliIo;
   // 対話コマンド(add)用。テストは scripted Prompter を注入する。未指定なら readline で対話する。
   readonly prompter?: Prompter;
+  // slnt check 用。テストは fake runner を注入する。未指定なら subprocess で slnt を呼ぶ。
+  readonly seamlintRunner?: SeamlintRunner;
 }
 
 export async function runCli(
@@ -112,11 +115,12 @@ export async function runCli(
     });
   }
 
-  if (command === "seamlint-request") {
-    return runSeamlintRequestCommand(args.slice(1), {
+  if (command === "slnt") {
+    return runSlntCommand(args.slice(1), {
       cwd,
       stdout: io.stdout,
-      stderr: io.stderr
+      stderr: io.stderr,
+      ...(options.seamlintRunner === undefined ? {} : { seamlintRunner: options.seamlintRunner })
     });
   }
 
@@ -171,7 +175,7 @@ export function formatMainHelp(): string {
     "  init   Create a Loomit project in the current directory.",
     "  library List published Loomit library parts.",
     "  publish Copy a part into the Loomit library.",
-    "  seamlint-request Build a geometry request handoff for Seamlint.",
+    "  slnt   Geometry checks via Seamlint (loom slnt request|check).",
     "  suggest-tests Suggest movement tests for a project.",
     "  test   Run a movement test risk check.",
     "",

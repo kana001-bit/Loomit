@@ -4,15 +4,53 @@
 
 Git-inspired workflow for iterative pattern making.
 
-*Japanese version: [`README.ja.md`](README.ja.md)*
+*日本語版: [`README.ja.md`](README.ja.md)*
 
 ## What is Loomit?
 
 Loomit is a local-first CLI that brings a Git-inspired workflow to pattern making. It focuses on managing design iterations, validating compatibility, tracking meaningful changes, and reusing pattern parts, while leaving CAD editing to external tools such as Valentina.
 
+## Status
+
+Early, local-first, and honest about scope:
+
+- **Built today** — compatibility `check`, semantic `diff`, fit / movement-test diagnostics, and part reuse (`fork`, `publish`, `library`).
+- **Delegated to Git, by design** — snapshots, branches, and history. Loomit's source of truth is plain text (`loomit.yml`, `part.loom`), so a project lives naturally inside a Git repo. Loomit adds a sewing-aware layer on top instead of reimplementing version control.
+- **On the roadmap** — a closer `loom diff` ↔ Git-revision integration, more `fit` rules, and Loomit Studio (UI).
+
 ## Motivation
 
 In sewing, problems often surface too late — parts that do not match once sewn, prototypes redone over small changes, and losing track of what changed and why. Loomit makes prototyping more intentional, explainable, and less wasteful.
+
+## Example
+
+Check that a garment's parts still sew together — before cutting any fabric:
+
+```console
+$ loom check my-blouse
+Loomit check: ok
+
+Compatibility:
+  [ok] connector-length body.armhole -> sleeve.armhole
+  [ok] requirement-range body.requires.sleeve.armhole.length_mm -> sleeve.armhole.length_mm
+  [ok] requirement-range sleeve.requires.body.armhole.length_mm -> body.armhole.length_mm
+```
+
+When a seam no longer matches, the mismatch is caught with an explanation, not just a red mark:
+
+```console
+$ loom check my-blouse            # exit code 1
+Loomit check: error
+
+Compatibility:
+  [error] connector-length body.armhole -> sleeve.armhole
+  [error] CONNECTOR_LENGTH_MISMATCH sleeve.armhole
+    コネクタの仕上がり線の長さが許容差を超えています。/ Connector finished seam lengths exceed the tolerance.
+    suggestion: body.armhole and sleeve.armhole differ by 11mm; allowed tolerance is 3mm.
+  …
+```
+
+Diagnostics are structured data — bilingual (Japanese / English) for humans, and available as `--format json` with a non-zero exit code for CI. `loom doctor` explains the same findings in full sentences. Every check also states what it does *not* guarantee; see [Core Concepts](docs/core-concepts.md).
 
 ## For People Who Make Clothes
 

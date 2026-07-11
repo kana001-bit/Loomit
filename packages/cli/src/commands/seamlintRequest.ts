@@ -86,7 +86,7 @@ export async function runSeamlintRequestCommand(
   }
 
   // loom add してからでないと意味がない状況(part が空/未登録の .val)を黙って ok にせず案内する。
-  // check / build と同じ readiness を通し、seamlint-request 単独でも同じ signal を返す。
+  // check / build と同じ readiness を通し、slnt request 単独でも同じ signal を返す。
   const readinessDiagnostics = await collectProjectReadinessDiagnostics(resolvedProjectResult.value);
   const result = createSeamlintGeometryRequest(resolvedProjectResult.value);
   const diagnostics = [...result.diagnostics, ...readinessDiagnostics];
@@ -102,7 +102,7 @@ export async function runSeamlintRequestCommand(
 
 export function formatSeamlintRequestHelp(): string {
   return [
-    "Usage: loom seamlint-request [path] [--format text|json]",
+    "Usage: loom slnt request [path] [--format text|json]",
     "",
     "Build a Loomit-to-Seamlint geometry request from the current project.",
     "",
