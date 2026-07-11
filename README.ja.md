@@ -14,9 +14,9 @@ Loomit は、型紙づくりに Git ライクなワークフローを持ち込�
 
 まだ初期段階・ローカルファースト。スコープは正直に書きます。
 
-- **今できること** — 互換 `check`、意味的 `diff`、fit / movement-test 診断、パーツ再利用（`fork`, `publish`, `library`）。
-- **Git に委譲（設計判断）** — snapshot・branch・履歴。Loomit の正本はテキスト（`loomit.yml`, `part.loom`）なので、プロジェクトは Git リポジトリの中で自然に動きます。バージョン管理を再実装せず、その上に**洋裁向けの層**を足す方針です。
-- **これから** — `loom diff` と Git revision のより緊密な統合、`fit` ルールの拡充、Loomit Studio（UI）。
+- **今できること** — 互換 `check`、意味的 `diff`（Git revision 間の差分も。例: `loom diff main..HEAD --part body`）、fit / movement-test 診断、パーツ再利用（`fork`, `publish`, `library`）。
+- **Git に委譲（設計判断）** — snapshot・branch・履歴。Loomit の正本はテキスト（`loomit.yml`, `part.loom`）なので、プロジェクトは Git リポジトリの中で自然に動きます。`loom diff` は任意の2版を**洋裁レベルの設計変更**として読み、バージョン管理は再実装しません。
+- **これから** — `fit` ルールの拡充、diff の説明力向上、Loomit Studio（UI）。
 
 ## Motivation
 
