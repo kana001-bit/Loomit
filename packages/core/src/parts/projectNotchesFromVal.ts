@@ -49,27 +49,49 @@ export async function projectNotchesFromValFile(
   });
 }
 
-// 設計判断: notch(合印)は縫い線上の「合わせ目印」であって幾何の点そのものではない。
-// Valentina の modeling では、縫い線を表す <path name="seam"> の <node> に passmark="1" が立つ。
-// ここではその passmark node を identity(seam＋node)＋param(縫い線上の正規化位置＋深さ/幅)へ射影する。
-// 位置は幾何計算せず、.val 側が持つ position 属性(0..1)をそのまま読む(read-only 射影)。
-// 深さ/幅は Seamly2D 方言の数値属性 notchLength → depth_mm(縫い代方向のクリップ量) / notchWidth → width_mm
-// (合印マーク幅)を射影する。Seamly2D 優先で実装し、Valentina 本家の enum(passmarkLine/passmarkAngle)は
-// 将来フォールバックとして足せるよう、寸法の読み取りを parsePositiveDimension に分離しておく。
+// 設計判断: notch(合印)は縫い線上の「合わせ目印」であって幾何の点そのものではない。射影は2方言を扱う:
+//
+//   方言1 Seamly2D — <draw>/<modeling>/<path name="seam"> の <node passmark="1" position=...>。
+//     縫い線上の正規化位置(position 0..1)を .val が持つので、identity(seam＋node)＋param(位置＋深さ/幅)へ射影。
+//     位置は幾何計算せず属性をそのまま読む(read-only 射影)。
+//
+//   方言2 実 Valentina — <draw>/<details>/<detail name>/<nodes> の <node passmark="true" passmarkLine=... passmarkAngle=...>。
+//     合印は縫い線ではなく detail(型紙ピース)に属し、position を持たない(位置は仕上がり線の弧長=幾何で、DXF
+//     export→Seamlint が測って解決する。Loomit は幾何を計算しない=A案)。よって identity は piece(detail名=DXF
+//     BLOCK名)＋種別(passmarkLine=V/T)＋detail内順序(order)で表し、position/seam_ref は持たない。「どの .val
+//     passmark = どの DXF notch か」の突き合わせは piece＋種別＋順序で効く
+//     (docs/work/tasks/feature-seamlint-dxf-passmark-projection-integration.md)。
+//
+// 2方言は格納場所が排他(実 Valentina の passmark は modeling の seam path に載らず、Seamly2D fixture は
+// <details> の passmark="true" node を持たない)ため、両スキャナを流しても二重計上しない。
 // 注: .val の寸法は pattern の <unit>(cm/mm/inch)依存。現状は既存の射影(darts 含む)と同様に単位変換せず、
-//     数値をそのまま mm として読む。実ファイル運用時の <unit>→mm 変換は、position/passmarkType が実 .val に
-//     存在しない合成属性である点(= 実フォーマット整合)と合わせた follow-up とする。
+//     数値をそのまま mm として読む。<unit>→mm 変換は follow-up とする。
 export function projectNotchesFromValText(
   source: string,
   options: {
     readonly filePath: string;
   }
 ): ValentinaNotchProjectionResult {
-  const drawBlocks = collectBlocks(source, "draw");
   const notches: Record<string, Notch> = {};
   const diagnostics: Diagnostic[] = [];
 
-  for (const drawBlock of drawBlocks) {
+  projectSeamPathNotches(source, options, notches, diagnostics);
+  projectDetailNotches(source, options, notches, diagnostics);
+
+  return {
+    notches,
+    diagnostics
+  };
+}
+
+// 方言1: Seamly2D の <modeling>/<path name="seam"> 上の passmark="1" node を射影する。
+function projectSeamPathNotches(
+  source: string,
+  options: { readonly filePath: string },
+  notches: Record<string, Notch>,
+  diagnostics: Diagnostic[]
+): void {
+  for (const drawBlock of collectBlocks(source, "draw")) {
     const drawName = drawBlock.attrs.name ?? "draw";
     const modelingBlock = collectFirstBlock(drawBlock.content, "modeling");
 
@@ -132,11 +154,94 @@ export function projectNotchesFromValText(
       });
     }
   }
+}
 
-  return {
-    notches,
-    diagnostics
-  };
+// 方言2: 実 Valentina の <draw>/<details>/<detail name>/<nodes> 上の passmark="true" node を射影する。
+// position を持たない identity-only の合印(piece＋種別＋向き＋順序)として lift する。位置(縫い線上の弧長)は
+// 幾何であり DXF export→Seamlint が解決するため、ここでは発明しない(A案)。
+// .val は複数の <draw> を持ちうるため、seam-path 走査(方言1)や listValDetails と同じく draw ごとに <details> を
+// 辿る。最初の <details> だけを見ると 2つ目以降の draw の合印を丸ごと落とす。
+//
+// 契約: detail(piece)名は .val 全体で一意でなければならない。piece 名は DXF export の BLOCK 名(=Seamlint への
+// 突き合わせ identity)であり、DXF の BLOCK 名は一意なので、同名 detail が複数あると「どの物理ピースの合印か」を
+// 特定できず handoff が成立しない。複数 draw を辿るようになったことで同名 detail が別 draw に現れると notch キー
+// (val:<piece>:notch:<node>)が衝突しうる。draw をキーに含めても piece が重複したままでは handoff が曖昧なので、
+// 損失回避にならない。よって最初の detail を採用し、以降の同名 detail は黙って上書きせず warning で知らせて捨てる。
+function projectDetailNotches(
+  source: string,
+  options: { readonly filePath: string },
+  notches: Record<string, Notch>,
+  diagnostics: Diagnostic[]
+): void {
+  const seenPieces = new Set<string>();
+
+  for (const drawBlock of collectBlocks(source, "draw")) {
+    const detailsBlock = collectFirstBlock(drawBlock.content, "details");
+
+    if (detailsBlock === undefined) {
+      continue;
+    }
+
+    for (const detail of collectBlocks(detailsBlock.content, "detail")) {
+      const pieceName = detail.attrs.name;
+
+      // detail 名は piece の identity(=DXF BLOCK名)。無名 detail は突き合わせに使えないため対象外。
+      if (pieceName === undefined || pieceName.trim() === "") {
+        continue;
+      }
+
+      // 同名 detail は契約違反(piece 名は一意)。最初を採用し、以降は warning を出して捨てる(黙って上書きしない)。
+      if (seenPieces.has(pieceName)) {
+        diagnostics.push(
+          createDiagnostic({
+            severity: "warning",
+            code: "PART_SOURCE_VAL_NOTCH_DUPLICATE_PIECE",
+            message:
+              "同じ名前の detail(型紙ピース)が複数見つかりました。piece 名は DXF BLOCK の identity として一意である必要があるため、最初の detail の合印だけを採用しました。 / Found more than one detail with the same name; piece names must be unique because they identify DXF blocks, so only the first detail's notches were kept.",
+            target: `${options.filePath}#${pieceName}`,
+            suggestion: [
+              "各型紙ピースの detail 名を .val 全体で一意にしてください。 / Give every pattern piece a detail name that is unique across the .val."
+            ]
+          })
+        );
+        continue;
+      }
+
+      seenPieces.add(pieceName);
+
+      const nodesBlock = collectFirstBlock(detail.content, "nodes");
+
+      if (nodesBlock === undefined) {
+        continue;
+      }
+
+      // order は同一 piece 内の passmark 並び順(contour/node 順で 0 始まり)。DXF は layer4=V/layer80=T の POINT を
+      // seam 順に持つので、同一 piece・同一種別の合印が複数あっても「piece＋種別＋この順序」で 1:1 対応づけられる。
+      // passmark でない contour node は DXF に対応点が無いため数に含めない。
+      let passmarkOrder = 0;
+
+      collectSelfClosingTags(nodesBlock.content, "node").forEach((node, index) => {
+        if (node.attrs.passmark !== "true") {
+          return;
+        }
+
+        // identity は idObject(実 Valentina では点参照として常に付く)を安定キーに。無い場合のみ
+        // detail 内の node 並び順を fallback キーにする。
+        const nodeKey = node.attrs.idObject ?? `node${index}`;
+        const order = passmarkOrder;
+        passmarkOrder += 1;
+
+        notches[`val:${pieceName}:notch:${nodeKey}`] = {
+          piece: pieceName,
+          order,
+          // passmarkLine(vMark/tMark 等)= 合印の種別。空なら種別なしとして省く(schema min 1)。
+          ...(node.attrs.passmarkLine ? { type: node.attrs.passmarkLine } : {}),
+          // passmarkAngle(straightforward 等)= 合印の向きの決め方。空なら省く。
+          ...(node.attrs.passmarkAngle ? { angle: node.attrs.passmarkAngle } : {})
+        };
+      });
+    }
+  }
 }
 
 // NOTE: loadProjectedPart は source.val を1回読みに集約したため、現状この関数の Loomit 内部消費者は無い。

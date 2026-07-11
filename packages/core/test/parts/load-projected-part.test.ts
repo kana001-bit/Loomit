@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { loadProjectedPart } from "../../src/index.js";
+import { loadProjectedPart, partSchema } from "../../src/index.js";
 
 const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../fixtures/load-files");
 
@@ -44,6 +44,25 @@ describe("loadProjectedPart", () => {
       }
     });
     expect(result.diagnostics).toEqual([]);
+  });
+
+  it("projects native Valentina detail passmarks as identity-only notches", async () => {
+    // 守る仕様(方言2): files.source が実 Valentina の .val のとき、<details>/<detail>/<nodes> の passmark="true"
+    //           node を piece(detail名=DXF BLOCK名)＋種別(vMark/tMark)＋向きの identity-only notch へ射影する。
+    //           position/seam_ref は持たない(位置は仕上がり線の幾何で下流=Seamlint が解決)。
+    const result = await loadProjectedPart(
+      join(fixturesRoot, "valid-part-projected-notches-valentina/part.loom")
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.ok ? result.value.notches : {}).toEqual({
+      "val:front:notch:169": { piece: "front", order: 0, type: "vMark", angle: "straightforward" },
+      "val:front:notch:141": { piece: "front", order: 1, type: "tMark", angle: "straightforward" }
+    });
+    expect(result.diagnostics).toEqual([]);
+
+    // 射影した identity-only notch が正本 schema を満たすことも固定する(A案の緩和が実方言で成立する保証)。
+    expect(() => partSchema.parse(result.ok ? result.value : undefined)).not.toThrow();
   });
 
   it("keeps inline darts without projecting darts from source.val", async () => {
