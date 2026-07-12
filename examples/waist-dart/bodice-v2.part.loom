@@ -1,0 +1,12 @@
+schema: loomit.part.v0
+name: bodice-front
+variant: fitted
+type: body
+darts:
+  waist_front:
+    apex_ref: val:point#bodice/Apex
+    width_mm: 35
+    intake_length_mm: 120
+    legs:
+      left_ref: val:point#bodice/Left
+      right_ref: val:point#bodice/Right
