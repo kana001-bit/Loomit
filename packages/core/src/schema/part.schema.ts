@@ -119,6 +119,12 @@ export const connectorSchema = z
     // identity なので Loomit 側に持つ(A案を守る)。数のみ(将来 order/type/位置へ拡張余地)。
     // 0 も有効値: 「合印の無い seam」と明示すれば、notch を持つ候補を弾いて識別子になる(nonnegative)。
     notch_count: z.number().int().nonnegative().optional(),
+    // 設計判断: side は「この縫い目で、このピースがどちらの unit(側)に属すか」のラベル。armhole のように
+    // 多パーツの端どうしを1本で縫う contiguous な縫い目で、参加ピースを2つの側(身頃側/袖側)にまとめる。
+    // side を宣言した縫い目は「参加ピース数が2を超えても over-pair でない(側がちょうど2なら健全)」と判定する。
+    // side 無しは従来どおり coincident(重ね・各参加が等長)として扱う。unit 所属は縫い目ごと(front は脇では
+    // piece 単位、armhole では身頃 unit)なので part ではなく connector に載せる。幾何(和の実測)は Seamlint。
+    side: z.string().min(1).optional(),
     // range id は connector 内で一意でなければならない。diff は id をキーに range を突き合わせるため、
     // 重複を許すと先行 range が上書きされ、変更が黙って取りこぼされる。正本 schema で禁止する。
     ranges: z
