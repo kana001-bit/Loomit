@@ -178,4 +178,65 @@ describe("formatDiffText", () => {
     expect(output).toContain("test case: arm-raise");
     expect(output).toContain("suggested_change: increase armhole ease");
   });
+
+  it("renders a feature-overlap reason as 'touches' with the tag it matched on", () => {
+    // 守る仕様: 今回の変更を名前で触る note は、regime レベルの「changed」より鋭い「touches ... (via タグ)」で出す。
+    const report: PartDiffReport = {
+      status: "changed",
+      decisionSummary: {
+        silhouetteImpact: "none",
+        volumeChange: "none",
+        connectionRisk: "review-needed",
+        prototypeNoteSignal: "related-notes-found"
+      },
+      recheckHints: {
+        partRole: { from: "body", to: "body", changed: false },
+        connectors: [],
+        requirements: []
+      },
+      diagnostics: [],
+      from: { name: "body", variant: "v1", type: "body" },
+      to: { name: "body", variant: "v2", type: "body" },
+      changes: [
+        {
+          feature: "connector",
+          kind: "modified",
+          id: "armhole",
+          before: { type: "armhole", length_mm: 469 },
+          after: { type: "armhole", length_mm: 472 },
+          changes: [{ field: "length_mm", before: 469, after: 472 }]
+        }
+      ],
+      relatedNotes: [
+        {
+          id: "note-2026-06-28-armhole",
+          date: "2026-06-28",
+          result: "failed",
+          issue: "armhole tight when raising arms",
+          appliesTo: ["fitted-armhole", "non-stretch-fabric"],
+          suggestedChange: [],
+          createsTestCase: "arm-raise",
+          reasons: [
+            {
+              kind: "applies-to-tags",
+              tags: ["fitted-armhole", "non-stretch-fabric"],
+              matchedOn: "both"
+            },
+            {
+              kind: "feature-overlap",
+              feature: "connector",
+              changedIds: ["armhole"],
+              matchedTags: ["fitted-armhole"]
+            }
+          ]
+        }
+      ]
+    };
+
+    const output = formatDiffText(report);
+
+    expect(output).toContain(
+      "why: applies-to tags [fitted-armhole, non-stretch-fabric] (both); touches connector [armhole] (via fitted-armhole)"
+    );
+  });
 });
