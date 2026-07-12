@@ -421,13 +421,12 @@ describe("runChecks", () => {
     });
   });
 
-  it("errors on a connector join shared by more than two parts", async () => {
-    // 守る仕様: connector は pairwise。3パーツ以上が同じ id を宣言すると comparePartConnectorLengths が
-    // 多対多に総当たり比較してしまうため、over-pair は error で止める。
+  it("does not flag a join shared by three parts with no side (a stacked/coincident seam)", async () => {
+    // 守る仕様(assembly (d)): 「1本の縫い目=2枚」とは限らない。side を宣言しない縫い目は coincident(重ね)として
+    // 3枚以上でも健全(旧 over-pair error は退役)。長さの実測は Seamlint に defer(pairwise 長さ比較は打ち切る)。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const body = getResolvedPart(resolvedProject, "body");
     const sleeve = getResolvedPart(resolvedProject, "sleeve");
-    // body・sleeve に加えて collar も同じ armhole を宣言 → 3パーツ共有の over-pair。
     const collar: ResolvedProjectPart = {
       role: "collar",
       filePath: sleeve.filePath,
@@ -447,30 +446,149 @@ describe("runChecks", () => {
       }
     });
 
-    expect(report.status).toBe("error");
-    expect(report.compatibility).toContainEqual({
-      status: "error",
-      from: "armhole",
-      to: "body, collar, sleeve",
-      rule: "connector-pairing",
-      actual: undefined,
-      expected: undefined,
-      diagnostics: [
-        {
-          severity: "error",
-          code: "CONNECTOR_JOIN_OVERPAIRED",
-          message:
-            "コネクタの縫い合わせ相手が2つのパーツを超えています。/ Connector join is shared by more than two parts.",
-          target: "armhole",
-          suggestion: [
-            'Connector "armhole" is declared by 3 parts (body, collar, sleeve); a connector joins exactly two parts. Give the extra seams distinct join ids.'
-          ]
-        }
-      ]
-    });
-    // over-pair な join は長さ比較を打ち切るので、任意の組の [ok] connector-length が混ざらない。
+    expect(report.compatibility).not.toContainEqual(
+      expect.objectContaining({ rule: "connector-pairing" })
+    );
+    // pairwise でない縫い目は長さ比較を打ち切る。
     expect(report.compatibility).not.toContainEqual(
       expect.objectContaining({ rule: "connector-length" })
+    );
+  });
+
+  it("errors when a seam declares more than two sides", async () => {
+    // 守る仕様(assembly (d)): 1本の縫い目は2つの unit(側)まで。3側は組めないので error。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = getResolvedPart(resolvedProject, "body");
+    const sleeve = getResolvedPart(resolvedProject, "sleeve");
+    const collar: ResolvedProjectPart = {
+      role: "collar",
+      filePath: sleeve.filePath,
+      part: {
+        ...sleeve.part,
+        type: "collar",
+        connectors: { armhole: { type: "armhole", side: "collar" } },
+        requires: {}
+      }
+    };
+    const report = runChecks({
+      ...resolvedProject,
+      parts: {
+        body: {
+          ...body,
+          part: { ...body.part, connectors: { armhole: { type: "armhole", side: "bodice" } }, requires: {} }
+        },
+        sleeve: {
+          ...sleeve,
+          part: { ...sleeve.part, connectors: { armhole: { type: "armhole", side: "sleeve" } }, requires: {} }
+        },
+        collar
+      }
+    });
+
+    expect(report.status).toBe("error");
+    expect(report.compatibility).toContainEqual(
+      expect.objectContaining({
+        rule: "connector-pairing",
+        diagnostics: [
+          expect.objectContaining({
+            severity: "error",
+            code: "CONNECTOR_JOIN_TOO_MANY_SIDES",
+            target: "armhole"
+          })
+        ]
+      })
+    );
+  });
+
+  it("warns when a contiguous side's parts are not joined into a unit by other seams", async () => {
+    // 守る仕様(narrow (B)): 「{body, collar} を bodice 側(unit)」と宣言したのに、その2枚を繋ぐ別の縫い目が無いと
+    // グラフ上 unit になっていない。辺は知らずグラフ到達性だけで warning(ブロックはしない)。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = getResolvedPart(resolvedProject, "body");
+    const sleeve = getResolvedPart(resolvedProject, "sleeve");
+    const collar: ResolvedProjectPart = {
+      role: "collar",
+      filePath: sleeve.filePath,
+      part: {
+        ...sleeve.part,
+        type: "collar",
+        connectors: { armhole: { type: "armhole", side: "bodice" } },
+        requires: {}
+      }
+    };
+    const report = runChecks({
+      ...resolvedProject,
+      parts: {
+        body: {
+          ...body,
+          part: { ...body.part, connectors: { armhole: { type: "armhole", side: "bodice" } }, requires: {} }
+        },
+        sleeve: {
+          ...sleeve,
+          part: { ...sleeve.part, connectors: { armhole: { type: "armhole", side: "sleeve" } }, requires: {} }
+        },
+        collar
+      }
+    });
+
+    // armhole は bodice={body, collar} / sleeve={sleeve} で 2 側=健全だが、bodice の2枚が他の縫い目で繋がってない。
+    expect(report.compatibility).toContainEqual(
+      expect.objectContaining({
+        rule: "connector-pairing",
+        diagnostics: [
+          expect.objectContaining({
+            severity: "warning",
+            code: "CONNECTOR_UNIT_DISCONNECTED",
+            target: "armhole.bodice"
+          })
+        ]
+      })
+    );
+  });
+
+  it("treats a contiguous two-side seam as healthy when each side is a connected unit", async () => {
+    // 守る仕様(assembly (d)): body+collar を bodice 側とし、別の縫い目(neckline)で互いに繋がっていれば unit として
+    // 健全。armhole は 2 側で OK・連結性も満たすので connector-pairing の結果を出さない。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = getResolvedPart(resolvedProject, "body");
+    const sleeve = getResolvedPart(resolvedProject, "sleeve");
+    const collar: ResolvedProjectPart = {
+      role: "collar",
+      filePath: sleeve.filePath,
+      part: {
+        ...sleeve.part,
+        type: "collar",
+        connectors: {
+          armhole: { type: "armhole", side: "bodice" },
+          neckline: { type: "neckline" }
+        },
+        requires: {}
+      }
+    };
+    const report = runChecks({
+      ...resolvedProject,
+      parts: {
+        body: {
+          ...body,
+          part: {
+            ...body.part,
+            connectors: {
+              armhole: { type: "armhole", side: "bodice" },
+              neckline: { type: "neckline" }
+            },
+            requires: {}
+          }
+        },
+        sleeve: {
+          ...sleeve,
+          part: { ...sleeve.part, connectors: { armhole: { type: "armhole", side: "sleeve" } }, requires: {} }
+        },
+        collar
+      }
+    });
+
+    expect(report.compatibility).not.toContainEqual(
+      expect.objectContaining({ rule: "connector-pairing" })
     );
   });
 

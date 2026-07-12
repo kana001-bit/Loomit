@@ -1,5 +1,6 @@
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { ResolvedProject, ResolvedProjectPart } from "../project/resolveParts.js";
+import { classifyJoinSides } from "../schema/connectorSides.js";
 import { resolveJoinedConnectorToleranceMm } from "../schema/connectorTolerance.js";
 import type { Connector, Requirement } from "../schema/part.schema.js";
 import { createCompatibilityResult } from "./checkReport.js";
@@ -27,13 +28,15 @@ export const requirementRangeRule: CompatibilityRule = {
   check: checkRequirements
 };
 
-// connector は2パーツを縫い合わせる cross-part join。長さや requirement を比べる前段として、
-// 「join が graph として健全か(相手が居るか・多重でないか)」は宣言だけで判定できる。これを独立ルールにする。
+// connector は縫い目に沿って縫い合う複数パーツの cross-part join(重ねの N 枚 / 連続する2側でよく、「2枚」に限らない)。
+// 長さや requirement を比べる前段として、「join が graph として健全か(相手が居るか・side が2側までか)」は宣言だけで
+// 判定できる。これを独立ルールにする。
 // 自己シーム(同一パーツ内の縫い目)は connector で表さない設計(幾何は Seamlint 側)なので、相手の居ない
 // open join は「相手待ち / id の取り違え / 自己シームの connector 誤登録」を促す warning にする。
 export const connectorPairingRule: CompatibilityRule = {
   id: "connector-pairing",
-  description: "Checks that each connector join pairs exactly two parts.",
+  description:
+    "Checks that each connector join is a sound assembly seam (has a mate; contiguous seams declare exactly two sides).",
   check: checkConnectorPairing
 };
 
@@ -61,14 +64,13 @@ export function runCompatibilityRules(
 function checkConnectorLengths(resolvedProject: ResolvedProject): readonly CompatibilityResult[] {
   const compatibility: CompatibilityResult[] = [];
   const parts = Object.values(resolvedProject.parts);
-  // 3パーツ以上が宣言する over-pair な join は縫い合わせ相手が一意に定まらない。connector-pairing が
-  // CONNECTOR_JOIN_OVERPAIRED で別途 error にするので、ここでは長さ比較そのものを打ち切る。
-  // 打ち切らないと任意の組の [ok] connector-length が混ざり、構造的に壊れた join の診断がミスリーディングになる。
-  const overPairedJoinIds = collectOverPairedJoinIds(resolvedProject);
+  // pairwise(2枚)でない縫い目は、宣言 length_mm の 2者比較では測れない。3枚以上の重ねや contiguous(和で合う)は
+  // 長さの実測を Seamlint に defer するので、ここでは長さ比較を打ち切る(任意の組の [ok] が混ざるのを防ぐ)。
+  const nonPairwiseJoinIds = collectNonPairwiseJoinIds(resolvedProject);
 
   for (const [fromIndex, fromPart] of parts.entries()) {
     for (const toPart of parts.slice(fromIndex + 1)) {
-      compatibility.push(...comparePartConnectorLengths(fromPart, toPart, overPairedJoinIds));
+      compatibility.push(...comparePartConnectorLengths(fromPart, toPart, nonPairwiseJoinIds));
     }
   }
 
@@ -78,7 +80,7 @@ function checkConnectorLengths(resolvedProject: ResolvedProject): readonly Compa
 function comparePartConnectorLengths(
   fromPart: ResolvedProjectPart,
   toPart: ResolvedProjectPart,
-  overPairedJoinIds: ReadonlySet<string>
+  nonPairwiseJoinIds: ReadonlySet<string>
 ): readonly CompatibilityResult[] {
   const compatibility: CompatibilityResult[] = [];
   const fromConnectors = fromPart.part.connectors ?? {};
@@ -91,8 +93,9 @@ function comparePartConnectorLengths(
       continue;
     }
 
-    // over-pair な join は相手が一意に定まらないため長さ比較しない(connector-pairing が error 化する)。
-    if (overPairedJoinIds.has(connectorId)) {
+    // pairwise でない縫い目(3枚以上の重ね / contiguous)は相手が一意に定まらないため pairwise 長さ比較しない
+    // (長さの実測は Seamlint に defer)。
+    if (nonPairwiseJoinIds.has(connectorId)) {
       continue;
     }
 
@@ -204,63 +207,194 @@ function buildUnmeasuredConnectorResult(input: {
   });
 }
 
-// join id ごとに、それを宣言しているパーツの role を集める。connector-pairing(健全性判定)と
-// connector-length(over-pair の比較打ち切り)の両方が使う共有ヘルパ。
-function collectRolesByJoinId(resolvedProject: ResolvedProject): Map<string, string[]> {
-  const rolesByJoinId = new Map<string, string[]>();
+// 1つの縫い目(join id)を宣言しているパーツ1件。role と、その縫い目でどちらの側(unit)に属すかの side。
+interface JoinDeclarer {
+  readonly role: string;
+  readonly side?: string;
+}
+
+// join id ごとに、宣言しているパーツ(role と side)を集める。connector-pairing(健全性判定)と
+// connector-length(pairwise 比較の対象外判定)の両方が使う共有ヘルパ。
+function collectDeclarersByJoinId(resolvedProject: ResolvedProject): Map<string, JoinDeclarer[]> {
+  const byJoinId = new Map<string, JoinDeclarer[]>();
 
   for (const part of Object.values(resolvedProject.parts)) {
-    for (const joinId of Object.keys(part.part.connectors ?? {})) {
-      const roles = rolesByJoinId.get(joinId) ?? [];
-      roles.push(part.role);
-      rolesByJoinId.set(joinId, roles);
+    for (const [joinId, connector] of Object.entries(part.part.connectors ?? {})) {
+      const declarers = byJoinId.get(joinId) ?? [];
+      declarers.push(
+        connector.side === undefined
+          ? { role: part.role }
+          : { role: part.role, side: connector.side }
+      );
+      byJoinId.set(joinId, declarers);
     }
   }
 
-  return rolesByJoinId;
+  return byJoinId;
 }
 
-// 3パーツ以上が宣言する over-pair な join id の集合。connector-length はこの join の長さ比較を打ち切る。
-function collectOverPairedJoinIds(resolvedProject: ResolvedProject): ReadonlySet<string> {
-  const overPaired = new Set<string>();
+// pairwise(2枚)の単純な縫い目でない join の集合。connector-length はこれらの pairwise 長さ比較を打ち切る。
+// 3枚以上の重ね(coincident N-ary)や、side を宣言した contiguous(和で合う)は、宣言 length_mm の pairwise
+// sanity では測れず、長さの実測は Seamlint に defer するため。
+function collectNonPairwiseJoinIds(resolvedProject: ResolvedProject): ReadonlySet<string> {
+  const nonPairwise = new Set<string>();
 
-  for (const [joinId, roles] of collectRolesByJoinId(resolvedProject)) {
-    if (roles.length >= 3) {
-      overPaired.add(joinId);
+  for (const [joinId, declarers] of collectDeclarersByJoinId(resolvedProject)) {
+    if (declarers.length >= 3 || declarers.some((declarer) => declarer.side !== undefined)) {
+      nonPairwise.add(joinId);
     }
   }
 
-  return overPaired;
+  return nonPairwise;
 }
 
-// 同じ join id を宣言しているパーツ数で graph の健全性を判定する。
-// N=2 は健全(縫い合わせペア)なので何も出さない。N=1 は相手待ちの open join(warning)、
-// N>=3 は connector が想定する pairwise を超えた over-pair(error)。over-pair な join は
-// connector-length 側でも長さ比較を打ち切る(相手が一意でないため)。出力は join id 昇順、role も昇順で安定させる。
+// 同じ join id を宣言しているパーツ構成で assembly グラフの健全性を判定する。
+// - 1枚: 相手待ちの open join(warning)。
+// - 2枚以上・side 宣言なし: coincident(重ね/pairwise)。健全(何も出さない)。「1本の縫い目=2枚」は限らず、
+//   見返し/裏地/ポケット重ねのように N 枚が1本に参加してよい。長さ(全部等長か)の実測は Seamlint に defer。
+// - side 宣言あり: contiguous(連続側・和で合う)。side がちょうど2なら健全＋各側の連結性を確認(warning のみ)。
+//   一部だけ side 宣言(mixed)や側が1つだけは不完全(warning)。側が3つ以上は 1本の縫い目に3 unit で error。
+// 旧 over-pair(3枚以上=error)は退役: あれは主に loom add の id 使い回し検出用で、それは add 側で対処済み。
+// 出力は join id 昇順、role/side も昇順で安定させる。
 function checkConnectorPairing(resolvedProject: ResolvedProject): readonly CompatibilityResult[] {
   const results: CompatibilityResult[] = [];
+  const declarersByJoinId = collectDeclarersByJoinId(resolvedProject);
 
-  for (const [joinId, roles] of [...collectRolesByJoinId(resolvedProject).entries()].sort(
-    ([a], [b]) => a.localeCompare(b)
+  for (const [joinId, declarers] of [...declarersByJoinId.entries()].sort(([a], [b]) =>
+    a.localeCompare(b)
   )) {
-    const sortedRoles = [...roles].sort((a, b) => a.localeCompare(b));
+    const sortedDeclarers = [...declarers].sort((a, b) => a.role.localeCompare(b.role));
 
-    if (sortedRoles.length === 1) {
-      const role = sortedRoles[0];
+    if (sortedDeclarers.length === 1) {
+      const only = sortedDeclarers[0];
 
-      if (role !== undefined) {
-        results.push(buildOpenJoinResult(joinId, role));
+      if (only !== undefined) {
+        results.push(buildOpenJoinResult(joinId, only.role));
       }
 
       continue;
     }
 
-    if (sortedRoles.length >= 3) {
-      results.push(buildOverpairedJoinResult(joinId, sortedRoles));
+    // side のトポロジは connectorSides の共有分類器で判定する(createSeamlintGeometryRequest と同じ真実を使い、
+    // 判定が drift しないようにする)。
+    const topology = classifyJoinSides(sortedDeclarers.map((declarer) => declarer.side));
+
+    // side なし = coincident(重ね)。参加が何枚でも over-pair ではない。健全(無出力)。
+    if (topology.kind === "coincident") {
+      continue;
     }
+
+    // contiguous(2側)は健全。各側のピースが他の縫い目で unit に繋がっているかだけ warning で見る(narrow B)。
+    if (topology.kind === "contiguous") {
+      results.push(...checkContiguousSideConnectivity(joinId, sortedDeclarers, declarersByJoinId));
+      continue;
+    }
+
+    // 側が3つ以上 = 1本の縫い目に3つの unit は組めない。error。
+    if (topology.kind === "too-many-sides") {
+      results.push(buildTooManySidesResult(joinId, topology.sides));
+      continue;
+    }
+
+    // 側の宣言が不完全(一部だけ side / 側が1種だけ)= warning。理由で文言を分ける。
+    results.push(
+      buildSidesIncompleteResult(
+        joinId,
+        sidesIncompleteSuggestion(joinId, sortedDeclarers, topology.reason)
+      )
+    );
   }
 
   return results;
+}
+
+// contiguous side ごとに、その側のピースが「当該 join 以外の縫い目」で互いに繋がっているかを見る。繋がって
+// いなければ「unit と宣言したのに繋ぐ縫い目が無い」warning(辺は知らずグラフ到達性だけで判定＝Loomit で言える範囲)。
+function checkContiguousSideConnectivity(
+  joinId: string,
+  declarers: readonly JoinDeclarer[],
+  declarersByJoinId: ReadonlyMap<string, readonly JoinDeclarer[]>
+): readonly CompatibilityResult[] {
+  const results: CompatibilityResult[] = [];
+  const rolesBySide = new Map<string, string[]>();
+
+  for (const declarer of declarers) {
+    if (declarer.side === undefined) {
+      continue;
+    }
+    const roles = rolesBySide.get(declarer.side) ?? [];
+    roles.push(declarer.role);
+    rolesBySide.set(declarer.side, roles);
+  }
+
+  for (const [side, roles] of [...rolesBySide.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    // 1枚の側は自分で unit なので繋ぐ相手が要らない。
+    if (roles.length <= 1) {
+      continue;
+    }
+    if (rolesConnectedWithinSide(roles, joinId, declarersByJoinId)) {
+      continue;
+    }
+    results.push(
+      buildUnitDisconnectedResult(
+        joinId,
+        side,
+        [...roles].sort((a, b) => a.localeCompare(b))
+      )
+    );
+  }
+
+  return results;
+}
+
+// side のピース同士が、当該 join を除く縫い目だけで互いにグラフ連結か。側内のピース間の縫い目だけを辿る
+// (相手側 unit を経由した見かけの連結を数えないよう、side に属す role 同士のリンクに限る)。
+function rolesConnectedWithinSide(
+  sideRoles: readonly string[],
+  excludeJoinId: string,
+  declarersByJoinId: ReadonlyMap<string, readonly JoinDeclarer[]>
+): boolean {
+  const sideSet = new Set(sideRoles);
+  const adjacency = new Map<string, Set<string>>();
+  const link = (from: string, to: string): void => {
+    const neighbors = adjacency.get(from) ?? new Set<string>();
+    neighbors.add(to);
+    adjacency.set(from, neighbors);
+  };
+
+  for (const [otherJoinId, otherDeclarers] of declarersByJoinId) {
+    if (otherJoinId === excludeJoinId) {
+      continue;
+    }
+    const roles = otherDeclarers
+      .map((declarer) => declarer.role)
+      .filter((role) => sideSet.has(role));
+    for (const from of roles) {
+      for (const to of roles) {
+        if (from !== to) {
+          link(from, to);
+        }
+      }
+    }
+  }
+
+  const start = sideRoles[0];
+  if (start === undefined) {
+    return true;
+  }
+  const seen = new Set<string>([start]);
+  const queue: string[] = [start];
+  while (queue.length > 0) {
+    const current = queue.shift() as string;
+    for (const neighbor of adjacency.get(current) ?? []) {
+      if (!seen.has(neighbor)) {
+        seen.add(neighbor);
+        queue.push(neighbor);
+      }
+    }
+  }
+
+  return sideRoles.every((role) => seen.has(role));
 }
 
 function buildOpenJoinResult(joinId: string, role: string): CompatibilityResult {
@@ -285,23 +419,81 @@ function buildOpenJoinResult(joinId: string, role: string): CompatibilityResult 
   });
 }
 
-function buildOverpairedJoinResult(
+// 不完全な side 宣言の直し方文言。mixed(一部だけ side)と one-side(側が1種だけ)で分ける。
+function sidesIncompleteSuggestion(
   joinId: string,
-  roles: readonly string[]
-): CompatibilityResult {
+  declarers: readonly JoinDeclarer[],
+  reason: "mixed" | "one-side"
+): string {
+  if (reason === "mixed") {
+    const missing = declarers.filter((declarer) => declarer.side === undefined).map((declarer) => declarer.role);
+    return `Parts ${missing.join(", ")} declare "${joinId}" without a side; give every part on a contiguous seam a side, or drop side on all to treat it as a stacked seam.`;
+  }
+  const side = declarers.find((declarer) => declarer.side !== undefined)?.side ?? "";
+  return `Connector "${joinId}" declares only one side ("${side}"); a contiguous seam joins two sides. Declare the mating side, or remove side to treat it as a stacked seam.`;
+}
+
+// contiguous な縫い目の側の宣言が不完全(一部だけ side / 側が1つだけ)なときの warning。
+function buildSidesIncompleteResult(joinId: string, suggestion: string): CompatibilityResult {
   return createCompatibilityResult({
     from: joinId,
-    to: roles.join(", "),
+    to: "(sides incomplete)",
+    rule: "connector-pairing",
+    diagnostics: [
+      createDiagnostic({
+        severity: "warning",
+        code: "CONNECTOR_JOIN_SIDES_INCOMPLETE",
+        message:
+          "contiguous な縫い目の側の宣言が不完全です。/ Contiguous seam has an incomplete set of sides.",
+        target: joinId,
+        suggestion: [suggestion]
+      })
+    ]
+  });
+}
+
+// 1本の縫い目に3つ以上の側が宣言されたときの error(1本の縫い目は2つの unit までしか組めない)。
+function buildTooManySidesResult(joinId: string, sides: readonly string[]): CompatibilityResult {
+  return createCompatibilityResult({
+    from: joinId,
+    to: sides.join(", "),
     rule: "connector-pairing",
     diagnostics: [
       createDiagnostic({
         severity: "error",
-        code: "CONNECTOR_JOIN_OVERPAIRED",
+        code: "CONNECTOR_JOIN_TOO_MANY_SIDES",
         message:
-          "コネクタの縫い合わせ相手が2つのパーツを超えています。/ Connector join is shared by more than two parts.",
+          "1本の縫い目が3つ以上の側を繋いでいます。/ A seam joins more than two sides.",
         target: joinId,
         suggestion: [
-          `Connector "${joinId}" is declared by ${roles.length} parts (${roles.join(", ")}); a connector joins exactly two parts. Give the extra seams distinct join ids.`
+          `Connector "${joinId}" declares ${sides.length} sides (${sides.join(", ")}); a seam joins exactly two sides. Use distinct connector ids for separate seams, or regroup the parts into two sides.`
+        ]
+      })
+    ]
+  });
+}
+
+// 「unit と宣言した側」のピースが他の縫い目で繋がっていないときの warning(narrow なグラフ連結性検査)。
+function buildUnitDisconnectedResult(
+  joinId: string,
+  side: string,
+  roles: readonly string[]
+): CompatibilityResult {
+  const target = `${joinId}.${side}`;
+
+  return createCompatibilityResult({
+    from: target,
+    to: roles.join(", "),
+    rule: "connector-pairing",
+    diagnostics: [
+      createDiagnostic({
+        severity: "warning",
+        code: "CONNECTOR_UNIT_DISCONNECTED",
+        message:
+          "unit と宣言した側のピースが、他の縫い目で繋がっていません。/ Parts grouped as one side are not joined into a unit by other seams.",
+        target,
+        suggestion: [
+          `Side "${side}" of connector "${joinId}" groups ${roles.join(", ")} as one unit, but they are not connected by other seams. Declare the seams that join them, or split them across connectors.`
         ]
       })
     ]
