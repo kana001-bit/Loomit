@@ -244,6 +244,57 @@ describe("loom connect", () => {
     }
   });
 
+  it("rejects two roles that resolve to the same part.loom and writes nothing", async () => {
+    // loomit.yml の parts で2つの role が同じファイルを指す(schema は値の重複を禁止しない)。物理パーツは1つ
+    // なので connect は成功に見せかけず弾く(同じファイルを2度書くだけで「2パーツを縫った」ことにならない)。
+    const root = await mkdtemp(join(tmpdir(), "loomit-connect-samefile-"));
+    const err: string[] = [];
+
+    try {
+      await writeFile(
+        join(root, "loomit.yml"),
+        [
+          "schema: loomit.project.v0",
+          "name: connect-samefile",
+          "garment: knickers",
+          "parts:",
+          "  front: ./parts/front/part.loom",
+          "  back: ./parts/front/part.loom"
+        ].join("\n"),
+        "utf8"
+      );
+      await mkdir(join(root, "parts", "front"), { recursive: true });
+      await writeFile(
+        join(root, "parts", "front", "part.loom"),
+        [
+          "schema: loomit.part.v0",
+          "name: front",
+          "variant: v1",
+          "type: body",
+          "files:",
+          "  source: cycling_knickers.val",
+          "  piece: front"
+        ].join("\n"),
+        "utf8"
+      );
+
+      const code = await runConnectCommand(["front", "back", "--as", "outseam"], {
+        cwd: root,
+        stdout: () => {},
+        stderr: (text) => err.push(text)
+      });
+
+      expect(code).toBe(1);
+      expect(err.join("")).toContain("CONNECT_SAME_FILE");
+      // 共有ファイルには何も書かれない(部分適用なし)。
+      expect(await readFile(join(root, "parts/front/part.loom"), "utf8")).not.toContain(
+        "connectors"
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("returns a usage error when --as is missing", async () => {
     const root = await makeProject();
     const err: string[] = [];

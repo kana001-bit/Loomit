@@ -130,6 +130,27 @@ export async function connectParts(
     };
   }
 
+  // role 名が違っても、両 role が同じ part.loom に解決される(loomit.yml の parts で値が重複。project schema は
+  // 値の一意を要求しない)なら、物理パーツは1つ。このまま進むと同じファイルを2度書くだけで「2パーツを縫った」
+  // 結果にならないのに成功扱いになる。connector は異なる2パーツを繋ぐものなので、file 同一性で明示的に弾く。
+  // (roleA === roleB は上で弾いているが、別名で同一ファイルを指すケースはそこを通り抜ける。)
+  if (filePathA === filePathB) {
+    return {
+      ok: false,
+      diagnostics: [
+        createDiagnostic({
+          severity: "error",
+          code: "CONNECT_SAME_FILE",
+          message: `Roles "${options.roleA}" and "${options.roleB}" resolve to the same part.loom, so they are one physical part; a connector joins two distinct parts.`,
+          target: filePathA,
+          suggestion: [
+            "Point each role at its own part.loom in loomit.yml, or connect two different parts."
+          ]
+        })
+      ]
+    };
+  }
+
   // 片側だけ書いて対を崩さないよう、両パーツを先に読み・検証してから書き込む。どちらかの load/検証で失敗したら
   // 何も書かない(部分適用しない)。
   const sideA = await prepareSide(filePathA, options.roleA, options.id, options.pathRefA);
