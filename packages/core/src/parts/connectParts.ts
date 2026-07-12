@@ -1,3 +1,5 @@
+import { stat } from "node:fs/promises";
+
 import { stringify } from "yaml";
 
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
@@ -133,8 +135,10 @@ export async function connectParts(
   // role 名が違っても、両 role が同じ part.loom に解決される(loomit.yml の parts で値が重複。project schema は
   // 値の一意を要求しない)なら、物理パーツは1つ。このまま進むと同じファイルを2度書くだけで「2パーツを縫った」
   // 結果にならないのに成功扱いになる。connector は異なる2パーツを繋ぐものなので、file 同一性で明示的に弾く。
-  // (roleA === roleB は上で弾いているが、別名で同一ファイルを指すケースはそこを通り抜ける。)
-  if (filePathA === filePathB) {
+  // (roleA === roleB は上で弾いているが、別名で同一ファイルを指すケースはそこを通り抜ける。)判定は文字列一致
+  // だけでなく dev+ino(ファイルの実 identity)で行い、case-insensitive FS(Windows/macOS の Front vs front)や
+  // symlink/hardlink 跨ぎの重複も拾う。
+  if (await isSamePhysicalFile(filePathA, filePathB)) {
     return {
       ok: false,
       diagnostics: [
@@ -314,6 +318,27 @@ async function prepareSide(
     value: { part, originalText: rawResult.value, pathRef, hasGeometrySource },
     diagnostics: []
   };
+}
+
+// 2つのパスが同じ物理ファイルを指すか。まず文字列一致(I/O なしの速い道・未作成でも成立)を見て、違えば
+// dev+ino で突き合わせる。これで case-insensitive FS(Windows/macOS の Front vs front)や symlink/hardlink 跨ぎの
+// 同一実ファイルも拾える。どちらかが stat できない(未作成など)ときは「同一でない」とみなし、後続の prepareSide に
+// 本来の read エラーを出させる(存在しないことを「同一ファイル」で覆い隠さない)。ino が取れない FS(0)では
+// 別ファイルを誤って同一扱いしないよう、ino が非0のときだけ dev+ino 一致を同一と判定する(安全側=誤検出を避ける)。
+async function isSamePhysicalFile(pathA: string, pathB: string): Promise<boolean> {
+  if (pathA === pathB) {
+    return true;
+  }
+
+  try {
+    const [a, b] = await Promise.all([
+      stat(pathA, { bigint: true }),
+      stat(pathB, { bigint: true })
+    ]);
+    return a.ino !== 0n && a.dev === b.dev && a.ino === b.ino;
+  } catch {
+    return false;
+  }
 }
 
 // 既存 part に connector を1つ足した新しい Part を返す(元は破壊しない)。type/path_ref/notch_count のうち
