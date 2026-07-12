@@ -406,13 +406,20 @@ describe("diffParts", () => {
     const report = diffParts(from, to, { prototypeNotes });
 
     expect(report.relatedNotes).toHaveLength(1);
+    // 変更 notch "armhole_match" は note タグ "fitted-armhole" と "armhole" で重なるので、regime レベルの
+    // changed-feature ではなく、より鋭い feature-overlap 理由になる(この note は今回動かした合印の話)。
     expect(report.relatedNotes[0]?.reasons).toEqual([
       {
         kind: "applies-to-tags",
         tags: ["fitted-armhole"],
         matchedOn: "both"
       },
-      { kind: "changed-feature", feature: "notch", changedIds: ["armhole_match"] }
+      {
+        kind: "feature-overlap",
+        feature: "notch",
+        changedIds: ["armhole_match"],
+        matchedTags: ["fitted-armhole"]
+      }
     ]);
     expect(report.decisionSummary.prototypeNoteSignal).toBe("related-notes-found");
   });
@@ -823,9 +830,10 @@ describe("diffParts", () => {
     expect(report.decisionSummary.prototypeNoteSignal).toBe("none");
   });
 
-  it("records changed-feature reasons per feature category and which revision matched", () => {
-    // 守る仕様: 変わったフィーチャは種別ごと(dart→connector→requirement 順・id 昇順)に理由化し、
-    // from にしか無いタグで一致した場合は matchedOn=from を残す。
+  it("prefers feature-overlap reasons over regime changed-feature when the change touches the note's tags", () => {
+    // 守る仕様: 変更 connector "armhole" / requirement "sleeve.armhole.length_mm" は note タグ
+    // "fitted-armhole" と "armhole" で重なるので feature-overlap 理由になり(種別ごと・id 昇順)、
+    // regime レベルの changed-feature は載せない。from にしか無いタグで一致したときは matchedOn=from を残す。
     const from = createBodyPart({
       tags: ["fitted-armhole", "non-stretch-fabric"],
       connectors: {
@@ -872,16 +880,160 @@ describe("diffParts", () => {
             tags: ["fitted-armhole", "non-stretch-fabric"],
             matchedOn: "from"
           },
-          { kind: "changed-feature", feature: "connector", changedIds: ["armhole"] },
           {
-            kind: "changed-feature",
+            kind: "feature-overlap",
+            feature: "connector",
+            changedIds: ["armhole"],
+            matchedTags: ["fitted-armhole"]
+          },
+          {
+            kind: "feature-overlap",
             feature: "requirement",
-            changedIds: ["sleeve.armhole.length_mm"]
+            changedIds: ["sleeve.armhole.length_mm"],
+            matchedTags: ["fitted-armhole"]
           }
         ]
       }
     ]);
   });
+  it("ranks a note that touches the change above a regime-only match", () => {
+    // 守る仕様: 今回の変更(connector "armhole")を名前で触る note を上位に、regime だけ一致する note を下位に
+    // 並べ替える(定義順では regime-only が先でも、feature-overlap を持つ note を持ち上げる)。
+    const from = createBodyPart({
+      tags: ["fitted-armhole", "non-stretch-fabric"],
+      connectors: { armhole: { type: "armhole", length_mm: 469 } }
+    });
+    const to = createBodyPart({
+      tags: ["fitted-armhole", "non-stretch-fabric"],
+      connectors: { armhole: { type: "armhole", length_mm: 472 } }
+    });
+    const prototypeNotes: PrototypeNotes = {
+      schema: "loomit.prototype_notes.v0",
+      notes: [
+        {
+          id: "note-regime-only",
+          date: "2026-07-02",
+          result: "failed",
+          issue: "fabric relaxed over time",
+          creates_test_case: "relax",
+          applies_to: ["non-stretch-fabric"]
+        },
+        {
+          id: "note-touches-armhole",
+          date: "2026-07-03",
+          result: "failed",
+          issue: "armhole tight when raising arms",
+          creates_test_case: "arm-raise",
+          applies_to: ["fitted-armhole", "non-stretch-fabric"]
+        }
+      ]
+    };
+
+    const report = diffParts(from, to, { prototypeNotes });
+
+    expect(report.relatedNotes.map((note) => note.id)).toEqual([
+      "note-touches-armhole",
+      "note-regime-only"
+    ]);
+    expect(report.relatedNotes[0]?.reasons).toContainEqual({
+      kind: "feature-overlap",
+      feature: "connector",
+      changedIds: ["armhole"],
+      matchedTags: ["fitted-armhole"]
+    });
+    // 重なりが無い regime-only note は従来どおり changed-feature 理由のまま(後退なし)。
+    expect(report.relatedNotes[1]?.reasons).toContainEqual({
+      kind: "changed-feature",
+      feature: "connector",
+      changedIds: ["armhole"]
+    });
+  });
+
+  it("cites only the tag that justified each feature in per-feature overlap reasons", () => {
+    // 守る仕様: 別々のタグで重なった複数フィーチャがあるとき、各 feature-overlap 理由は自分を結び付けたタグ
+    // だけを matchedTags に載せる(全タグを載せて「どのタグでこのフィーチャが関係したのか」を誤解させない)。
+    const from = createBodyPart({
+      tags: ["fitted-armhole", "gathered-waist"],
+      connectors: { armhole: { type: "armhole", length_mm: 469 } }
+    });
+    const to = createBodyPart({
+      tags: ["fitted-armhole", "gathered-waist"],
+      connectors: { armhole: { type: "armhole", length_mm: 472 } },
+      darts: {
+        waist_dart: {
+          apex_ref: "val:point#bodice/Apex",
+          width_mm: 20,
+          legs: { left_ref: "val:point#bodice/L", right_ref: "val:point#bodice/R" }
+        }
+      }
+    });
+    const prototypeNotes: PrototypeNotes = {
+      schema: "loomit.prototype_notes.v0",
+      notes: [
+        {
+          id: "note-both",
+          date: "2026-07-04",
+          result: "failed",
+          issue: "armhole and waist both off",
+          creates_test_case: "fit-check",
+          applies_to: ["fitted-armhole", "gathered-waist"]
+        }
+      ]
+    };
+
+    const report = diffParts(from, to, { prototypeNotes });
+
+    const reasons = report.relatedNotes[0]?.reasons ?? [];
+    // connector は "armhole" トークンで fitted-armhole にだけ、dart は "waist" で gathered-waist にだけ結び付く。
+    expect(reasons).toContainEqual({
+      kind: "feature-overlap",
+      feature: "dart",
+      changedIds: ["waist_dart"],
+      matchedTags: ["gathered-waist"]
+    });
+    expect(reasons).toContainEqual({
+      kind: "feature-overlap",
+      feature: "connector",
+      changedIds: ["armhole"],
+      matchedTags: ["fitted-armhole"]
+    });
+  });
+
+  it("matches non-ASCII (Japanese) tags and feature ids for overlap", () => {
+    // 守る仕様: applies_to / connector id は任意の非空文字列を許すので、日本語のタグ/id でも feature-overlap が
+    // 発火する(トークン化を ASCII 英数だけに絞らない)。
+    const from = createBodyPart({
+      tags: ["袖ぐり"],
+      connectors: { 袖ぐり: { type: "袖ぐり", length_mm: 469 } }
+    });
+    const to = createBodyPart({
+      tags: ["袖ぐり"],
+      connectors: { 袖ぐり: { type: "袖ぐり", length_mm: 472 } }
+    });
+    const prototypeNotes: PrototypeNotes = {
+      schema: "loomit.prototype_notes.v0",
+      notes: [
+        {
+          id: "note-sode",
+          date: "2026-07-05",
+          result: "failed",
+          issue: "袖ぐりがきつい",
+          creates_test_case: "arm-raise",
+          applies_to: ["袖ぐり"]
+        }
+      ]
+    };
+
+    const report = diffParts(from, to, { prototypeNotes });
+
+    expect(report.relatedNotes[0]?.reasons).toContainEqual({
+      kind: "feature-overlap",
+      feature: "connector",
+      changedIds: ["袖ぐり"],
+      matchedTags: ["袖ぐり"]
+    });
+  });
+
   it("does not match prototype notes from tags split across revisions", () => {
     // 守る仕様: prototype note は from/to のタグ和集合ではなく、どちらか一方の revision で成立した場合だけ related に載せる。
     const from = createBodyPart({

@@ -83,6 +83,11 @@ function formatNoteReasons(reasons: PartDiffReport["relatedNotes"][number]["reas
       return `applies-to tags [${reason.tags.join(", ")}] (${reason.matchedOn})`;
     }
 
+    if (reason.kind === "feature-overlap") {
+      // regime レベルの一致より鋭い「この note は今回変えたこの部位の話」。どのタグで結び付いたかも見せる。
+      return `touches ${reason.feature} [${reason.changedIds.join(", ")}] (via ${reason.matchedTags.join(", ")})`;
+    }
+
     return `changed ${reason.feature} [${reason.changedIds.join(", ")}]`;
   });
 
