@@ -19,6 +19,9 @@ export type PartDiffConnectorRecheckKind =
   | "length"
   | "tolerance"
   | "path"
+  // side = 縫い目でこのピースがどちらの unit(側)かの変更。stacked↔contiguous や側の付け替えは assembly の
+  // 意味を変える(check の役割② / Seamlint の和の測定に効く)ので、recheck hint に載せる。
+  | "side"
   | "gathered-range"
   | "range";
 
@@ -503,6 +506,8 @@ function diffConnectorFields(before: Connector, after: Connector): readonly Part
   pushFieldChange(changes, "length_mm", before.length_mm, after.length_mm);
   pushFieldChange(changes, "tolerance_mm", before.tolerance_mm, after.tolerance_mm);
   pushFieldChange(changes, "path_ref", before.path_ref, after.path_ref);
+  // side(所属 unit)の変更は assembly の意味を変えるので diff に載せる(recheck hint は side kind に写す)。
+  pushFieldChange(changes, "side", before.side, after.side);
 
   const beforeRanges = indexConnectorRanges(before);
   const afterRanges = indexConnectorRanges(after);
@@ -1105,6 +1110,7 @@ const connectorRecheckKindOrder: readonly PartDiffConnectorRecheckKind[] = [
   "length",
   "tolerance",
   "path",
+  "side",
   "gathered-range",
   "range"
 ];
@@ -1144,6 +1150,11 @@ function buildConnectorRecheckKinds(
 
     if (fieldChange.field === "path_ref") {
       kinds.add("path");
+      continue;
+    }
+
+    if (fieldChange.field === "side") {
+      kinds.add("side");
       continue;
     }
   }
