@@ -1,0 +1,6 @@
+schema: loomit.project.v0
+name: blouse
+garment: blouse
+parts:
+  body: ./parts/body/part.loom
+  sleeve: ./parts/sleeve/part.loom

@@ -1,0 +1,21 @@
+schema: loomit.part.v0
+name: basic-body
+variant: blouse-base
+type: body
+status: active
+measurements:
+  finished:
+    bust_width_mm: 480
+    waist_width_mm: 370
+connectors:
+  armhole:
+    type: armhole
+    length_mm: 469
+    tolerance_mm: 3
+requires:
+  sleeve.armhole.length_mm:
+    min: 466
+    max: 472
+tags:
+  - blouse
+  - fitted-armhole
