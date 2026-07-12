@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { link, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -287,6 +287,63 @@ describe("loom connect", () => {
       expect(code).toBe(1);
       expect(err.join("")).toContain("CONNECT_SAME_FILE");
       // 共有ファイルには何も書かれない(部分適用なし)。
+      expect(await readFile(join(root, "parts/front/part.loom"), "utf8")).not.toContain(
+        "connectors"
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects two roles whose different paths are the same physical file", async () => {
+    // 別パス(parts/front と parts/back)を hardlink で同一 inode にする。文字列一致では拾えないが、dev+ino で
+    // 同一実ファイルと判定して弾く(= case-insensitive FS の Front vs front と同じ穴を、OS 非依存に再現する)。
+    const root = await mkdtemp(join(tmpdir(), "loomit-connect-hardlink-"));
+    const err: string[] = [];
+
+    try {
+      await writeFile(
+        join(root, "loomit.yml"),
+        [
+          "schema: loomit.project.v0",
+          "name: connect-hardlink",
+          "garment: knickers",
+          "parts:",
+          "  front: ./parts/front/part.loom",
+          "  back: ./parts/back/part.loom"
+        ].join("\n"),
+        "utf8"
+      );
+      await mkdir(join(root, "parts", "front"), { recursive: true });
+      await mkdir(join(root, "parts", "back"), { recursive: true });
+      await writeFile(
+        join(root, "parts", "front", "part.loom"),
+        [
+          "schema: loomit.part.v0",
+          "name: front",
+          "variant: v1",
+          "type: body",
+          "files:",
+          "  source: cycling_knickers.val",
+          "  piece: front"
+        ].join("\n"),
+        "utf8"
+      );
+      // parts/back/part.loom を parts/front/part.loom への hardlink にする(別パスだが同一の実ファイル)。
+      await link(
+        join(root, "parts", "front", "part.loom"),
+        join(root, "parts", "back", "part.loom")
+      );
+
+      const code = await runConnectCommand(["front", "back", "--as", "outseam"], {
+        cwd: root,
+        stdout: () => {},
+        stderr: (text) => err.push(text)
+      });
+
+      expect(code).toBe(1);
+      expect(err.join("")).toContain("CONNECT_SAME_FILE");
+      // 実ファイルには何も書かれない(部分適用なし)。
       expect(await readFile(join(root, "parts/front/part.loom"), "utf8")).not.toContain(
         "connectors"
       );
