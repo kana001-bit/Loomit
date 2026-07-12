@@ -113,6 +113,12 @@ export const connectorSchema = z
     length_mm: z.number().finite().nonnegative().optional(),
     tolerance_mm: z.number().finite().nonnegative().optional(),
     path_ref: z.string().min(1).optional(),
+    // 設計判断: seam-edge の per-connector 識別子=この seam の合印(notch)数。path_ref が BLOCK 全体を指すとき、
+    // Seamlint は同じ2 BLOCK を共有する複数 seam(front↔back の outseam/inseam 等)を「辺ごとの notch 署名」で
+    // 区別する。notch の位置測定は Seamlint(幾何)だが、「どの seam に合印が何個あるか」は型紙の知識=人が宣言する
+    // identity なので Loomit 側に持つ(A案を守る)。数のみ(将来 order/type/位置へ拡張余地)。
+    // 0 も有効値: 「合印の無い seam」と明示すれば、notch を持つ候補を弾いて識別子になる(nonnegative)。
+    notch_count: z.number().int().nonnegative().optional(),
     // 設計判断: side は「この縫い目で、このピースがどちらの unit(側)に属すか」のラベル。armhole のように
     // 多パーツの端どうしを1本で縫う contiguous な縫い目で、参加ピースを2つの側(身頃側/袖側)にまとめる。
     // side を宣言した縫い目は「参加ピース数が2を超えても over-pair でない(側がちょうど2なら健全)」と判定する。

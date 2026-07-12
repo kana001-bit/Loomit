@@ -124,6 +124,217 @@ describe("createSeamlintGeometryRequest", () => {
     ]);
   });
 
+  it("emits a DXF-addressed seam-edge request for a cross-part seam when both sides are DXF", async () => {
+    // 守る仕様: 両側 DXF なら seam-edge を出す(BLOCK 外周を丸ごと比べる sewn-seam の ceiling を外す)。
+    // かつ、その request が「消費可能な形」であること ── format=dxf で、path_ref が BLOCK(detail)名で
+    // addressing されること(Seamlint は DXF を BLOCK 名で引く)を固定する。DXF に切り替えたら path_ref は
+    // SVG パス id(svg:path#...)ではなく BLOCK 名にするのが正しい authoring なので、そのケースをそのまま組む。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = resolvedProject.parts.body;
+    const sleeve = resolvedProject.parts.sleeve;
+
+    if (body === undefined || sleeve === undefined) {
+      throw new Error("Expected valid-blouse to resolve body and sleeve parts.");
+    }
+
+    const bodyArmhole = body.part.connectors?.armhole;
+    const sleeveArmhole = sleeve.part.connectors?.armhole;
+    if (bodyArmhole === undefined || sleeveArmhole === undefined) {
+      throw new Error("Expected valid-blouse body/sleeve to declare an armhole connector.");
+    }
+
+    const withDxfGeometry: ResolvedProject = {
+      ...resolvedProject,
+      parts: {
+        ...resolvedProject.parts,
+        body: {
+          ...body,
+          part: {
+            ...body.part,
+            files: { ...body.part.files, geometry: "body.dxf" },
+            connectors: { ...body.part.connectors, armhole: { ...bodyArmhole, path_ref: "body-armhole" } }
+          }
+        },
+        sleeve: {
+          ...sleeve,
+          part: {
+            ...sleeve.part,
+            files: { ...sleeve.part.files, geometry: "sleeve.dxf" },
+            connectors: { ...sleeve.part.connectors, armhole: { ...sleeveArmhole, path_ref: "sleeve-armhole" } }
+          }
+        }
+      }
+    };
+
+    const result = createSeamlintGeometryRequest(withDxfGeometry);
+
+    expect(result.diagnostics).toEqual([]);
+    // request の形が Seamlint に消費可能: format=dxf、path_ref は BLOCK 名で addressing される(svg transport なし)。
+    expect(result.request.parts).toEqual([
+      expect.objectContaining({ partId: "body", format: "dxf", paths: { armhole: "body-armhole" } }),
+      expect.objectContaining({ partId: "sleeve", format: "dxf", paths: { armhole: "sleeve-armhole" } })
+    ]);
+    expect(result.request.checks).toEqual([
+      {
+        id: "seam-edge:body.armhole/sleeve.armhole",
+        kind: "seam-edge",
+        from: { partId: "body", pathRef: "armhole", connectorId: "armhole" },
+        to: { partId: "sleeve", pathRef: "armhole", connectorId: "armhole" },
+        tolerance: { length_mm: 3 }
+      }
+    ]);
+  });
+
+  it("carries the connector notch_count as the seam-edge edgeSignature", async () => {
+    // 守る仕様: connector が notch_count を宣言したら、seam-edge check に edgeSignature.notchCount として渡す
+    // (Seamlint が同じ2 BLOCK を共有する複数 seam を per-connector で判別する識別子)。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = resolvedProject.parts.body;
+    const sleeve = resolvedProject.parts.sleeve;
+    const bodyArmhole = body?.part.connectors?.armhole;
+    const sleeveArmhole = sleeve?.part.connectors?.armhole;
+    if (body === undefined || sleeve === undefined || bodyArmhole === undefined || sleeveArmhole === undefined) {
+      throw new Error("Expected valid-blouse body/sleeve armhole connectors.");
+    }
+
+    const signed: ResolvedProject = {
+      ...resolvedProject,
+      parts: {
+        ...resolvedProject.parts,
+        body: {
+          ...body,
+          part: {
+            ...body.part,
+            files: { ...body.part.files, geometry: "body.dxf" },
+            connectors: { ...body.part.connectors, armhole: { ...bodyArmhole, path_ref: "body-armhole", notch_count: 2 } }
+          }
+        },
+        sleeve: {
+          ...sleeve,
+          part: {
+            ...sleeve.part,
+            files: { ...sleeve.part.files, geometry: "sleeve.dxf" },
+            connectors: { ...sleeve.part.connectors, armhole: { ...sleeveArmhole, path_ref: "sleeve-armhole", notch_count: 2 } }
+          }
+        }
+      }
+    };
+
+    const result = createSeamlintGeometryRequest(signed);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.request.checks[0]?.kind).toBe("seam-edge");
+    expect(result.request.checks[0]?.edgeSignature).toEqual({ notchCount: 2 });
+  });
+
+  it("carries notch_count 0 as a signature (a seam declared to have no notches)", async () => {
+    // 守る仕様: 0 も有効な署名（合印の無い seam を明示して notched 候補と区別する）。schema は nonnegative。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = resolvedProject.parts.body;
+    const sleeve = resolvedProject.parts.sleeve;
+    const bodyArmhole = body?.part.connectors?.armhole;
+    const sleeveArmhole = sleeve?.part.connectors?.armhole;
+    if (body === undefined || sleeve === undefined || bodyArmhole === undefined || sleeveArmhole === undefined) {
+      throw new Error("Expected valid-blouse body/sleeve armhole connectors.");
+    }
+
+    const zero: ResolvedProject = {
+      ...resolvedProject,
+      parts: {
+        ...resolvedProject.parts,
+        body: {
+          ...body,
+          part: {
+            ...body.part,
+            files: { ...body.part.files, geometry: "body.dxf" },
+            connectors: { ...body.part.connectors, armhole: { ...bodyArmhole, path_ref: "body-armhole", notch_count: 0 } }
+          }
+        },
+        sleeve: {
+          ...sleeve,
+          part: {
+            ...sleeve.part,
+            files: { ...sleeve.part.files, geometry: "sleeve.dxf" },
+            connectors: { ...sleeve.part.connectors, armhole: { ...sleeveArmhole, path_ref: "sleeve-armhole", notch_count: 0 } }
+          }
+        }
+      }
+    };
+
+    const result = createSeamlintGeometryRequest(zero);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.request.checks[0]?.edgeSignature).toEqual({ notchCount: 0 });
+  });
+
+  it("warns and omits the signature when the two sides declare different notch_count", async () => {
+    // 守る仕様: 同じ seam は両ピースで同じ合印数のはず。食い違ったら誤った辺に解決させないよう署名を付けず warning。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = resolvedProject.parts.body;
+    const sleeve = resolvedProject.parts.sleeve;
+    const bodyArmhole = body?.part.connectors?.armhole;
+    const sleeveArmhole = sleeve?.part.connectors?.armhole;
+    if (body === undefined || sleeve === undefined || bodyArmhole === undefined || sleeveArmhole === undefined) {
+      throw new Error("Expected valid-blouse body/sleeve armhole connectors.");
+    }
+
+    const mismatched: ResolvedProject = {
+      ...resolvedProject,
+      parts: {
+        ...resolvedProject.parts,
+        body: {
+          ...body,
+          part: {
+            ...body.part,
+            files: { ...body.part.files, geometry: "body.dxf" },
+            connectors: { ...body.part.connectors, armhole: { ...bodyArmhole, path_ref: "body-armhole", notch_count: 2 } }
+          }
+        },
+        sleeve: {
+          ...sleeve,
+          part: {
+            ...sleeve.part,
+            files: { ...sleeve.part.files, geometry: "sleeve.dxf" },
+            connectors: { ...sleeve.part.connectors, armhole: { ...sleeveArmhole, path_ref: "sleeve-armhole", notch_count: 3 } }
+          }
+        }
+      }
+    };
+
+    const result = createSeamlintGeometryRequest(mismatched);
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain(
+      "SEAMLINT_CONNECTOR_NOTCH_COUNT_MISMATCH"
+    );
+    expect(result.request.checks[0]?.kind).toBe("seam-edge");
+    expect(result.request.checks[0]?.edgeSignature).toBeUndefined();
+  });
+
+  it("keeps sewn-seam when either side is SVG (structuralEdges is DXF-only)", async () => {
+    // 守る仕様: 片側でも SVG なら辺分割できないので、seam-edge に上げず従来の whole-path sewn-seam に倒す。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = resolvedProject.parts.body;
+
+    if (body === undefined) {
+      throw new Error("Expected valid-blouse to resolve the body part.");
+    }
+
+    // body だけ DXF、sleeve は既定の SVG preview のまま。
+    const mixed: ResolvedProject = {
+      ...resolvedProject,
+      parts: {
+        ...resolvedProject.parts,
+        body: { ...body, part: { ...body.part, files: { ...body.part.files, geometry: "body.dxf" } } }
+      }
+    };
+
+    const result = createSeamlintGeometryRequest(mixed);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.request.checks[0]?.kind).toBe("sewn-seam");
+    expect(result.request.checks[0]?.id).toBe("sewn-seam:body.armhole/sleeve.armhole");
+  });
+
   it("warns and skips connectors that still lack path_ref or preview geometry", async () => {
     // 守る仕様: connector.path_ref 欠落と files.geometry/files.preview エントリ欠落は別々の warning として surface する。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
