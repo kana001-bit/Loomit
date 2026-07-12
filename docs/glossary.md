@@ -217,6 +217,26 @@ Version のような新旧関係は持たず、異なる設計案として扱わ
 
 ---
 
+## Snapshot（スナップショット）
+
+ある時点の Project state を丸ごと固定したもの。`loom diff` が比較する「変更前 / 変更後」の一方の状態を指す。
+
+Loomit は snapshot を**自前で保存しない**。保存・履歴・branch・merge は Git に委譲し（[design-history.md](design-history.md) の「diff だけでは足りない」の章）、Loomit は2つの snapshot を意味的に読む（diff）ことに集中する。したがって `loom commit` / `loom snapshot` のような保存コマンドは持たない。snapshot を作るのは `git commit`（Valentina / エディタで保存したうえで）。
+
+---
+
+## Revision（リビジョン）
+
+snapshot を指すための handle（参照）。history を Git に委譲する方針（leaning A）では、revision は素の **Git revision**（`main`, `HEAD`, または SHA）そのもので、**1つ**の snapshot を指す。`loom diff <rev> --part <role>` の `<rev>` がこれで、指定された revision の snapshot を一時 worktree に展開して diff する。
+
+- **snapshot** = 状態そのもの（概念）
+- **revision** = その snapshot を addressing する Git 上の参照（1つの版）
+- `main..HEAD` は revision **ではなく**、2つの revision の**範囲**（＝比較する2つの snapshot の指定）。`loom diff main..HEAD` はこの2版を比べる。Loomit は `..` を自前で分割し、両辺をそれぞれ1つの revision として解決する。
+
+Loomit は revision を独自に採番せず、Git の revision をそのまま使う。
+
+---
+
 # Related Projects
 
 ## Valentina
