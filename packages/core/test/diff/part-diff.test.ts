@@ -687,6 +687,32 @@ describe("diffParts", () => {
     });
   });
 
+  it("tracks a connector side change in the diff and recheck hints", () => {
+    // 守る仕様(assembly (d)): side(所属 unit)の変更は stacked↔contiguous / 側の付け替え = assembly の意味を変える。
+    // 同じ id のフィールド変更として diff に載り、recheck hint の changeKinds に "side" として写る。
+    const before = createBodyPart({
+      connectors: { armhole: { type: "armhole", side: "bodice" } }
+    });
+    const after = createBodyPart({
+      connectors: { armhole: { type: "armhole", side: "sleeve" } }
+    });
+
+    const report = diffParts(before, after);
+
+    expect(report.changes).toContainEqual(
+      expect.objectContaining({
+        feature: "connector",
+        kind: "modified",
+        id: "armhole",
+        changes: expect.arrayContaining([{ field: "side", before: "bodice", after: "sleeve" }])
+      })
+    );
+    expect(report.recheckHints.connectors).toContainEqual({
+      id: "armhole",
+      changeKinds: ["side"]
+    });
+  });
+
   it("surfaces input diagnostics and reflects them in status", () => {
     // 守る仕様: 前段(part load / darts 射影)で出た診断を diff レポートに載せ、status にも反映する。
     const part = createBodyPart({});

@@ -100,7 +100,7 @@ describe("doctor report", () => {
       code: "CONNECTOR_JOIN_OPEN",
       title: "Connector Join Open",
       detail:
-        "body.armhole is declared by only one part, so it has no seam partner to sew to. A connector joins two parts: add the mating part, fix a mismatched join id, or move an internal (self) seam to Seamlint.",
+        "body.armhole is declared by only one part, so it has no seam partner to sew to. A seam is sewn by at least two parts: add the mating part, fix a mismatched join id, or move an internal (self) seam to Seamlint.",
       target: "body.armhole",
       suggestion: [
         'Add a part that also declares connector "armhole", fix a mismatched id, or if "armhole" is an internal (self) seam, check it in Seamlint instead of declaring a connector.'
@@ -113,44 +113,50 @@ describe("doctor report", () => {
     });
   });
 
-  it("explains an over-paired connector join", async () => {
+  it("explains a seam that declares more than two sides", async () => {
     const project = await resolveFixture("valid-blouse");
     const body = getPart(project, "body");
     const sleeve = getPart(project, "sleeve");
-    // body・sleeve に加えて collar も armhole を宣言 → 3パーツ共有の over-pair。
+    // body=bodice / sleeve=sleeve / collar=collar の3側を armhole が繋ぐ → 1本の縫い目に3 unit で error。
     const collar: ResolvedProjectPart = {
       role: "collar",
       filePath: sleeve.filePath,
       part: {
         ...sleeve.part,
         type: "collar",
-        connectors: { armhole: { type: "armhole", length_mm: 470, tolerance_mm: 3 } },
+        connectors: { armhole: { type: "armhole", side: "collar" } },
         requires: {}
       }
     };
     const checkReport = runChecks({
       ...project,
       parts: {
-        body: { ...body, part: { ...body.part, requires: {} } },
-        sleeve: { ...sleeve, part: { ...sleeve.part, requires: {} } },
+        body: {
+          ...body,
+          part: { ...body.part, connectors: { armhole: { type: "armhole", side: "bodice" } }, requires: {} }
+        },
+        sleeve: {
+          ...sleeve,
+          part: { ...sleeve.part, connectors: { armhole: { type: "armhole", side: "sleeve" } }, requires: {} }
+        },
         collar
       }
     });
     const report = createDoctorReport(checkReport);
 
     expect(report.findings).toContainEqual({
-      code: "CONNECTOR_JOIN_OVERPAIRED",
-      title: "Connector Join Overpaired",
+      code: "CONNECTOR_JOIN_TOO_MANY_SIDES",
+      title: "Connector Join Too Many Sides",
       detail:
-        'Connector "armhole" is declared by more than two parts (body, collar, sleeve). A connector joins exactly two parts, so Loomit cannot tell which pair should be sewn; give the extra seams distinct join ids.',
+        'Connector "armhole" declares more than two sides (bodice, collar, sleeve). A seam joins exactly two sides (units); use distinct connector ids for separate seams, or regroup the parts into two sides.',
       target: "armhole",
       suggestion: [
-        'Connector "armhole" is declared by 3 parts (body, collar, sleeve); a connector joins exactly two parts. Give the extra seams distinct join ids.'
+        'Connector "armhole" declares 3 sides (bodice, collar, sleeve); a seam joins exactly two sides. Use distinct connector ids for separate seams, or regroup the parts into two sides.'
       ],
       source: {
         rule: "connector-pairing",
         from: "armhole",
-        to: "body, collar, sleeve"
+        to: "bodice, collar, sleeve"
       }
     });
   });
