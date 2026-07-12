@@ -312,7 +312,18 @@ diff が読めるようになって、もう一段深い欠落に気づいた。
 
 大事だったのは、**Loomit が再実装すべきなのは version control ではない**という線引きだ。branch engine を自前で持つより先に要るのは、「diff は snapshot 間の比較である」と整理を明示し、Loomit は洋裁の意味論（意味的 diff・互換・再利用）に集中することだった。history storage は枯れた Git に預ける。
 
-そのため、Loomit 単体で `commit` / `branch` を持つところまでは、あえて設計を閉じていない。次に自然なのは自前の revision store ではなく、`loom diff` を Git の2 revision と結びつけて呼べるようにする方向だと考えている。
+そのため、Loomit 単体で `commit` / `branch` を持つところまでは、あえて設計を閉じていない。次に自然なのは自前の revision store ではなく、`loom diff` を Git の2 revision と結びつけて呼べるようにする方向だと考えていた。
+
+### そして「revision と結びつけて呼ぶ」は実装された
+
+その次の一歩は、想像していたより素直に踏めた。files が正本で、各 snapshot が Git の commit として既にそこにあるなら、Loomit がすることは「その版のファイルを一時 worktree に展開して、いつもの意味差分に流す」だけでよかった。自前の revision store も、snapshot 保存形式も要らない。`loom diff main..HEAD --part body` は2つの snapshot を比べ、`loom diff <rev> --part body` はその snapshot と作業ツリー（未コミットの変更）を比べる。git shell は CLI 層に閉じ、core の diff は pure なまま保った。
+
+ここで用語も固定した。leaning A の下では、区別すべきは2語で足りる。
+
+- **snapshot** = ある時点の Project state そのもの（概念）。`loom diff` が比較する状態。
+- **revision** = その snapshot を addressing する **Git の revision**（`main` / `HEAD` / SHA）。1つの版＝1つの snapshot で、`loom diff <rev>` が受け取る handle。`main..HEAD` はこの revision を2つ並べた**範囲**（＝2 snapshot の比較）で、revision そのものではない。
+
+**commit** は Git の動詞のまま残し、`loom commit` / `loom snapshot` という Loomit 独自の保存 verb は作らない。snapshot を作る・履歴を持つのは Git の仕事で、Loomit は snapshot を**読む**（意味的 diff）ことに集中する。この「Loomit は独自の revision surface を持たない」は、Studio を作るときに UI の一貫性のために revision を見せたくなったら再検討する余地として残すが、CLI/core の v0 では持たない。定義は [glossary.md](glossary.md) の Snapshot / Revision を正とする。
 
 ## 「1本の縫い目 = 2枚」が崩れた — assembly は tree だった
 
@@ -354,7 +365,8 @@ connector(seam)を、**作者が宣言する参加エッジの集合**として�
 - prototype note の関連度をどう絞るか
 - Seamlint と Truer の境界をどう保つか
 - `connector-length` を宣言メタの sanity として残すか、Seamlint への check request に畳むか
-- `loom diff` を Git の revision とどう結びつけて呼ぶか（history は Git 委譲を基本にする）
+
+（`loom diff` を Git の revision とどう結びつけて呼ぶかは、上の「そして『revision と結びつけて呼ぶ』は実装された」で決着した — snapshot=概念 / revision=Git handle、独自 revision surface は持たない。）
 
 ただ、少なくとも今は、何が不足していて、なぜその不足が問題なのかを以前よりはっきり言えるようになった。
 
