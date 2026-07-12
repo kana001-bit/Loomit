@@ -166,6 +166,16 @@ export type PartDiffPrototypeNoteReason =
       // 今回の差分で変わったフィーチャ種別。note を読み返す価値がある「変化があった」根拠。
       readonly feature: PartDiffChange["feature"];
       readonly changedIds: readonly string[];
+    }
+  | {
+      // regime レベルの一致(applies-to-tags)より狭く、「この note は今回変えた“この部位”の話らしい」を指す。
+      // 変わったフィーチャの id と note の applies_to タグを、名前トークンで突き合わせて重なったものだけを載せる
+      // (例: 変更 connector "armhole" ↔ タグ "fitted-armhole" は "armhole" で重なる)。当てずっぽうにせず、
+      // どのタグで結び付いたか(matchedTags)を残す。この理由を持つ note は related の上位に並べる。
+      readonly kind: "feature-overlap";
+      readonly feature: PartDiffChange["feature"];
+      readonly changedIds: readonly string[];
+      readonly matchedTags: readonly string[];
     };
 
 export interface PartDiffPrototypeNoteMatch {
@@ -674,10 +684,10 @@ function findRelatedPrototypeNotes(
 
   const fromTags = new Set(from.tags ?? []);
   const toTags = new Set(to.tags ?? []);
-  // 変わったフィーチャの根拠は差分ごとに同一なので、note ごとに作り直さず一度だけ組み立てて共有する。
+  // regime レベルの「何が変わったか」は差分ごとに同一なので一度だけ組み立て、重なりが無い note で共有する。
   const changedFeatureReasons = buildChangedFeatureReasons(changes);
 
-  return prototypeNotes.notes.flatMap((note) => {
+  const matches = prototypeNotes.notes.flatMap((note) => {
     // applies_to と creates_test_case は schema 上つねに対で存在するが、片方でも欠ける不正データは
     // related に載せない(createsTestCase を確定した string として扱えるようにする防御)。
     if (note.applies_to === undefined || note.creates_test_case === undefined) {
@@ -697,6 +707,15 @@ function findRelatedPrototypeNotes(
       matchedOn: matchesFrom && matchesTo ? "both" : matchesFrom ? "from" : "to"
     };
 
+    // この note の applies_to タグと、変わったフィーチャの id を名前トークンで突き合わせる。重なりが
+    // あれば「この note は今回変えたこの部位の話」= feature-overlap を出し、regime レベルの changed-feature は
+    // 冗長なので載せない(狭い方が説明として鋭い)。重なりが無ければ従来どおり changed-feature を残す。
+    const featureOverlapReasons = buildFeatureOverlapReasons(changes, note.applies_to);
+    const reasons =
+      featureOverlapReasons.length > 0
+        ? [appliesToReason, ...featureOverlapReasons]
+        : [appliesToReason, ...changedFeatureReasons];
+
     return [
       {
         id: note.id,
@@ -706,10 +725,108 @@ function findRelatedPrototypeNotes(
         appliesTo: [...note.applies_to],
         suggestedChange: [...(note.suggested_change ?? [])],
         createsTestCase: note.creates_test_case,
-        reasons: [appliesToReason, ...changedFeatureReasons]
+        reasons
       }
     ];
   });
+
+  // 今回の変更を直接触る(feature-overlap がある)note を上位に、regime だけの一致を下位に並べる。
+  // 重み(重なった changed id の数)の降順・安定ソートで、同じ重みの note は定義順を保つ。
+  return [...matches].sort(
+    (left, right) => featureOverlapWeight(right) - featureOverlapWeight(left)
+  );
+}
+
+// related note の並び替え用の重み。feature-overlap 理由が結び付けた changed id の総数。0 なら regime のみ。
+function featureOverlapWeight(match: PartDiffPrototypeNoteMatch): number {
+  return match.reasons.reduce(
+    (sum, reason) => (reason.kind === "feature-overlap" ? sum + reason.changedIds.length : sum),
+    0
+  );
+}
+
+// 変わったフィーチャの id と note の applies_to タグを名前トークンで突き合わせ、重なったフィーチャを
+// feature-overlap 理由にする。トークンは英数の連なり単位(部分文字列ではない)なので、"armhole" は
+// "fitted-armhole" と重なるが "arm" では重ならない(誤検出を抑える)。matchedTags には結び付いたタグを残す。
+function buildFeatureOverlapReasons(
+  changes: readonly PartDiffChange[],
+  appliesTo: readonly string[]
+): readonly PartDiffPrototypeNoteReason[] {
+  const tagTokens = new Set(appliesTo.flatMap(tokenize));
+
+  if (tagTokens.size === 0) {
+    return [];
+  }
+
+  // フィーチャ種別ごとに、重なった changed id と「重なりを生んだトークン」を別々に貯める。matchedTags を
+  // 全フィーチャ共通で作ると、別のタグで重なった他フィーチャのタグまで各理由に載って誤解を招くため、
+  // トークンもフィーチャ単位で持ち、そのフィーチャを結び付けたタグだけを reason に載せる。
+  const overlapByFeature = new Map<
+    PartDiffChange["feature"],
+    { readonly ids: Set<string>; readonly tokens: Set<string> }
+  >();
+
+  for (const change of changes) {
+    const hitTokens = tokenize(change.id).filter((token) => tagTokens.has(token));
+
+    if (hitTokens.length === 0) {
+      continue;
+    }
+
+    const entry = overlapByFeature.get(change.feature) ?? {
+      ids: new Set<string>(),
+      tokens: new Set<string>()
+    };
+    entry.ids.add(change.id);
+    for (const token of hitTokens) {
+      entry.tokens.add(token);
+    }
+    overlapByFeature.set(change.feature, entry);
+  }
+
+  if (overlapByFeature.size === 0) {
+    return [];
+  }
+
+  const featureOrder: readonly PartDiffChange["feature"][] = [
+    "dart",
+    "notch",
+    "connector",
+    "requirement"
+  ];
+
+  return featureOrder.flatMap((feature) => {
+    const entry = overlapByFeature.get(feature);
+
+    if (entry === undefined) {
+      return [];
+    }
+
+    // このフィーチャの重なりを生んだトークンを含む note タグだけを matchedTags にする。
+    const matchedTags = [
+      ...new Set(
+        appliesTo.filter((tag) => tokenize(tag).some((token) => entry.tokens.has(token)))
+      )
+    ].sort();
+
+    return [
+      {
+        kind: "feature-overlap" as const,
+        feature,
+        changedIds: [...entry.ids].sort(),
+        matchedTags
+      }
+    ];
+  });
+}
+
+// 名前を「文字/数字の連なり」単位のトークンに割る(小文字化)。区切りは Unicode の非英数字なので、日本語など
+// 非 ASCII のタグ/id もトークンになる(schema は applies_to / connector id / requirement id に任意の非空文字列を
+// 許すため、ASCII だけに絞ると日本語入力で feature-overlap が黙って発火しなくなる)。部分文字列ではなく
+// トークン一致なので、"armhole" は "fitted-armhole" と重なるが "arm" では重ならない。
+// 例: "fitted-armhole" → ["fitted","armhole"]、"フィット-袖ぐり" → ["フィット","袖ぐり"]。
+function tokenize(value: string): string[] {
+  return value.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
 }
 
 // 差分で変わったフィーチャを種別ごとにまとめ、related note の「変化があった」根拠にする。
