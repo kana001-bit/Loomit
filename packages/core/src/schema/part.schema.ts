@@ -113,6 +113,12 @@ export const connectorSchema = z
     length_mm: z.number().finite().nonnegative().optional(),
     tolerance_mm: z.number().finite().nonnegative().optional(),
     path_ref: z.string().min(1).optional(),
+    // 設計判断: side は「この縫い目で、このピースがどちらの unit(側)に属すか」のラベル。armhole のように
+    // 多パーツの端どうしを1本で縫う contiguous な縫い目で、参加ピースを2つの側(身頃側/袖側)にまとめる。
+    // side を宣言した縫い目は「参加ピース数が2を超えても over-pair でない(側がちょうど2なら健全)」と判定する。
+    // side 無しは従来どおり coincident(重ね・各参加が等長)として扱う。unit 所属は縫い目ごと(front は脇では
+    // piece 単位、armhole では身頃 unit)なので part ではなく connector に載せる。幾何(和の実測)は Seamlint。
+    side: z.string().min(1).optional(),
     // range id は connector 内で一意でなければならない。diff は id をキーに range を突き合わせるため、
     // 重複を許すと先行 range が上書きされ、変更が黙って取りこぼされる。正本 schema で禁止する。
     ranges: z

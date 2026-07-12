@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import type { ResolvedProject, ResolvedProjectPart } from "../project/resolveParts.js";
+import { classifyJoinSides } from "../schema/connectorSides.js";
 import { resolveJoinedConnectorToleranceMm } from "../schema/connectorTolerance.js";
 import { indexConnectorRanges } from "../schema/connectorRanges.js";
 import type { IndexedConnectorRange } from "../schema/connectorRanges.js";
@@ -160,19 +161,57 @@ export function createSeamlintGeometryRequest(
       continue;
     }
 
+    // side のトポロジは connectorSides の共有分類器で判定する(connector-pairing と同じ真実を使い、slnt 単独実行
+    // でも loom check と食い違わないようにする)。不正なトポロジ(3側 / 不完全)は defer でなく本来の診断を出す。
+    const topology = classifyJoinSides(participants.map((participant) => participant.connector.side));
+
+    if (topology.kind === "too-many-sides") {
+      diagnostics.push(
+        createDiagnostic({
+          severity: "error",
+          code: "SEAMLINT_CONNECTOR_JOIN_TOO_MANY_SIDES",
+          message:
+            `Connector "${joinId}" declares ${topology.sides.length} sides (${topology.sides.join(", ")}); a seam joins exactly two sides, so Loomit cannot build a seam request for it.`,
+          target: joinId,
+          suggestion: [
+            `Use distinct connector ids for separate seams, or regroup the parts into two sides.`
+          ]
+        })
+      );
+      continue;
+    }
+
+    if (topology.kind === "sides-incomplete") {
+      diagnostics.push(
+        createDiagnostic({
+          severity: "warning",
+          code: "SEAMLINT_CONNECTOR_JOIN_SIDES_INCOMPLETE",
+          message:
+            `Connector "${joinId}" is a contiguous seam with an incomplete set of sides, so Loomit did not build a seam request for it.`,
+          target: joinId,
+          suggestion: [
+            `Give every participating part a side and declare both sides, or drop side to treat it as a stacked seam.`
+          ]
+        })
+      );
+      continue;
+    }
+
+    // ここまで来れば coincident(重ね)か contiguous(連続2側)= 正当なデザイン。3枚以上は pairwise の seam request を
+    // 作れないので、N-ary/和のジオメトリは Seamlint に defer する(assembly (d))。error ではなく先送りの warning。
     if (participants.length > 2) {
       const roles = participants
         .map((participant) => participant.part.role)
         .sort((left, right) => left.localeCompare(right));
       diagnostics.push(
         createDiagnostic({
-          severity: "error",
-          code: "SEAMLINT_CONNECTOR_JOIN_OVERPAIRED",
+          severity: "warning",
+          code: "SEAMLINT_CONNECTOR_SEAM_DEFERRED",
           message:
-            `Connector "${joinId}" is declared by ${roles.length} parts (${roles.join(", ")}), so Loomit cannot tell which two sides form the seam and skipped it.`,
+            `Connector "${joinId}" is declared by ${roles.length} parts (${roles.join(", ")}); Loomit only emits pairwise (two-part) seam requests for now, so its ${topology.kind === "contiguous" ? "contiguous" : "stacked"} geometry check is deferred.`,
           target: joinId,
           suggestion: [
-            `Give each seam a distinct connector id so "${joinId}" joins exactly two parts.`
+            `This is expected for stacked (facing/lining) or contiguous (armhole) seams; measuring their combined length is a future Seamlint step.`
           ]
         })
       );

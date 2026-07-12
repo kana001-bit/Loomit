@@ -82,11 +82,19 @@ function explainCompatibilityDiagnostic(
   }
 
   if (diagnostic.code === "CONNECTOR_JOIN_OPEN") {
-    return `${result.from} is declared by only one part, so it has no seam partner to sew to. A connector joins two parts: add the mating part, fix a mismatched join id, or move an internal (self) seam to Seamlint.`;
+    return `${result.from} is declared by only one part, so it has no seam partner to sew to. A seam is sewn by at least two parts: add the mating part, fix a mismatched join id, or move an internal (self) seam to Seamlint.`;
   }
 
-  if (diagnostic.code === "CONNECTOR_JOIN_OVERPAIRED") {
-    return `Connector "${result.from}" is declared by more than two parts (${result.to}). A connector joins exactly two parts, so Loomit cannot tell which pair should be sewn; give the extra seams distinct join ids.`;
+  if (diagnostic.code === "CONNECTOR_JOIN_TOO_MANY_SIDES") {
+    return `Connector "${result.from}" declares more than two sides (${result.to}). A seam joins exactly two sides (units); use distinct connector ids for separate seams, or regroup the parts into two sides.`;
+  }
+
+  if (diagnostic.code === "CONNECTOR_JOIN_SIDES_INCOMPLETE") {
+    return `Connector "${result.from}" is a contiguous seam with an incomplete set of sides. A contiguous seam joins two sides: give every participating part a side and declare the mating side, or drop side to treat it as a stacked seam.`;
+  }
+
+  if (diagnostic.code === "CONNECTOR_UNIT_DISCONNECTED") {
+    return `${result.from} groups ${result.to} as one unit, but those parts are not joined into a unit by other seams. Declare the seams that connect them, or split them across separate connectors.`;
   }
 
   return diagnostic.message;

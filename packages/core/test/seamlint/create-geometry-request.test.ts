@@ -565,7 +565,9 @@ describe("createSeamlintGeometryRequest", () => {
     ]);
   });
 
-  it("errors and skips a join id shared by three or more parts instead of dropping it silently", async () => {
+  it("defers (does not error on) a join id shared by three or more parts", async () => {
+    // 守る仕様(assembly (d)): 3枚以上が宣言する縫い目(重ね/contiguous)は正当なデザイン。Loomit は今 pairwise の
+    // seam request しか出せないので、N-ary/和のジオメトリは Seamlint に defer する ── error ではなく warning で先送り。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const sleeve = resolvedProject.parts.sleeve;
 
@@ -573,8 +575,8 @@ describe("createSeamlintGeometryRequest", () => {
       throw new Error("Expected valid-blouse to resolve the sleeve part.");
     }
 
-    // sleeve を複製した collar も armhole を宣言し、armhole を3パーツ共有の over-paired にする。
-    const withOverpairedJoin: ResolvedProject = {
+    // sleeve を複製した collar も armhole を宣言し、armhole を3パーツ共有にする。
+    const withSharedJoin: ResolvedProject = {
       ...resolvedProject,
       parts: {
         ...resolvedProject.parts,
@@ -586,16 +588,88 @@ describe("createSeamlintGeometryRequest", () => {
       }
     };
 
-    const result = createSeamlintGeometryRequest(withOverpairedJoin);
+    const result = createSeamlintGeometryRequest(withSharedJoin);
 
     expect(result.request.checks).toEqual([]);
     expect(result.diagnostics).toEqual([
       expect.objectContaining({
-        severity: "error",
-        code: "SEAMLINT_CONNECTOR_JOIN_OVERPAIRED",
+        severity: "warning",
+        code: "SEAMLINT_CONNECTOR_SEAM_DEFERRED",
         target: "armhole"
       })
     ]);
+  });
+
+  it("errors (not defers) on a seam that declares more than two sides", async () => {
+    // 守る仕様(P1): slnt 単独実行でも connector-pairing と同じ判定にする。3側は defer("expected")でなく error。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = resolvedProject.parts.body;
+    const sleeve = resolvedProject.parts.sleeve;
+    const bodyArmhole = body?.part.connectors?.armhole;
+    const sleeveArmhole = sleeve?.part.connectors?.armhole;
+    if (body === undefined || sleeve === undefined || bodyArmhole === undefined || sleeveArmhole === undefined) {
+      throw new Error("Expected valid-blouse body/sleeve armhole connectors.");
+    }
+
+    const withThreeSides: ResolvedProject = {
+      ...resolvedProject,
+      parts: {
+        body: { ...body, part: { ...body.part, connectors: { armhole: { ...bodyArmhole, side: "bodice" } } } },
+        sleeve: { ...sleeve, part: { ...sleeve.part, connectors: { armhole: { ...sleeveArmhole, side: "sleeve" } } } },
+        collar: {
+          ...sleeve,
+          role: "collar",
+          filePath: join(fixturesRoot, "valid-blouse/parts/collar/part.loom"),
+          part: { ...sleeve.part, connectors: { armhole: { ...sleeveArmhole, side: "collar" } } }
+        }
+      }
+    };
+
+    const result = createSeamlintGeometryRequest(withThreeSides);
+
+    expect(result.request.checks).toEqual([]);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        severity: "error",
+        code: "SEAMLINT_CONNECTOR_JOIN_TOO_MANY_SIDES",
+        target: "armhole"
+      })
+    );
+    expect(result.diagnostics).not.toContainEqual(
+      expect.objectContaining({ code: "SEAMLINT_CONNECTOR_SEAM_DEFERRED" })
+    );
+  });
+
+  it("warns (not defers) when a seam's side declarations are incomplete", async () => {
+    // 守る仕様(P1): 一部だけ side 宣言(mixed)は defer でなく SIDES_INCOMPLETE warning(connector-pairing と同じ)。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = resolvedProject.parts.body;
+    const sleeve = resolvedProject.parts.sleeve;
+    const bodyArmhole = body?.part.connectors?.armhole;
+    const sleeveArmhole = sleeve?.part.connectors?.armhole;
+    if (body === undefined || sleeve === undefined || bodyArmhole === undefined || sleeveArmhole === undefined) {
+      throw new Error("Expected valid-blouse body/sleeve armhole connectors.");
+    }
+
+    // body は side:bodice、sleeve は side なし → mixed(どちらの側か決まらないピースがある)。
+    const mixedSides: ResolvedProject = {
+      ...resolvedProject,
+      parts: {
+        ...resolvedProject.parts,
+        body: { ...body, part: { ...body.part, connectors: { armhole: { ...bodyArmhole, side: "bodice" } } } }
+      }
+    };
+
+    const result = createSeamlintGeometryRequest(mixedSides);
+
+    expect(result.request.checks).toEqual([]);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        severity: "warning",
+        code: "SEAMLINT_CONNECTOR_JOIN_SIDES_INCOMPLETE",
+        target: "armhole"
+      })
+    );
   });
 
   it("warns and skips a connector id declared by only one part (open join)", async () => {
