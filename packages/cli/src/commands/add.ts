@@ -149,16 +149,44 @@ export async function runAddCommand(
     return await addAllPiecesWithDefaults(options, valPath, detectedPieces, defaultName);
   }
 
-  // 縫い合わせ相手の候補として、プロジェクト内の他パーツが既に宣言している join(connector id)を集める。
-  // 取得できなくても add は続行する(最初のパーツや壊れた project では単に候補なしで新規命名に倒す)。
-  // 1回の add で複数ピースを足すときは、直前に足したピースの join も候補に加えていく(mergeExistingJoins)。
-  let existingJoins = await collectExistingJoins(options.cwd);
+  // 縫い合わせ相手の候補(join)は遅延ロードする。連結を1つも足さない add(「Add a seam connector?」に N)では
+  // project を一切読まないよう、既存パーツが宣言済みの join(ベース)を初回に必要になったときだけ1回読んで
+  // キャッシュする。取得できなくても add は続行する(最初のパーツや壊れた project では候補なしで新規命名に倒す)。
+  // それに、この add で続けて足したピースの join を重ねて返す(直前のピースが宣言した join を選べる)。
+  let baseJoins: readonly ExistingJoin[] | undefined;
+  const addedJoins = new Map<string, { type: string; roles: string[] }>();
+
+  const listJoins = async (): Promise<readonly ExistingJoin[]> => {
+    if (baseJoins === undefined) {
+      baseJoins = await collectExistingJoins(options.cwd);
+    }
+
+    return combineJoins(baseJoins, addedJoins);
+  };
+
+  // 足したばかりの part の connectors を候補に反映する(次のピースが同じ join(id と type)を選べるように)。
+  // ベース未ロードでも記録だけしておき、次に候補が必要になったとき combineJoins でベースと合流する。
+  const recordAddedJoins = (
+    role: string,
+    connectors: Readonly<Record<string, { readonly type: string }>> | undefined
+  ): void => {
+    for (const [joinId, connector] of Object.entries(connectors ?? {})) {
+      const entry = addedJoins.get(joinId);
+
+      if (entry === undefined) {
+        addedJoins.set(joinId, { type: connector.type, roles: [role] });
+      } else if (!entry.roles.includes(role)) {
+        entry.roles.push(role);
+      }
+    }
+  };
+
   const prompter = options.prompter ?? createReadlinePrompter();
 
   try {
     // detail を割り出せない .val(draw も detail も無い等)は、旧来の 1 .val=1 part 経路に倒す。
     if (detectedPieces.length === 0) {
-      const answers = await collectAnswers(prompter, options.stdout, defaultName, existingJoins);
+      const answers = await collectAnswers(prompter, options.stdout, defaultName, listJoins);
       return await addOnePart(options, valPath, answers);
     }
 
@@ -175,7 +203,7 @@ export async function runAddCommand(
         prompter,
         options.stdout,
         piece.pieceName,
-        existingJoins
+        listJoins
       );
       const result = await addPartToProject({
         projectPath: options.cwd,
@@ -197,11 +225,7 @@ export async function runAddCommand(
       options.stdout(formatAddSuccess(result.value));
       // 足したばかりの part の connectors を候補に反映し、次のピースが同じ join(id と type)を選んで
       // 繋げられるようにする。
-      existingJoins = mergeExistingJoins(
-        existingJoins,
-        result.value.role,
-        result.value.part.connectors
-      );
+      recordAddedJoins(result.value.role, result.value.part.connectors);
     }
 
     return 0;
@@ -592,12 +616,12 @@ async function collectAnswers(
   prompter: Prompter,
   notify: (text: string) => void,
   defaultName: string,
-  existingJoins: readonly ExistingJoin[]
+  listJoins: () => Promise<readonly ExistingJoin[]>
 ): Promise<PartAnswers> {
   const name = await promptName(prompter, notify, defaultName);
   const type = await promptType(prompter, notify);
   const variant = await prompter.input("Variant", { default: "v1" });
-  const connectors = await promptConnectors(prompter, notify, existingJoins);
+  const connectors = await promptConnectors(prompter, notify, listJoins);
 
   return { name, type, variant, connectors };
 }
@@ -609,7 +633,7 @@ async function collectDetailAnswers(
   prompter: Prompter,
   notify: (text: string) => void,
   detailName: string,
-  existingJoins: readonly ExistingJoin[]
+  listJoins: () => Promise<readonly ExistingJoin[]>
 ): Promise<DetailPartAnswers> {
   const role = await promptSegment(
     prompter,
@@ -620,7 +644,7 @@ async function collectDetailAnswers(
   const name = await promptName(prompter, notify, detailName);
   const type = await promptType(prompter, notify);
   const variant = await prompter.input("Variant", { default: "v1" });
-  const connectors = await promptConnectors(prompter, notify, existingJoins);
+  const connectors = await promptConnectors(prompter, notify, listJoins);
 
   return { role, name, type, variant, connectors };
 }
@@ -638,10 +662,18 @@ async function promptType(prompter: Prompter, notify: (text: string) => void): P
 async function promptConnectors(
   prompter: Prompter,
   notify: (text: string) => void,
-  existingJoins: readonly ExistingJoin[]
+  listJoins: () => Promise<readonly ExistingJoin[]>
 ): Promise<readonly AddPartConnectorInput[]> {
   const connectors: AddPartConnectorInput[] = [];
   let more = await prompter.confirm("Add a seam connector?", { default: false });
+
+  // 連結を足すと答えて初めて縫い合わせ候補を集める。足さないなら project を読まない(先読みしない)。
+  if (!more) {
+    return connectors;
+  }
+
+  // 候補は part 1つ分の対話中は不変(この part で足した id は下の chosenIds で別に除外する)。ので1回だけ解決する。
+  const existingJoins = await listJoins();
 
   while (more) {
     // この part の add ループ中に既に選んだ id。これを渡し、次の新規 join の既定 id 生成と衝突判定が
@@ -873,25 +905,30 @@ function formatPiecePromptHeader(piece: DetectedPiece): string {
   return `Piece: ${piece.pieceName} (draw: ${piece.drawName})\n`;
 }
 
-// 直前に足した part の connectors を候補一覧に反映する(1回の add で続けて足すピースが同じ join を選べる
-// ように)。type も一緒に運び、次のピースが同じ join を選んだとき種類を継げるようにする。collectExistingJoins
-// と同じく id 昇順で返し、同じ role の重複登録はしない。
-function mergeExistingJoins(
-  existingJoins: readonly ExistingJoin[],
-  role: string,
-  connectors: Readonly<Record<string, { readonly type: string }>> | undefined
+// ベース(既存パーツが宣言済みの join)と、この add で足したピースの join(addedJoins)を id ごとに合流し、
+// id 昇順で返す。type はベース優先で運び(継承していれば両者で一致する)、同じ id は roles を和(重複なし)に
+// する。ベースを遅延ロードした結果このピースが既に含まれても、roles の重複を除くので二重にならない。
+function combineJoins(
+  base: readonly ExistingJoin[],
+  added: ReadonlyMap<string, { readonly type: string; readonly roles: readonly string[] }>
 ): readonly ExistingJoin[] {
-  const byJoinId = new Map(
-    existingJoins.map((join) => [join.id, { type: join.type, roles: [...join.roles] }])
-  );
+  const byJoinId = new Map<string, { type: string; roles: string[] }>();
 
-  for (const [joinId, connector] of Object.entries(connectors ?? {})) {
+  for (const join of base) {
+    byJoinId.set(join.id, { type: join.type, roles: [...join.roles] });
+  }
+
+  for (const [joinId, join] of added) {
     const entry = byJoinId.get(joinId);
 
     if (entry === undefined) {
-      byJoinId.set(joinId, { type: connector.type, roles: [role] });
-    } else if (!entry.roles.includes(role)) {
-      entry.roles.push(role);
+      byJoinId.set(joinId, { type: join.type, roles: [...join.roles] });
+    } else {
+      for (const role of join.roles) {
+        if (!entry.roles.includes(role)) {
+          entry.roles.push(role);
+        }
+      }
     }
   }
 
