@@ -204,9 +204,12 @@ describe("loom add --yes", () => {
     try {
       await writeFile(
         join(root, "loomit.yml"),
-        ["schema: loomit.project.v0", "name: add-yes-collide", "garment: knickers", "parts: {}"].join(
-          "\n"
-        ),
+        [
+          "schema: loomit.project.v0",
+          "name: add-yes-collide",
+          "garment: knickers",
+          "parts: {}"
+        ].join("\n"),
         "utf8"
       );
       await writeFile(
@@ -237,8 +240,59 @@ describe("loom add --yes", () => {
       expect(project).toContain("front: ./parts/front/part.loom");
       expect(project).toContain("front2: ./parts/front2/part.loom");
       // どちらも同じ detail "front" を指す(完全同名なので警告を出す)。
-      expect(await readFile(join(root, "parts/front2/part.loom"), "utf8")).toContain("piece: front");
+      expect(await readFile(join(root, "parts/front2/part.loom"), "utf8")).toContain(
+        "piece: front"
+      );
       expect(out.join("")).toContain("repeat in the .val");
+      // 衝突理由は「.val 内に同名 detail」なので、既存プロジェクト由来の文言ではなくこちらを出す。
+      expect(out.join("")).toContain("repeats another piece in this .val");
+      expect(out.join("")).not.toContain("already exists in this project");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("says the role already exists when re-adding a .val whose pieces are already parts", async () => {
+    // ユーザ実例の再現: 同じ .val をもう一度 add。detail "front" は既にプロジェクトの part role なので、
+    // 「.val 内重複」ではなく「もう add 済みかも」を真っ先に伝える(一番効く情報)。scripted で front2 に。
+    const root = await mkdtemp(join(tmpdir(), "loomit-add-yes-readd-"));
+    const out: string[] = [];
+    const err: string[] = [];
+
+    try {
+      await writeFile(
+        join(root, "loomit.yml"),
+        [
+          "schema: loomit.project.v0",
+          "name: add-yes-readd",
+          "garment: knickers",
+          "parts:",
+          "  front: ./parts/front/part.loom",
+          "  back: ./parts/back/part.loom"
+        ].join("\n"),
+        "utf8"
+      );
+      await writeFile(join(root, "knickers.val"), TWO_PIECE_VAL, "utf8");
+
+      const code = await runAddCommand(["knickers.val", "--yes"], {
+        cwd: root,
+        stdout: (text) => out.push(text),
+        stderr: (text) => err.push(text),
+        // front も back も既存 role と衝突する。両方に distinct な role を訊かれる。
+        prompter: scriptedPrompter(["front2", "back2"])
+      });
+
+      expect(err.join("")).toBe("");
+      expect(code).toBe(0);
+      // 既存プロジェクト由来の衝突なので「もう add 済みかも」を出し、.val 内重複の文言は出さない。
+      expect(out.join("")).toContain('Part role "front" already exists in this project');
+      expect(out.join("")).toContain("you may have already run loom add on this .val");
+      expect(out.join("")).not.toContain("repeats another piece in this .val");
+      // 既存 front/back は残し、対話で決めた front2/back2 を足す。
+      const project = await readFile(join(root, "loomit.yml"), "utf8");
+      expect(project).toContain("front: ./parts/front/part.loom");
+      expect(project).toContain("front2: ./parts/front2/part.loom");
+      expect(project).toContain("back2: ./parts/back2/part.loom");
     } finally {
       await rm(root, { recursive: true, force: true });
     }
