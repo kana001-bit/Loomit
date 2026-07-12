@@ -16,6 +16,9 @@ const WHOLE_SEAM_EPSILON = 0.001;
 export type SeamlintJoinKind =
   | "smooth-continuation"
   | "sewn-seam"
+  // seam-edge: path_ref が指す BLOCK 全体(外周)ではなく、宣言ペアが実際に縫い合う共有辺を Seamlint が
+  // structuralEdges で発見して測る。両側 DXF の平 seam でだけ使う(SVG は辺分割できない)。
+  | "seam-edge"
   | "closed-loop"
   | "overlap"
   | "intentional-corner"
@@ -63,6 +66,12 @@ export interface SeamlintGeometryCheckRange {
   readonly to: SeamlintGeometryMarkerRange;
 }
 
+// seam-edge の per-connector 識別子。connector が宣言する「その seam の合印(notch)数」を運び、Seamlint が
+// 同じ2 BLOCK を共有する複数 seam を辺ごとの notch 署名で区別できるようにする(幾何ではなく宣言データ)。
+export interface SeamlintGeometryEdgeSignature {
+  readonly notchCount?: number;
+}
+
 export interface SeamlintGeometryCheckSpec {
   readonly id: string;
   readonly kind: SeamlintJoinKind;
@@ -70,6 +79,7 @@ export interface SeamlintGeometryCheckSpec {
   readonly to?: SeamlintGeometryTarget;
   readonly tolerance?: SeamlintGeometryTolerance;
   readonly range?: SeamlintGeometryCheckRange;
+  readonly edgeSignature?: SeamlintGeometryEdgeSignature;
 }
 
 export interface SeamlintGeometryPartRef {
@@ -326,9 +336,22 @@ export function createSeamlintGeometryRequest(
 
     const toleranceMm = resolveJoinedConnectorToleranceMm(from.connector, to.connector);
 
+    // path_ref は現状 BLOCK 全体(ピース丸ごと)を指す。両側 DXF なら Seamlint が structuralEdges で
+    // 実際に縫い合う共有辺を発見して測れるので seam-edge を使い、BLOCK 外周を丸ごと比べる ceiling を外す。
+    // SVG は辺分割できないので従来どおり whole-path の sewn-seam に倒す(どちらでも path_ref/tolerance は不変)。
+    const kind: SeamlintJoinKind =
+      fromSide.format === "dxf" && toSide.format === "dxf" ? "seam-edge" : "sewn-seam";
+
+    // seam-edge のとき、connector が宣言した notch 署名を渡す(同じ2 BLOCK を共有する複数 seam の per-connector 判別)。
+    // sewn-seam(SVG 側 fallback)は辺分割しないので署名を付けない。
+    const notchCount =
+      kind === "seam-edge"
+        ? resolveJoinedConnectorNotchCount(from, to, joinId, diagnostics)
+        : undefined;
+
     checks.push({
-      id: `sewn-seam:${from.part.role}.${joinId}/${to.part.role}.${joinId}`,
-      kind: "sewn-seam",
+      id: `${kind}:${from.part.role}.${joinId}/${to.part.role}.${joinId}`,
+      kind,
       from: {
         partId: fromGeometryPart.partId,
         pathRef: joinId,
@@ -345,7 +368,8 @@ export function createSeamlintGeometryRequest(
             tolerance: {
               length_mm: toleranceMm
             }
-          })
+          }),
+      ...(notchCount === undefined ? {} : { edgeSignature: { notchCount } })
     });
   }
 
@@ -389,6 +413,40 @@ function collectPartsByJoinId(resolvedProject: ResolvedProject): Map<string, Joi
 
 function hasConnectorRanges(connector: Connector): boolean {
   return (connector.ranges?.length ?? 0) > 0;
+}
+
+// 両側 connector が宣言した notch 数を1つに解決する。同じ seam なので両側同数のはず。両側宣言かつ食い違うときは
+// warning を出して署名を付けない(誤った辺に解決させない)。片側だけ宣言ならそれを使う(同じ seam に対する宣言)。
+function resolveJoinedConnectorNotchCount(
+  from: JoinParticipant,
+  to: JoinParticipant,
+  joinId: string,
+  diagnostics: Diagnostic[]
+): number | undefined {
+  const fromCount = from.connector.notch_count;
+  const toCount = to.connector.notch_count;
+
+  if (fromCount === undefined && toCount === undefined) {
+    return undefined;
+  }
+
+  if (fromCount !== undefined && toCount !== undefined && fromCount !== toCount) {
+    diagnostics.push(
+      createDiagnostic({
+        severity: "warning",
+        code: "SEAMLINT_CONNECTOR_NOTCH_COUNT_MISMATCH",
+        message:
+          `Connector "${joinId}" declares different notch counts on ${from.part.role} (${fromCount}) and ${to.part.role} (${toCount}), so Loomit did not hand Seamlint a notch signature to disambiguate the seam.`,
+        target: `${from.part.role}.${joinId}/${to.part.role}.${joinId}`,
+        suggestion: [
+          `Align connectors.${joinId}.notch_count on both parts (a seam has the same notches on both pieces).`
+        ]
+      })
+    );
+    return undefined;
+  }
+
+  return fromCount ?? toCount;
 }
 
 // seam の片側を検証する(mutation はしない)。path_ref は connector 単位、geometrySource(preview)は
