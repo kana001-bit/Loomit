@@ -7,10 +7,7 @@ export type {
   BuildManifestAsset,
   BuildReport
 } from "./build/buildProject.js";
-export {
-  createCheckReport,
-  createCompatibilityResult
-} from "./compatibility/checkReport.js";
+export { createCheckReport, createCompatibilityResult } from "./compatibility/checkReport.js";
 export type { CheckReport, CompatibilityResult } from "./compatibility/checkReport.js";
 export { runChecks } from "./compatibility/runChecks.js";
 export type { RunChecksOptions } from "./compatibility/runChecks.js";
@@ -22,10 +19,7 @@ export {
   requirementRangeRule,
   runCompatibilityRules
 } from "./compatibility/rules.js";
-export type {
-  CompatibilityRule,
-  CompatibilityRuleRegistry
-} from "./compatibility/rules.js";
+export type { CompatibilityRule, CompatibilityRuleRegistry } from "./compatibility/rules.js";
 export { createDiagnostic, diagnosticSeverities } from "./diagnostics/diagnostic.js";
 export type { Diagnostic, DiagnosticSeverity } from "./diagnostics/diagnostic.js";
 export { diffParts } from "./diff/partDiff.js";
@@ -124,11 +118,17 @@ export type {
   AddPartConnectorInput,
   AddPartToProjectOptions
 } from "./parts/addPartToProject.js";
+export { connectParts } from "./parts/connectParts.js";
+export type { ConnectedParts, ConnectedSide, ConnectPartsOptions } from "./parts/connectParts.js";
 export { loadPartFile } from "./parts/loadPartFile.js";
 export { loadProjectedPart } from "./parts/loadProjectedPart.js";
 export { listValDetailsFromFile, listValDetailsFromText } from "./parts/listValDetails.js";
 export type { ValDetailList, ValDrawDetails } from "./parts/listValDetails.js";
-export { projectDartsFromValFile, projectDartsFromValText, projectPartDartsFromSource } from "./parts/projectDartsFromVal.js";
+export {
+  projectDartsFromValFile,
+  projectDartsFromValText,
+  projectPartDartsFromSource
+} from "./parts/projectDartsFromVal.js";
 export {
   projectNotchesFromValFile,
   projectNotchesFromValText,
@@ -186,7 +186,14 @@ export {
   partStatusSchema,
   requirementSchema
 } from "./schema/part.schema.js";
-export type { Connector, Dart, Notch, Part, PartStatus, Requirement } from "./schema/part.schema.js";
+export type {
+  Connector,
+  Dart,
+  Notch,
+  Part,
+  PartStatus,
+  Requirement
+} from "./schema/part.schema.js";
 export { projectSchema } from "./schema/project.schema.js";
 export type { Project } from "./schema/project.schema.js";
 export { libraryMetaSchema, libraryPartStatusSchema } from "./schema/library-meta.schema.js";

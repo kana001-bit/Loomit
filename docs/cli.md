@@ -67,6 +67,28 @@ loom add <file.val>
 - 質問はパイプでも与えられる（例: `loom add body.val < answers.txt`）。
 - 取り込み後は `loom check` を実行する。
 
+## `loom connect`
+
+既に add 済みの2つの part を「縫い合う」と宣言する。両方の `part.loom` に**同じ id の connector を対で書き込む**ので、`loom check` がその id でペアにし、`loom slnt check` が共有 seam を測れるようになる。`loom add --yes` で骨組みだけ作った後の配線工程。
+
+```text
+loom connect <roleA> <roleB> --as <id> [options]
+```
+
+オプション:
+
+- `--as <id>`（必須）— 縫い目の一意 id。両 part に同じ id が書かれ、それがペアの成立条件になる。
+- `--type <type>` — 縫い目の種類ラベル（例: `side`, `armhole`）。ペアリングには使われない。未指定なら id にフォールバック。
+- `--notches <n>` — この seam の合印（notch）数（非負整数）。同じ2ピースを共有する複数 seam を Seamlint が辺ごとに区別するための識別子。
+- `--path-ref-a <block>` / `--path-ref-b <block>` — 各 part の測定用 DXF BLOCK 名。未指定なら各 part の `files.piece` を既定にする（BLOCK 照合は大文字小文字を無視するので `front` が `FRONT` に当たる）。
+
+補足:
+
+- **辺（座標）は入力しない。** 人が渡すのはトークン（id / path_ref / notch_count）だけで、どの辺が共有縫い線かは Seamlint が幾何から発見する（`seam-edge`）。
+- connector は複数 part を組む cross-part join 専用なので、同じ role 同士は接続できない（自己シームは Seamlint が測る）。
+- 実測まで行くには各 part に `files.geometry`（DXF）か `files.preview`（SVG）が要る。無い側は成功時に案内する。
+- 例: `loom connect front back --as outseam --notches 2` → 両 part.loom に `connectors.outseam` を書き、次に `loom slnt check`。
+
 ## `loom check`
 
 project と part の整合性を検証する。
