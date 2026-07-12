@@ -247,23 +247,25 @@ export async function runAddCommand(
 }
 
 export function formatAddHelp(): string {
-  return [
-    "Usage: loom add <file.val> [--yes]",
-    "",
-    "Add a Valentina .val to the project. If Loomit detects <detail> pieces,",
-    "it scaffolds one part per piece and records files.piece in each part. If",
-    "the file has draws but no pieces yet, Loomit prints guidance and adds",
-    "nothing. Otherwise it falls back to the legacy single-part prompt.",
-    "",
-    "Options:",
-    "  --yes, -y  Scaffold every detected piece with defaults (role = piece name,",
-    "             type \"body\", no connectors) without prompting. Fastest way to",
-    "             turn a multi-piece .val into a checkable project. If a detail name",
-    "             collides with a part role, it asks for a distinct role only in an",
-    "             interactive terminal; in a non-interactive shell it fails cleanly",
-    "             (writing nothing) instead of prompting.",
-    "  --help     Show this help."
-  ].join("\n") + "\n";
+  return (
+    [
+      "Usage: loom add <file.val> [--yes]",
+      "",
+      "Add a Valentina .val to the project. If Loomit detects <detail> pieces,",
+      "it scaffolds one part per piece and records files.piece in each part. If",
+      "the file has draws but no pieces yet, Loomit prints guidance and adds",
+      "nothing. Otherwise it falls back to the legacy single-part prompt.",
+      "",
+      "Options:",
+      "  --yes, -y  Scaffold every detected piece with defaults (role = piece name,",
+      '             type "body", no connectors) without prompting. Fastest way to',
+      "             turn a multi-piece .val into a checkable project. If a detail name",
+      "             collides with a part role, it asks for a distinct role only in an",
+      "             interactive terminal; in a non-interactive shell it fails cleanly",
+      "             (writing nothing) instead of prompting.",
+      "  --help     Show this help."
+    ].join("\n") + "\n"
+  );
 }
 
 // 検出した draw / detail を取り込み前に見せる read-only な一覧を組む。draw が無ければ何も出さない
@@ -387,6 +389,11 @@ async function addAllPiecesWithDefaults(
     }
   }
 
+  // 元からプロジェクトに登録済みの role のスナップショット。ループ中に takenRoleKeys へ積んでいく
+  // 「この run で先に決めた role」と区別し、衝突の理由(= 同じ .val をもう一度 add したのか / .val 内に
+  // 同名 detail があるのか)を言い分けるために使う。一番効く「もう入ってるよ」を伝えるのが狙い。
+  const existingRoleKeys = new Set(takenRoleKeys);
+
   // role 衝突(既存 part / 先行ピース / detail 重複)するピースを書き込み前に洗い出す。
   const collidingPieceNames = collectCollidingPieceNames(addable, takenRoleKeys, normalizeRoleKey);
 
@@ -398,9 +405,19 @@ async function addAllPiecesWithDefaults(
       : (options.prompter ?? (process.stdin.isTTY === true ? createReadlinePrompter() : undefined));
 
   if (collidingPieceNames.length > 0 && prompter === undefined) {
+    // 衝突のうち「元からプロジェクトにある role」= もう一度 add しているサイン。あれば真っ先に伝える。
+    const alreadyInProject = collidingPieceNames.filter((name) =>
+      existingRoleKeys.has(normalizeRoleKey(name))
+    );
+    const alreadyNote =
+      alreadyInProject.length > 0
+        ? ` These roles are already in this project (${alreadyInProject.join(", ")}), so this .val may have been added already.`
+        : "";
+
     options.stderr(
-      `Detail names collide as part roles (${collidingPieceNames.join(", ")}), and --yes does not prompt in a non-interactive shell. ` +
-        "Run loom add in an interactive terminal to name the colliding roles, or give each piece a distinct detail name in Valentina.\n"
+      `Detail names collide as part roles (${collidingPieceNames.join(", ")}), and --yes does not prompt in a non-interactive shell.` +
+        alreadyNote +
+        " Run loom add in an interactive terminal to name the colliding roles, or give each piece a distinct detail name in Valentina.\n"
     );
     return 1;
   }
@@ -431,6 +448,7 @@ async function addAllPiecesWithDefaults(
         options.stdout,
         piece.pieceName,
         takenRoleKeys,
+        existingRoleKeys,
         normalizeRoleKey
       );
       takenRoleKeys.add(normalizeRoleKey(role));
@@ -526,14 +544,26 @@ function collectCollidingPieceNames(
 
 // role 衝突したピースに distinct な role を訊く(B: --yes でも衝突分だけ対話する)。safe segment かつ、実 FS の
 // case 感度で正規化して未使用になるまで訊き直す(既存 part や先に決めた role と重ならないよう takenRoleKeys で判定)。
+// 冒頭の案内は衝突の理由で言い分ける: 元からプロジェクトにある role(existingRoleKeys)なら「もう add 済みかも」を
+// 真っ先に伝え(一番効く情報)、そうでなければ .val 内で detail 名が重複しているサインとして伝える。
 async function promptDistinctRole(
   prompter: Prompter,
   notify: (text: string) => void,
   pieceName: string,
   takenRoleKeys: ReadonlySet<string>,
+  existingRoleKeys: ReadonlySet<string>,
   normalizeRoleKey: (role: string) => string
 ): Promise<string> {
-  notify(`Detail "${pieceName}" collides with another part role; enter a distinct role for it.\n`);
+  if (existingRoleKeys.has(normalizeRoleKey(pieceName))) {
+    notify(
+      `Part role "${pieceName}" already exists in this project — you may have already run loom add on this .val. ` +
+        "Enter a distinct role to add another part, or press Ctrl+C to stop.\n"
+    );
+  } else {
+    notify(
+      `Detail "${pieceName}" repeats another piece in this .val; enter a distinct role for it.\n`
+    );
+  }
 
   for (;;) {
     const role = await promptSegment(prompter, notify, `Part role for "${pieceName}"`, undefined);
@@ -764,10 +794,7 @@ async function promptNewJoin(
 
 // 縫い目の種類(connector.type)を訊く。id ではなく分類ラベルなので、よく使う縫い目種から選ばせ、
 // 無ければ "other" で自由入力させる(type は schema 上パス segment ではないので空白入り等も許す)。
-async function promptSeamType(
-  prompter: Prompter,
-  notify: (text: string) => void
-): Promise<string> {
+async function promptSeamType(prompter: Prompter, notify: (text: string) => void): Promise<string> {
   const chosen = await prompter.select("Seam type", SEAM_TYPE_CHOICES, { default: "side" });
 
   if (chosen !== "other") {
@@ -1035,14 +1062,16 @@ function formatAddSuccess(added: AddedPart): string {
   const projectRoot = dirname(added.projectFilePath);
   const rel = (target: string): string => relative(projectRoot, target).split("\\").join("/");
 
-  return [
-    `Added part "${added.name}" as role "${added.role}":`,
-    `  ${rel(added.sourceFilePath)}   (placed)`,
-    `  ${rel(added.partFilePath)}   (generated)`,
-    `  ${rel(added.projectFilePath)}   (registered)`,
-    "",
-    "Next: loom check"
-  ].join("\n") + "\n";
+  return (
+    [
+      `Added part "${added.name}" as role "${added.role}":`,
+      `  ${rel(added.sourceFilePath)}   (placed)`,
+      `  ${rel(added.partFilePath)}   (generated)`,
+      `  ${rel(added.projectFilePath)}   (registered)`,
+      "",
+      "Next: loom check"
+    ].join("\n") + "\n"
+  );
 }
 
 function parseAddArgs(args: readonly string[]): ParsedAddArgs | string {
