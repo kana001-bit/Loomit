@@ -1,6 +1,7 @@
 import { runAddCommand } from "./commands/add.js";
 import { runBuildCommand } from "./commands/build.js";
 import { runCheckCommand } from "./commands/check.js";
+import { runConnectCommand } from "./commands/connect.js";
 import { runDiffCommand } from "./commands/diff.js";
 import { runDoctorCommand } from "./commands/doctor.js";
 import { runFitCommand } from "./commands/fit.js";
@@ -72,6 +73,14 @@ export async function runCli(
 
   if (command === "check") {
     return runCheckCommand(args.slice(1), {
+      cwd,
+      stdout: io.stdout,
+      stderr: io.stderr
+    });
+  }
+
+  if (command === "connect") {
+    return runConnectCommand(args.slice(1), {
       cwd,
       stdout: io.stdout,
       stderr: io.stderr
@@ -172,25 +181,28 @@ export async function runCli(
 }
 
 export function formatMainHelp(): string {
-  return [
-    "Usage: loom <command>",
-    "",
-    "Commands:",
-    "  add    Add a Valentina .val to the project as a part.",
-    "  build  Collect referenced files into output and write a manifest.",
-    "  check  Validate a Loomit project.",
-    "  diff   Compare two Loomit part files semantically.",
-    "  doctor Explain Loomit project diagnostics.",
-    "  fit    Compare a Loomit project against a body profile.",
-    "  fork   Copy an existing Loomit project.",
-    "  init   Create a Loomit project in the current directory.",
-    "  library List published Loomit library parts.",
-    "  note   Record a prototype note into notes/prototype-notes.yml.",
-    "  publish Copy a part into the Loomit library.",
-    "  slnt   Geometry checks via Seamlint (loom slnt request|check).",
-    "  suggest-tests Suggest movement tests for a project.",
-    "  test   Run a movement test risk check.",
-    "",
-    "Run loom <command> --help for command-specific options."
-  ].join("\n") + "\n";
+  return (
+    [
+      "Usage: loom <command>",
+      "",
+      "Commands:",
+      "  add    Add a Valentina .val to the project as a part.",
+      "  build  Collect referenced files into output and write a manifest.",
+      "  check  Validate a Loomit project.",
+      "  connect Declare that two parts sew together (writes a paired connector).",
+      "  diff   Compare two Loomit part files semantically.",
+      "  doctor Explain Loomit project diagnostics.",
+      "  fit    Compare a Loomit project against a body profile.",
+      "  fork   Copy an existing Loomit project.",
+      "  init   Create a Loomit project in the current directory.",
+      "  library List published Loomit library parts.",
+      "  note   Record a prototype note into notes/prototype-notes.yml.",
+      "  publish Copy a part into the Loomit library.",
+      "  slnt   Geometry checks via Seamlint (loom slnt request|check).",
+      "  suggest-tests Suggest movement tests for a project.",
+      "  test   Run a movement test risk check.",
+      "",
+      "Run loom <command> --help for command-specific options."
+    ].join("\n") + "\n"
+  );
 }
