@@ -215,6 +215,35 @@ describe("loom connect", () => {
     }
   });
 
+  it("rejects a connector id that Seamlint would drop and writes nothing", async () => {
+    // ":" "." "/" "__" を含む id は書けても loom slnt check で Seamlint が測定対象から外す。
+    // authoring 時に弾き、黙って測れない connector を作らせない。
+    for (const badId of ["sleeve.armhole", "a/b", "a__b", ".."]) {
+      const root = await makeProject();
+      const err: string[] = [];
+
+      try {
+        const code = await runConnectCommand(["front", "back", "--as", badId], {
+          cwd: root,
+          stdout: () => {},
+          stderr: (text) => err.push(text)
+        });
+
+        expect(code).toBe(1);
+        expect(err.join("")).toContain("CONNECT_ID_INVALID");
+        // どちらの part.loom にも書かない。
+        expect(await readFile(join(root, "parts/front/part.loom"), "utf8")).not.toContain(
+          "connectors"
+        );
+        expect(await readFile(join(root, "parts/back/part.loom"), "utf8")).not.toContain(
+          "connectors"
+        );
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    }
+  });
+
   it("returns a usage error when --as is missing", async () => {
     const root = await makeProject();
     const err: string[] = [];

@@ -4,9 +4,11 @@ import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import { describeFsError } from "../filesystem/fsError.js";
 import type { LoadFileResult } from "../filesystem/loadFileResult.js";
+import { isSafePathSegment } from "../filesystem/pathWithin.js";
 import { readText } from "../filesystem/readText.js";
 import { writeFileAtomic } from "../filesystem/writeFileAtomic.js";
 import { loadProject } from "../project/loadProject.js";
+import { isDelimiterSafeIdentifier } from "../schema/joinIdentifier.js";
 import { partSchema } from "../schema/part.schema.js";
 import type { Connector, Part } from "../schema/part.schema.js";
 import { loadPartFile } from "./loadPartFile.js";
@@ -67,6 +69,27 @@ export async function connectParts(
           target: options.roleA,
           suggestion: [
             "Give two distinct part roles. A self-seam (two edges of one piece) is measured by Seamlint, not declared as a connector."
+          ]
+        })
+      ]
+    };
+  }
+
+  // connector id は part.loom の record キーであると同時に、Seamlint が check id / marker キーを組み立てる
+  // join id にもなる。区切り文字(":" "." "/" "\\" "__")や不正な segment を含むと、書けても次の
+  // loom slnt check で Seamlint が測定対象から外す(SEAMLINT_UNSAFE_JOIN_IDENTIFIER)。黙って測れない
+  // connector を作らないよう、authoring 時にここで弾く(add の segment 制約＋Seamlint の delimiter 制約)。
+  if (!isSafePathSegment(options.id) || !isDelimiterSafeIdentifier(options.id)) {
+    return {
+      ok: false,
+      diagnostics: [
+        createDiagnostic({
+          severity: "error",
+          code: "CONNECT_ID_INVALID",
+          message: `Connector id "${options.id}" is not usable: it must be a single token without "/", "\\", ":", ".", or "__" (and not "." or "..").`,
+          target: options.id,
+          suggestion: [
+            'Use a simple id like "outseam" or "armhole". Seamlint reserves those characters to build seam ids, so an id with them would be silently dropped by loom slnt check.'
           ]
         })
       ]
@@ -162,9 +185,30 @@ export async function connectParts(
 
   try {
     await writeFileAtomic(filePathB, stringify(validatedB.value));
-  } catch (error) {
-    await writeFileAtomic(filePathA, sideA.value.originalText).catch(() => undefined);
-    return { ok: false, diagnostics: [connectWriteError(error, filePathB)] };
+  } catch (writeError) {
+    // B が書けなかったら A を原バイト列に巻き戻す。その巻き戻しも失敗したら(ディスクフル等)、A だけ
+    // connector が残り B は無い半端な状態になる。これを握りつぶさず別診断で明示し、どちらの part.loom を
+    // 手で戻せばよいかを示す(B の write 失敗と rollback 失敗の両方を返す)。
+    try {
+      await writeFileAtomic(filePathA, sideA.value.originalText);
+    } catch (rollbackError) {
+      return {
+        ok: false,
+        diagnostics: [
+          connectWriteError(writeError, filePathB),
+          describeFsError(rollbackError, {
+            code: "CONNECT_ROLLBACK_FAILED",
+            message: `Wrote connector "${options.id}" to "${options.roleA}" but could not write "${options.roleB}" or undo "${options.roleA}", so only one side declares the seam.`,
+            target: filePathA,
+            suggestion: [
+              `Remove connectors.${options.id} from ${options.roleA}'s part.loom by hand, then run loom connect again.`
+            ]
+          })
+        ]
+      };
+    }
+
+    return { ok: false, diagnostics: [connectWriteError(writeError, filePathB)] };
   }
 
   return {
