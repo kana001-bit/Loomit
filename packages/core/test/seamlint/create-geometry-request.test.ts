@@ -811,6 +811,282 @@ describe("createSeamlintGeometryRequest", () => {
     ]);
   });
 
+  it("emits a band-seam for a contiguous join whose smaller side is a single band piece", async () => {
+    // 守る仕様(band): contiguous で片側1枚(band)・反対側N枚(neighbours)なら defer せず band-seam を emit する。
+    // from=band(singleton side)、neighbours=もう一方の side のピース群(role 昇順)。band 接辺の発見に
+    // structuralEdges を要するので全側 DXF 必須。辺・裁断枚数は渡さず、BLOCK(path_ref)だけ渡す。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = resolvedProject.parts.body;
+    const sleeve = resolvedProject.parts.sleeve;
+    const bodyArmhole = body?.part.connectors?.armhole;
+    const sleeveArmhole = sleeve?.part.connectors?.armhole;
+    if (body === undefined || sleeve === undefined || bodyArmhole === undefined || sleeveArmhole === undefined) {
+      throw new Error("Expected valid-blouse body/sleeve armhole connectors.");
+    }
+
+    // sleeve = band(side:sleeve, 1枚)、body + back = neighbours(side:bodice, 2枚)。back は body の DXF を再利用する複製。
+    const bandProject: ResolvedProject = {
+      ...resolvedProject,
+      parts: {
+        sleeve: {
+          ...sleeve,
+          part: {
+            ...sleeve.part,
+            files: { ...sleeve.part.files, geometry: "sleeve.dxf" },
+            connectors: { armhole: { ...sleeveArmhole, side: "sleeve", path_ref: "sleeve-armhole" } }
+          }
+        },
+        body: {
+          ...body,
+          part: {
+            ...body.part,
+            files: { ...body.part.files, geometry: "body.dxf" },
+            connectors: { armhole: { ...bodyArmhole, side: "bodice", path_ref: "body-armhole" } }
+          }
+        },
+        back: {
+          ...body,
+          role: "back",
+          part: {
+            ...body.part,
+            files: { ...body.part.files, geometry: "body.dxf" },
+            connectors: { armhole: { ...bodyArmhole, side: "bodice", path_ref: "back-armhole" } }
+          }
+        }
+      }
+    };
+
+    const result = createSeamlintGeometryRequest(bandProject);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.request.checks).toEqual([
+      {
+        id: "band-seam:sleeve.armhole/back.armhole/body.armhole",
+        kind: "band-seam",
+        from: { partId: "sleeve", pathRef: "armhole", connectorId: "armhole" },
+        neighbours: [
+          { partId: "back", pathRef: "armhole", connectorId: "armhole" },
+          { partId: "body", pathRef: "armhole", connectorId: "armhole" }
+        ]
+      }
+    ]);
+    // 全側 DXF で BLOCK 名 addressing される(SVG transport prefix なし)。
+    expect(result.request.parts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ partId: "sleeve", format: "dxf", paths: { armhole: "sleeve-armhole" } }),
+        expect.objectContaining({ partId: "body", format: "dxf", paths: { armhole: "body-armhole" } }),
+        expect.objectContaining({ partId: "back", format: "dxf", paths: { armhole: "back-armhole" } })
+      ])
+    );
+  });
+
+  it("does not put notch_count on band neighbours (band edges are found by dart-folding, not notch)", async () => {
+    // 守る仕様(band contract): band 接辺は Seamlint が各 neighbour の dart 畳み辺として発見するので、connector が
+    // notch_count を宣言していても band-seam の neighbours には edgeSignature を載せない(BLOCK target のみ)。
+    // notch を送っても Seamlint は読まない dead data になるため、送らない(seam-edge とはそこが違う)。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = resolvedProject.parts.body;
+    const sleeve = resolvedProject.parts.sleeve;
+    const bodyArmhole = body?.part.connectors?.armhole;
+    const sleeveArmhole = sleeve?.part.connectors?.armhole;
+    if (body === undefined || sleeve === undefined || bodyArmhole === undefined || sleeveArmhole === undefined) {
+      throw new Error("Expected valid-blouse body/sleeve armhole connectors.");
+    }
+
+    const bandProject: ResolvedProject = {
+      ...resolvedProject,
+      parts: {
+        sleeve: {
+          ...sleeve,
+          part: {
+            ...sleeve.part,
+            files: { ...sleeve.part.files, geometry: "sleeve.dxf" },
+            connectors: { armhole: { ...sleeveArmhole, side: "sleeve", path_ref: "sleeve-armhole", notch_count: 4 } }
+          }
+        },
+        body: {
+          ...body,
+          part: {
+            ...body.part,
+            files: { ...body.part.files, geometry: "body.dxf" },
+            connectors: { armhole: { ...bodyArmhole, side: "bodice", path_ref: "body-armhole", notch_count: 2 } }
+          }
+        },
+        back: {
+          ...body,
+          role: "back",
+          part: {
+            ...body.part,
+            files: { ...body.part.files, geometry: "body.dxf" },
+            connectors: { armhole: { ...bodyArmhole, side: "bodice", path_ref: "back-armhole", notch_count: 2 } }
+          }
+        }
+      }
+    };
+
+    const result = createSeamlintGeometryRequest(bandProject);
+
+    expect(result.diagnostics).toEqual([]);
+    const check = result.request.checks[0];
+    expect(check?.kind).toBe("band-seam");
+    // band(from)も neighbours も署名なし ── BLOCK target だけを渡す。
+    expect(check?.from).not.toHaveProperty("edgeSignature");
+    expect(check?.neighbours).toEqual([
+      { partId: "back", pathRef: "armhole", connectorId: "armhole" },
+      { partId: "body", pathRef: "armhole", connectorId: "armhole" }
+    ]);
+    for (const neighbour of check?.neighbours ?? []) {
+      expect(neighbour).not.toHaveProperty("edgeSignature");
+    }
+  });
+
+  it("warns and skips a band whose parts declare different connector types", async () => {
+    // 守る仕様(band): pairwise と同じく、参加が同じ縫い目 type で揃っていることを要求する。手書き part.loom で band と
+    // neighbour の type が食い違えば「その縫い目が何か」の宣言が割れているので、band-seam を emit せず TYPE_MISMATCH。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = resolvedProject.parts.body;
+    const sleeve = resolvedProject.parts.sleeve;
+    const bodyArmhole = body?.part.connectors?.armhole;
+    const sleeveArmhole = sleeve?.part.connectors?.armhole;
+    if (body === undefined || sleeve === undefined || bodyArmhole === undefined || sleeveArmhole === undefined) {
+      throw new Error("Expected valid-blouse body/sleeve armhole connectors.");
+    }
+
+    // band=sleeve と back は type "armhole"、body だけ "dart" に食い違わせる(全側 DXF・side は正しい band 形)。
+    const mismatchedTypes: ResolvedProject = {
+      ...resolvedProject,
+      parts: {
+        sleeve: {
+          ...sleeve,
+          part: {
+            ...sleeve.part,
+            files: { ...sleeve.part.files, geometry: "sleeve.dxf" },
+            connectors: { armhole: { ...sleeveArmhole, type: "armhole", side: "sleeve", path_ref: "sleeve-armhole" } }
+          }
+        },
+        body: {
+          ...body,
+          part: {
+            ...body.part,
+            files: { ...body.part.files, geometry: "body.dxf" },
+            connectors: { armhole: { ...bodyArmhole, type: "dart", side: "bodice", path_ref: "body-armhole" } }
+          }
+        },
+        back: {
+          ...body,
+          role: "back",
+          part: {
+            ...body.part,
+            files: { ...body.part.files, geometry: "body.dxf" },
+            connectors: { armhole: { ...bodyArmhole, type: "armhole", side: "bodice", path_ref: "back-armhole" } }
+          }
+        }
+      }
+    };
+
+    const result = createSeamlintGeometryRequest(mismatchedTypes);
+
+    expect(result.request.checks).toEqual([]);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        severity: "warning",
+        code: "SEAMLINT_CONNECTOR_TYPE_MISMATCH",
+        target: "armhole"
+      })
+    );
+  });
+
+  it("still defers a contiguous join when both sides have multiple pieces (no single band)", async () => {
+    // 守る仕様(band): band は片側がちょうど1枚のときだけ。両側とも複数枚(2枚 vs 2枚)は和が band へ一意に解けないので
+    // band-seam にせず従来どおり defer する。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = resolvedProject.parts.body;
+    const sleeve = resolvedProject.parts.sleeve;
+    const bodyArmhole = body?.part.connectors?.armhole;
+    const sleeveArmhole = sleeve?.part.connectors?.armhole;
+    if (body === undefined || sleeve === undefined || bodyArmhole === undefined || sleeveArmhole === undefined) {
+      throw new Error("Expected valid-blouse body/sleeve armhole connectors.");
+    }
+
+    // bodice = {body, back}(2枚)、sleeve 側 = {sleeve, cuff}(2枚)。どちらも複数枚。
+    const twoByTwo: ResolvedProject = {
+      ...resolvedProject,
+      parts: {
+        body: { ...body, part: { ...body.part, connectors: { armhole: { ...bodyArmhole, side: "bodice" } } } },
+        back: {
+          ...body,
+          role: "back",
+          part: { ...body.part, connectors: { armhole: { ...bodyArmhole, side: "bodice" } } }
+        },
+        sleeve: { ...sleeve, part: { ...sleeve.part, connectors: { armhole: { ...sleeveArmhole, side: "sleeve" } } } },
+        cuff: {
+          ...sleeve,
+          role: "cuff",
+          part: { ...sleeve.part, connectors: { armhole: { ...sleeveArmhole, side: "sleeve" } } }
+        }
+      }
+    };
+
+    const result = createSeamlintGeometryRequest(twoByTwo);
+
+    expect(result.request.checks).toEqual([]);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({ severity: "warning", code: "SEAMLINT_CONNECTOR_SEAM_DEFERRED", target: "armhole" })
+    );
+  });
+
+  it("warns and skips a band-seam when a side is not DXF (cannot sum SVG edges)", async () => {
+    // 守る仕様(band): band 接辺の和は structuralEdges を要するので全側 DXF 必須。SVG が混ざれば seam-edge のような
+    // sewn-seam fallback は無いので、emit せず REQUIRES_DXF で何を足せばよいか示す。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = resolvedProject.parts.body;
+    const sleeve = resolvedProject.parts.sleeve;
+    const bodyArmhole = body?.part.connectors?.armhole;
+    const sleeveArmhole = sleeve?.part.connectors?.armhole;
+    if (body === undefined || sleeve === undefined || bodyArmhole === undefined || sleeveArmhole === undefined) {
+      throw new Error("Expected valid-blouse body/sleeve armhole connectors.");
+    }
+
+    // band(sleeve)と back は DXF、body は preview SVG のまま(files.geometry なし)。
+    const mixedFormat: ResolvedProject = {
+      ...resolvedProject,
+      parts: {
+        sleeve: {
+          ...sleeve,
+          part: {
+            ...sleeve.part,
+            files: { ...sleeve.part.files, geometry: "sleeve.dxf" },
+            connectors: { armhole: { ...sleeveArmhole, side: "sleeve" } }
+          }
+        },
+        body: {
+          ...body,
+          part: { ...body.part, connectors: { armhole: { ...bodyArmhole, side: "bodice" } } }
+        },
+        back: {
+          ...body,
+          role: "back",
+          part: {
+            ...body.part,
+            files: { ...body.part.files, geometry: "body.dxf" },
+            connectors: { armhole: { ...bodyArmhole, side: "bodice" } }
+          }
+        }
+      }
+    };
+
+    const result = createSeamlintGeometryRequest(mixedFormat);
+
+    expect(result.request.checks).toEqual([]);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        severity: "warning",
+        code: "SEAMLINT_BAND_SEAM_REQUIRES_DXF",
+        target: "armhole"
+      })
+    );
+  });
+
   it("errors (not defers) on a seam that declares more than two sides", async () => {
     // 守る仕様(P1): slnt 単独実行でも connector-pairing と同じ判定にする。3側は defer("expected")でなく error。
     const resolvedProject = await loadResolvedFixture("valid-blouse");

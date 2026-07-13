@@ -354,6 +354,17 @@ connector(seam)を、**作者が宣言する参加エッジの集合**として�
 
 始まりは「7ピースを add したら over-pair で怒られた」だったが、辿ってみると assembly グラフは flat な多重グラフではなく、**二分の join を積み上げる tree/DAG** だった、という認識の引き直しになった。Loomit は「誰が・どう組むか」の構造とグラフ整合を持ち、「その縫い目が幾何的に合うか(和・いせ)」の測定は Seamlint、「どの辺が自由端か」は作者 — という責務が、ここでも同じ形で現れた。
 
+## band — defer していた「和の縫い目」の最初の1枚が通った
+
+「1本の縫い目 = 2枚」が崩れたとき、N-ary や和のジオメトリの測定は Seamlint に defer した。その defer の中で、いちばん素直に測れる形が **band** だった。腰帯が前+後に、袖ぐりが袖山に縫い付くように、**片側が1枚（band）・反対側が複数枚（neighbours）** で、band の周方向辺の長さが neighbours の接辺の**和**に等しい contiguous な縫い目。Seamlint 側で「band 総周長 ≈ Σ(neighbour の接辺 × 裁断枚数) + 閉じ代」を測る純関数（`matchBandSubrange`）が先に用意され、Loomit はその check を発行できていなかった。
+
+ここで、defer を解くのは**測定**ではなく**発行と authoring**だと確認した。Loomit の担当は変わらない — 「どのピースが band で、どれが neighbours か」という構造を宣言し、Seamlint に渡すだけ。和を測るのも、各 neighbour のどの辺が band に接するかを見つけるのも、裁断枚数（DXF の "Cut N"）を読むのも Seamlint。だから `band-seam` の contract は **band target（BLOCK）＋ neighbour targets（BLOCK）** だけを運び、**辺も裁断枚数も渡さない**（`seam-edge` の「辺は Seamlint が発見」をそのまま一段広げた形）。当初は各 neighbour に notch 署名も載せたが、Seamlint の実データ検証で band 側の waist 辺が 0-notch＝notch では特定できず、Seamlint は **dart 畳み辺**（fitted band は dart で成形されるので darted 辺が唯一の band 接辺）で発見する実装になった。notch は band では読まれないので、送らない（seam-edge では notch 署名が効くが、band ではそこが違う）。
+
+- **emit** — 3枚以上の contiguous を一律 defer していた経路を割り、**片側がちょうど1枚**なら band と見て `band-seam` を1本出すようにした。両側とも複数枚（和が band へ一意に解けない）や、side を宣言しない重ね（coincident の N-ary）は従来どおり defer のまま。band 接辺の発見は辺分割を要するので**全側 DXF 必須**（SVG が混ざれば `seam-edge` のような sewn-seam fallback は無く、出さずに理由を返す）。
+- **authoring** — `loom connect` に band モード（`loom connect <band> --to <n1> <n2>... --as <id>`）を足した。ここで「縫い合う」を表すのは共有 id であって side ではない、という区別がはっきりした。`side` は「この N枚は同じ側＝長さが足し算で合う」を band と重ねで見分けるためだけのラベルなので、band モードでは**コマンドが裏で書く** — 作者はトークン（band / neighbours / notches）だけを渡し、`side` を手で触らない。素の2枚 seam は side なしのまま従来の形で残る。
+
+始まりは「connect を付けたのに Seamlint 側の band-seam を通せない」だったが、辿ってみると defer の正体は「Loomit が測れないから」ではなく「発行する口と authoring の口が無かったから」で、責務境界（Loomit=構造とグラフ / Seamlint=幾何 / 作者=トークン）は一切動かさずに、その口だけを開ければよかった、という確認になった。両側とも複数枚の和は、まだ defer の側に残っている。
+
 ## まだ途中にあるもの
 
 今の Loomit は、最初の発想だった「洋裁の git」に完全に到達したわけではない。
