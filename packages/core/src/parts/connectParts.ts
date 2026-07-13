@@ -45,6 +45,8 @@ export interface ConnectedSide {
   readonly pathRef: string | undefined;
   // files.geometry か files.preview のどちらかがあるか。無ければ slnt check は幾何ソース欠落で測れない。
   readonly hasGeometrySource: boolean;
+  // files.geometry(DXF)があるか。band-seam は DXF 必須(辺分割が要る)なので、SVG preview だけでは測れない。
+  readonly hasDxfGeometry: boolean;
 }
 
 export interface ConnectedParts {
@@ -176,14 +178,16 @@ export async function connectParts(
     options.id,
     type,
     sideA.value.pathRef,
-    options.notchCount
+    options.notchCount,
+    undefined
   );
   const newPartB = withConnector(
     sideB.value.part,
     options.id,
     type,
     sideB.value.pathRef,
-    options.notchCount
+    options.notchCount,
+    undefined
   );
 
   // 書き込む前に両パーツを正本 schema で検証する。CLI で弾ききれない値(型など)があっても、schema に合わない
@@ -247,13 +251,15 @@ export async function connectParts(
           role: options.roleA,
           filePath: filePathA,
           pathRef: sideA.value.pathRef,
-          hasGeometrySource: sideA.value.hasGeometrySource
+          hasGeometrySource: sideA.value.hasGeometrySource,
+          hasDxfGeometry: sideA.value.hasDxfGeometry
         },
         {
           role: options.roleB,
           filePath: filePathB,
           pathRef: sideB.value.pathRef,
-          hasGeometrySource: sideB.value.hasGeometrySource
+          hasGeometrySource: sideB.value.hasGeometrySource,
+          hasDxfGeometry: sideB.value.hasDxfGeometry
         }
       ],
       projectFilePath
@@ -262,11 +268,278 @@ export async function connectParts(
   };
 }
 
+export interface ConnectBandOptions {
+  // project を探す起点(通常は cwd)。
+  readonly projectPath: string;
+  // band = singleton 側の1枚。周方向辺(×裁断枚数)が neighbours の接辺の和と合うかを Seamlint が測る。
+  readonly bandRole: string;
+  // band に縫い付く反対側のピース群(1枚以上)。全員が同じ id・同じ neighbour 側 side を宣言する。
+  readonly neighbourRoles: readonly string[];
+  // 縫い目の一意 id(record キー=join id)。band と全 neighbour に同じ id を書くことでペアが成立する。
+  readonly id: string;
+  // 縫い目の種類ラベル。未指定なら id にフォールバック。
+  readonly type?: string;
+  // neighbours に載せる合印(notch)数。band 側は最長辺を Seamlint が選ぶので載せない。
+  readonly notchCount?: number;
+  // side ラベル。既定は band / neighbour。classifyJoinSides が2側の contiguous と見なせれば値自体は任意。
+  readonly bandSide?: string;
+  readonly neighbourSide?: string;
+}
+
+export interface ConnectedBand {
+  readonly id: string;
+  readonly type: string;
+  readonly notchCount: number | undefined;
+  readonly bandSide: string;
+  readonly neighbourSide: string;
+  readonly band: ConnectedSide;
+  readonly neighbours: readonly ConnectedSide[];
+  readonly projectFilePath: string;
+}
+
+// band を宣言する: band 1枚 + neighbours N枚 の全 part.loom に同じ id の connector を書き、band 側/neighbour 側を
+// side ラベルで分ける。これで loom check は contiguous(2側)と判定し、loom slnt check は band-seam を emit する。
+// 「縫い合う」を表すのは共有 id、side は「この N枚は同じ側=長さが足し算で合う」の判別ラベル(pairwise の素の seam は
+// side なし)。全 part をまとめて読み・検証してから書き込み、途中で失敗したら書いた分を原バイト列へ巻き戻す(部分適用しない)。
+export async function connectBand(
+  options: ConnectBandOptions
+): Promise<LoadFileResult<ConnectedBand>> {
+  const bandSide = options.bandSide ?? "band";
+  const neighbourSide = options.neighbourSide ?? "neighbour";
+
+  // side が同一だと classifyJoinSides が1側(不完全)になり band にならない。2側を要求する。
+  if (bandSide === neighbourSide) {
+    return connectBandError(
+      "CONNECT_BAND_SIDE_CONFLICT",
+      `Band side and neighbour side are both "${bandSide}"; a band seam needs two distinct sides.`,
+      bandSide,
+      ["Use different --band-side and --neighbour-side labels (defaults: band / neighbour)."]
+    );
+  }
+
+  if (options.neighbourRoles.length === 0) {
+    return connectBandError(
+      "CONNECT_BAND_NO_NEIGHBOURS",
+      `Band "${options.bandRole}" has no neighbours to sew to.`,
+      options.bandRole,
+      ["List at least one neighbour part after --to (the pieces whose edges add up to the band)."]
+    );
+  }
+
+  // band が neighbours に混ざる / neighbours 重複 = 同じ物理パーツを二重に数える。role 文字列で先に弾く
+  // (別名で同一ファイルを指すケースは後段の file-identity で拾う)。
+  const roleCounts = new Map<string, number>();
+  for (const role of [options.bandRole, ...options.neighbourRoles]) {
+    roleCounts.set(role, (roleCounts.get(role) ?? 0) + 1);
+  }
+  const duplicated = [...roleCounts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([role]) => role);
+  if (duplicated.length > 0) {
+    return connectBandError(
+      "CONNECT_BAND_DUPLICATE_ROLE",
+      `Roles ${duplicated.map((role) => `"${role}"`).join(", ")} appear more than once; a band and each neighbour must be distinct parts.`,
+      duplicated.join(", "),
+      ["Give the band and each neighbour a distinct role. A part cannot be both the band and a neighbour."]
+    );
+  }
+
+  // id は part.loom の record キー兼 Seamlint の join id。区切り文字/不正 segment は測れないので authoring で弾く。
+  if (!isSafePathSegment(options.id) || !isDelimiterSafeIdentifier(options.id)) {
+    return connectBandError(
+      "CONNECT_ID_INVALID",
+      `Connector id "${options.id}" is not usable: it must be a single token without "/", "\\", ":", ".", or "__" (and not "." or "..").`,
+      options.id,
+      ['Use a simple id like "waist" or "armhole". Seamlint reserves those characters to build seam ids.']
+    );
+  }
+
+  const loadedProjectResult = await loadProject(options.projectPath);
+
+  if (!loadedProjectResult.ok) {
+    return loadedProjectResult;
+  }
+
+  const { partFilePaths, projectFilePath } = loadedProjectResult.value.paths;
+
+  const allRoles = [options.bandRole, ...options.neighbourRoles];
+  const missingRoles = allRoles.filter((role) => partFilePaths[role] === undefined);
+  if (missingRoles.length > 0) {
+    return connectBandError(
+      "CONNECT_ROLE_NOT_FOUND",
+      `No part is registered for role ${missingRoles.map((role) => `"${role}"`).join(" or ")}.`,
+      missingRoles.join(", "),
+      ["Check the role spelling, or add the part first with loom add. Run loom check to list registered parts."]
+    );
+  }
+
+  // role → filePath(上で全て定義済みを確認済み)。noUncheckedIndexedAccess を満たすためガードして詰める。
+  const roleFilePaths: { readonly role: string; readonly filePath: string }[] = [];
+  for (const role of allRoles) {
+    const filePath = partFilePaths[role];
+    if (filePath !== undefined) {
+      roleFilePaths.push({ role, filePath });
+    }
+  }
+
+  // 別名で同一 part.loom を指す組を弾く(同じファイルを二重に数えて偽の band にしない)。全ペアを dev+ino で確認。
+  for (let i = 0; i < roleFilePaths.length; i += 1) {
+    for (let j = i + 1; j < roleFilePaths.length; j += 1) {
+      const a = roleFilePaths[i];
+      const b = roleFilePaths[j];
+      if (a !== undefined && b !== undefined && (await isSamePhysicalFile(a.filePath, b.filePath))) {
+        return connectBandError(
+          "CONNECT_SAME_FILE",
+          `Roles "${a.role}" and "${b.role}" resolve to the same part.loom, so they are one physical part; a band joins distinct parts.`,
+          a.filePath,
+          ["Point each role at its own part.loom in loomit.yml, or connect distinct parts."]
+        );
+      }
+    }
+  }
+
+  // 全 part を先に読み・検証(prepareSide)。どれかで失敗したら何も書かない。band か neighbour かで side を決める。
+  const prepared: BandPreparedEntry[] = [];
+  for (const { role, filePath } of roleFilePaths) {
+    const side = role === options.bandRole ? bandSide : neighbourSide;
+    const result = await prepareSide(filePath, role, options.id, undefined);
+    if (!result.ok) {
+      return result;
+    }
+    prepared.push({ role, filePath, side, prepared: result.value });
+  }
+
+  const type = options.type ?? options.id;
+
+  // 新 Part を組んで正本 schema で検証。band は notch を載せない(最長辺選択)、neighbours は notchCount を載せる。
+  const validated: BandValidatedEntry[] = [];
+  for (const entry of prepared) {
+    const isBand = entry.role === options.bandRole;
+    const newPart = withConnector(
+      entry.prepared.part,
+      options.id,
+      type,
+      entry.prepared.pathRef,
+      isBand ? undefined : options.notchCount,
+      entry.side
+    );
+    const check = validatePart(newPart, entry.role);
+    if (!check.ok) {
+      return check;
+    }
+    validated.push({
+      role: entry.role,
+      filePath: entry.filePath,
+      originalText: entry.prepared.originalText,
+      pathRef: entry.prepared.pathRef,
+      hasGeometrySource: entry.prepared.hasGeometrySource,
+      hasDxfGeometry: entry.prepared.hasDxfGeometry,
+      part: check.value
+    });
+  }
+
+  // 全 part を書き込み。途中で失敗したら、それまでに書いた分を原バイト列に巻き戻す(部分適用しない)。巻き戻しも
+  // 失敗したら、どのファイルが半端に残ったかを別診断で明示する。
+  const written: { readonly role: string; readonly filePath: string; readonly originalText: string }[] = [];
+  for (const entry of validated) {
+    try {
+      await writeFileAtomic(entry.filePath, stringify(entry.part));
+      written.push({ role: entry.role, filePath: entry.filePath, originalText: entry.originalText });
+    } catch (writeError) {
+      const rollbackFailures: Diagnostic[] = [];
+      for (const done of written) {
+        try {
+          await writeFileAtomic(done.filePath, done.originalText);
+        } catch (rollbackError) {
+          rollbackFailures.push(
+            describeFsError(rollbackError, {
+              code: "CONNECT_ROLLBACK_FAILED",
+              message: `Wrote connector "${options.id}" to "${done.role}" but could not finish the band or undo it, so its part.loom still declares the seam.`,
+              target: done.filePath,
+              suggestion: [
+                `Remove connectors.${options.id} from ${done.role}'s part.loom by hand, then run loom connect again.`
+              ]
+            })
+          );
+        }
+      }
+      return { ok: false, diagnostics: [connectWriteError(writeError, entry.filePath), ...rollbackFailures] };
+    }
+  }
+
+  const toSide = (entry: BandValidatedEntry): ConnectedSide => ({
+    role: entry.role,
+    filePath: entry.filePath,
+    pathRef: entry.pathRef,
+    hasGeometrySource: entry.hasGeometrySource,
+    hasDxfGeometry: entry.hasDxfGeometry
+  });
+
+  const bandEntry = validated.find((entry) => entry.role === options.bandRole);
+  const neighbourEntries = validated.filter((entry) => entry.role !== options.bandRole);
+
+  if (bandEntry === undefined) {
+    // 到達しない(band role は allRoles 先頭で検証済み)。型を満たすための保険。
+    return connectBandError(
+      "CONNECT_ROLE_NOT_FOUND",
+      `No part is registered for role "${options.bandRole}".`,
+      options.bandRole,
+      ["Check the role spelling, or add the part first with loom add."]
+    );
+  }
+
+  return {
+    ok: true,
+    value: {
+      id: options.id,
+      type,
+      notchCount: options.notchCount,
+      bandSide,
+      neighbourSide,
+      band: toSide(bandEntry),
+      neighbours: neighbourEntries.map(toSide),
+      projectFilePath
+    },
+    diagnostics: []
+  };
+}
+
+// band の入口検証で使う error 結果(false ブランチ)を1行で作る。
+function connectBandError(
+  code: string,
+  message: string,
+  target: string,
+  suggestion: readonly string[]
+): { readonly ok: false; readonly diagnostics: readonly Diagnostic[] } {
+  return {
+    ok: false,
+    diagnostics: [createDiagnostic({ severity: "error", code, message, target, suggestion: [...suggestion] })]
+  };
+}
+
+interface BandPreparedEntry {
+  readonly role: string;
+  readonly filePath: string;
+  readonly side: string;
+  readonly prepared: PreparedSide;
+}
+
+interface BandValidatedEntry {
+  readonly role: string;
+  readonly filePath: string;
+  readonly originalText: string;
+  readonly pathRef: string | undefined;
+  readonly hasGeometrySource: boolean;
+  readonly hasDxfGeometry: boolean;
+  readonly part: Part;
+}
+
 interface PreparedSide {
   readonly part: Part;
   readonly originalText: string;
   readonly pathRef: string | undefined;
   readonly hasGeometrySource: boolean;
+  readonly hasDxfGeometry: boolean;
 }
 
 // 片側の part.loom を読み、既存衝突を確認し、path_ref の既定(files.piece)を解決する。書き込みはしない。
@@ -312,10 +585,11 @@ async function prepareSide(
   // path_ref の既定は files.piece(= DXF export の BLOCK 名)。override があればそれを使う。
   const pathRef = pathRefOverride ?? part.files?.piece;
   const hasGeometrySource = part.files?.geometry !== undefined || part.files?.preview !== undefined;
+  const hasDxfGeometry = part.files?.geometry !== undefined;
 
   return {
     ok: true,
-    value: { part, originalText: rawResult.value, pathRef, hasGeometrySource },
+    value: { part, originalText: rawResult.value, pathRef, hasGeometrySource, hasDxfGeometry },
     diagnostics: []
   };
 }
@@ -341,17 +615,20 @@ async function isSamePhysicalFile(pathA: string, pathB: string): Promise<boolean
   }
 }
 
-// 既存 part に connector を1つ足した新しい Part を返す(元は破壊しない)。type/path_ref/notch_count のうち
-// 与えられたものだけを載せる(identity だけの connector も許す=path_ref/notch_count は後で足せる)。
+// 既存 part に connector を1つ足した新しい Part を返す(元は破壊しない)。type/side/path_ref/notch_count のうち
+// 与えられたものだけを載せる(identity だけの connector も許す=path_ref/notch_count は後で足せる)。side は band
+// (contiguous)を書くときだけ載る ── pairwise の素の seam は side なし(coincident)のまま。
 function withConnector(
   part: Part,
   id: string,
   type: string,
   pathRef: string | undefined,
-  notchCount: number | undefined
+  notchCount: number | undefined,
+  side: string | undefined
 ): Part {
   const connector: Connector = {
     type,
+    ...(side === undefined ? {} : { side }),
     ...(pathRef === undefined ? {} : { path_ref: pathRef }),
     ...(notchCount === undefined ? {} : { notch_count: notchCount })
   };

@@ -69,25 +69,35 @@ loom add <file.val>
 
 ## `loom connect`
 
-既に add 済みの2つの part を「縫い合う」と宣言する。両方の `part.loom` に**同じ id の connector を対で書き込む**ので、`loom check` がその id でペアにし、`loom slnt check` が共有 seam を測れるようになる。`loom add --yes` で骨組みだけ作った後の配線工程。
+既に add 済みの part を「縫い合う」と宣言する。参加する各 `part.loom` に**同じ id の connector を書き込む**ので、`loom check` がその id でペアにし、`loom slnt check` が共有 seam を測れるようになる。`loom add --yes` で骨組みだけ作った後の配線工程。
+
+2つの形がある:
 
 ```text
-loom connect <roleA> <roleB> --as <id> [options]
+loom connect <roleA> <roleB> --as <id> [options]          # 素の seam（2枚が端どうし）
+loom connect <band> --to <n1> <n2>... --as <id> [options]  # band seam（1枚 対 複数枚）
 ```
+
+- **素の seam** — front↔back の脇線のように、2枚が端どうしで縫い合う。`side` は書かない。
+- **band seam** — 腰帯が前+後に、袖ぐりが前身頃+後身頃に縫い付くように、1枚の band が「長さの和がそれに等しい複数枚」に縫い合う。`--to` で複数枚を並べると、band 側/neighbour 側の `side` は**コマンドが裏で書く**（作者は `side` を触らない）。
 
 オプション:
 
-- `--as <id>`（必須）— 縫い目の一意 id。両 part に同じ id が書かれ、それがペアの成立条件になる。
+- `--as <id>`（必須）— 縫い目の一意 id。参加 part 全部に同じ id が書かれ、それがペアの成立条件になる。
+- `--to <roles...>` — band モードに切り替える。band が縫い付く neighbour ピース群（1枚以上）。
 - `--type <type>` — 縫い目の種類ラベル（例: `side`, `armhole`）。ペアリングには使われない。未指定なら id にフォールバック。
-- `--notches <n>` — この seam の合印（notch）数（非負整数）。同じ2ピースを共有する複数 seam を Seamlint が辺ごとに区別するための識別子。
-- `--path-ref-a <block>` / `--path-ref-b <block>` — 各 part の測定用 DXF BLOCK 名。未指定なら各 part の `files.piece` を既定にする（BLOCK 照合は大文字小文字を無視するので `front` が `FRONT` に当たる）。
+- `--notches <n>` — この seam の合印（notch）数（非負整数）。band モードでは neighbours 側に書く。同じピースを共有する複数 seam を Seamlint が辺ごとに区別するための識別子。
+- `--band-side <s>` / `--neighbour-side <s>` — band モードの side ラベル。既定は `band` / `neighbour`。値は2側が別なら任意（`classifyJoinSides` が2側の contiguous と見なせればよい）。
+- `--path-ref-a <block>` / `--path-ref-b <block>` — 各 part の測定用 DXF BLOCK 名（**素の seam 専用**）。未指定なら各 part の `files.piece` を既定にする（BLOCK 照合は大文字小文字を無視するので `front` が `FRONT` に当たる）。
 
 補足:
 
-- **辺（座標）は入力しない。** 人が渡すのはトークン（id / path_ref / notch_count）だけで、どの辺が共有縫い線かは Seamlint が幾何から発見する（`seam-edge`）。
+- **「縫い合う」を表すのは side ではなく共有 id。** `side` は band のときだけ要る「この N枚は同じ側＝長さが足し算で1本の band に合う」の判別ラベルで、素の seam には付かない（重ね＝coincident と区別するため）。
+- **辺（座標）は入力しない。** 人が渡すのはトークン（id / path_ref / notch_count）だけで、どの辺が共有縫い線かは Seamlint が幾何から発見する（`seam-edge` / `band-seam`）。
 - connector は複数 part を組む cross-part join 専用なので、同じ role 同士は接続できない（自己シームは Seamlint が測る）。
-- 実測まで行くには各 part に `files.geometry`（DXF）か `files.preview`（SVG）が要る。無い側は成功時に案内する。
-- 例: `loom connect front back --as outseam --notches 2` → 両 part.loom に `connectors.outseam` を書き、次に `loom slnt check`。
+- 実測まで行くには各 part に `files.geometry`（DXF）か `files.preview`（SVG）が要る。無い側は成功時に案内する。**band seam は band 接辺の和を測るため全側 DXF が要る**（SVG は辺分割できない）。
+- 例（素）: `loom connect front back --as outseam --notches 2`
+- 例（band）: `loom connect waistband --to front back --as waist --notches 2` → 3枚の part.loom に `connectors.waist` を書き（band=waistband、neighbours=front/back）、次に `loom slnt check` が `band-seam` を1本出す。
 
 ## `loom check`
 
