@@ -118,8 +118,14 @@ export type {
   AddPartConnectorInput,
   AddPartToProjectOptions
 } from "./parts/addPartToProject.js";
-export { connectParts } from "./parts/connectParts.js";
-export type { ConnectedParts, ConnectedSide, ConnectPartsOptions } from "./parts/connectParts.js";
+export { connectBand, connectParts } from "./parts/connectParts.js";
+export type {
+  ConnectBandOptions,
+  ConnectedBand,
+  ConnectedParts,
+  ConnectedSide,
+  ConnectPartsOptions
+} from "./parts/connectParts.js";
 export { loadPartFile } from "./parts/loadPartFile.js";
 export { loadProjectedPart } from "./parts/loadProjectedPart.js";
 export { listValDetailsFromFile, listValDetailsFromText } from "./parts/listValDetails.js";

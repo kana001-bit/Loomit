@@ -130,6 +130,7 @@ Connector は **id** と **type** の2軸を持つ。
 - **id**（record キー）は縫い目ごとに一意な rendezvous。同じ id を宣言したパーツが1本の縫い目に参加する。`loom check` はこの id で参加者を集めて assembly グラフの整合を見る。**「1本の縫い目 = 2枚」とは限らない**（見返し/裏地/ポケット重ねは N 枚が1本に参加する coincident な縫い目、set-in sleeve の armhole は多パーツの端どうしを1本で縫う contiguous な縫い目）。よって「3パーツ以上 = error」ではない。詳細は下記 **side** と `design-history.md` の assembly の章。
 - **type** は縫い目の種類ラベル。ペアリングには使われない分類語で、同じ type の縫い目が複数あってよい（その区別は id が担う）。
 - **side**（任意）は contiguous な縫い目で、その縫い目でこのパーツがどちらの側（unit）に属すかのラベル。armhole のように多パーツの端が「和」で合う縫い目を、参加ピースを2つの側（例: 身頃側 / 袖側）にまとめて表す。side を宣言した縫い目は「側がちょうど2なら健全（`CONNECTOR_JOIN_TOO_MANY_SIDES` は3側以上のとき）」。side 無しは coincident（重ね・各参加が等長）。unit 所属は縫い目ごと（front は脇では piece 単位、armhole では身頃 unit）なので part ではなく connector に載る。長さ（和・いせ）の実測は Seamlint。
+- **band seam** は contiguous のうち、**片側がちょうど1枚（band）・反対側が複数枚（neighbours）** の形。band の周方向辺の長さが neighbours の接辺の和に等しい（腰帯 ↔ 前+後、袖山 ↔ 前身頃+後身頃）。この形は `loom slnt check` が `band-seam` check を1本発行し、和の照合は Seamlint（`matchBandSubrange`）が担う。authoring は `loom connect <band> --to <neighbours...>`（side はコマンドが裏で書く）。両側とも複数枚の和は今のところ defer（`SEAMLINT_CONNECTOR_SEAM_DEFERRED`）。詳細は `design-history.md` の band の章。
 
 type の例（**種類の例であって id ではない**）:
 

@@ -20,6 +20,10 @@ export type SeamlintJoinKind =
   // seam-edge: path_ref が指す BLOCK 全体(外周)ではなく、宣言ペアが実際に縫い合う共有辺を Seamlint が
   // structuralEdges で発見して測る。両側 DXF の平 seam でだけ使う(SVG は辺分割できない)。
   | "seam-edge"
+  // band-seam: contiguous な縫い目で、片側が1枚(band = from)・反対側がN枚(neighbours)のとき。band の周方向辺
+  // (×裁断枚数)が neighbours の band 接辺の和と合うかを Seamlint が測る(matchBandSubrange)。seam-edge と同じく
+  // 辺は渡さず BLOCK(path_ref)だけ渡し、各 neighbour の band 接辺は Seamlint が dart 畳み辺として発見する。DXF 専用。
+  | "band-seam"
   | "closed-loop"
   | "overlap"
   | "intentional-corner"
@@ -48,6 +52,9 @@ export interface SeamlintGeometryTolerance {
   readonly ease_ratio?: readonly [number, number];
   readonly gatherRatio?: readonly [number, number];
   readonly gather_ratio?: readonly [number, number];
+  // band-seam の閉じ代/ease 許容比(band 総周長と neighbours 合計の相対差の上限)。省略時は Seamlint 既定(6%)。
+  readonly closureRatio?: number;
+  readonly closure_ratio?: number;
 }
 
 export interface SeamlintGeometryMarkerRef {
@@ -78,6 +85,9 @@ export interface SeamlintGeometryCheckSpec {
   readonly kind: SeamlintJoinKind;
   readonly from: SeamlintGeometryTarget;
   readonly to?: SeamlintGeometryTarget;
+  // band-seam のときだけ設定。from(band) に接する反対側のピース群。BLOCK target のみを並べる ── どの辺が band に
+  // 接するかは Seamlint が各 neighbour の dart 畳み辺として発見するので、辺 id も notch 署名も渡さない(Seamlint 契約)。
+  readonly neighbours?: readonly SeamlintGeometryTarget[];
   readonly tolerance?: SeamlintGeometryTolerance;
   readonly range?: SeamlintGeometryCheckRange;
   readonly edgeSignature?: SeamlintGeometryEdgeSignature;
@@ -208,8 +218,25 @@ export function createSeamlintGeometryRequest(
     }
 
     // ここまで来れば coincident(重ね)か contiguous(連続2側)= 正当なデザイン。3枚以上は pairwise の seam request を
-    // 作れないので、N-ary/和のジオメトリは Seamlint に defer する(assembly (d))。error ではなく先送りの warning。
+    // 作れない。ただし contiguous で片側がちょうど1枚(band)・反対側がN枚(neighbours)なら band-seam として emit する
+    // (band の周方向辺 ×裁断枚数 ≈ Σ neighbours の接辺 を Seamlint が測る)。それ以外(重ねの N-ary / 両側とも複数枚)は
+    // pairwise の和として一意に解けないので従来どおり Seamlint に defer する(assembly (d))。
     if (participants.length > 2) {
+      const bandShape = topology.kind === "contiguous" ? findBandShape(participants) : undefined;
+
+      if (bandShape !== undefined) {
+        emitBandSeam({
+          joinId,
+          band: bandShape.band,
+          neighbours: bandShape.neighbours,
+          geometryParts,
+          partSourceCache,
+          checks,
+          diagnostics
+        });
+        continue;
+      }
+
       const roles = participants
         .map((participant) => participant.part.role)
         .sort((left, right) => left.localeCompare(right));
@@ -217,10 +244,10 @@ export function createSeamlintGeometryRequest(
         createDiagnostic({
           severity: "warning",
           code: "SEAMLINT_CONNECTOR_SEAM_DEFERRED",
-          message: `Connector "${joinId}" is declared by ${roles.length} parts (${roles.join(", ")}); Loomit only emits pairwise (two-part) seam requests for now, so its ${topology.kind === "contiguous" ? "contiguous" : "stacked"} geometry check is deferred.`,
+          message: `Connector "${joinId}" is declared by ${roles.length} parts (${roles.join(", ")}); Loomit only emits pairwise (two-part) or band (one-vs-many) seam requests for now, so its ${topology.kind === "contiguous" ? "contiguous" : "stacked"} geometry check is deferred.`,
           target: joinId,
           suggestion: [
-            `This is expected for stacked (facing/lining) or contiguous (armhole) seams; measuring their combined length is a future Seamlint step.`
+            `This is expected for stacked (facing/lining) seams, or contiguous seams where both sides have multiple pieces; measuring their combined length is a future Seamlint step.`
           ]
         })
       );
@@ -399,6 +426,176 @@ function collectPartsByJoinId(resolvedProject: ResolvedProject): Map<string, Joi
   }
 
   return new Map([...partsByJoinId.entries()].sort(([left], [right]) => left.localeCompare(right)));
+}
+
+// contiguous な縫い目の参加を band(1枚)と neighbours(N枚)に振り分ける。片側がちょうど1枚のときだけ band 形として
+// { band, neighbours } を返す。両側とも複数枚なら和が一意に band へ解けないので undefined(呼び出し側は defer に倒す)。
+// neighbours は role 昇順で安定させる(check id と neighbours 配列の順を決定的にする)。
+function findBandShape(
+  participants: readonly JoinParticipant[]
+): { readonly band: JoinParticipant; readonly neighbours: JoinParticipant[] } | undefined {
+  const bySide = new Map<string, JoinParticipant[]>();
+
+  for (const participant of participants) {
+    const side = participant.connector.side;
+    // contiguous は全参加が side を宣言している前提(classifyJoinSides)。念のため未宣言があれば band 形にしない。
+    if (side === undefined) {
+      return undefined;
+    }
+    const group = bySide.get(side) ?? [];
+    group.push(participant);
+    bySide.set(side, group);
+  }
+
+  // contiguous は distinct side がちょうど2。片方が1枚なら band、もう片方(必ず2枚以上)が neighbours。
+  const groups = [...bySide.values()];
+  const bandGroup = groups.find((group) => group.length === 1);
+  const neighbourGroup = groups.find((group) => group.length !== 1);
+
+  if (bandGroup === undefined || neighbourGroup === undefined) {
+    return undefined;
+  }
+
+  const band = bandGroup[0];
+  if (band === undefined) {
+    return undefined;
+  }
+
+  return {
+    band,
+    neighbours: [...neighbourGroup].sort((left, right) =>
+      left.part.role.localeCompare(right.part.role)
+    )
+  };
+}
+
+// band-seam を1本組み立てて checks に push する。band + 全 neighbour の path_ref / 幾何ソースを先に検証し、全側 DXF の
+// ときだけ emit する(band 総周長 vs neighbours 合計の照合は structuralEdges を要し SVG では測れない)。どれかが
+// 欠ける / DXF でない / 識別子が危険なら理由を診断して何も emit しない(片側だけ commit して孤立させない)。
+// 辺は渡さず BLOCK(path_ref)だけを渡す ── band 接辺の発見(各 neighbour の dart 畳み辺)と裁断枚数(Cut N)の
+// 読取りは Seamlint 側。notch 署名は band では使わないので送らない(seam-edge とはそこが違う)。
+function emitBandSeam(input: {
+  readonly joinId: string;
+  readonly band: JoinParticipant;
+  readonly neighbours: readonly JoinParticipant[];
+  readonly geometryParts: Map<string, MutableGeometryPartRef>;
+  readonly partSourceCache: Map<string, ResolvedPartGeometry | null>;
+  readonly checks: SeamlintGeometryCheckSpec[];
+  readonly diagnostics: Diagnostic[];
+}): void {
+  const { joinId, band, neighbours, geometryParts, partSourceCache, checks, diagnostics } = input;
+  const roles = [band.part.role, ...neighbours.map((neighbour) => neighbour.part.role)];
+
+  // check id / paths キーは role・joinId を区切り文字("." "/" ":" "__")で連結する。危険な識別子は別 seam と同じ
+  // キーへ化けて衝突するので、seam(pairwise)と同じく skip して理由を出す。
+  if (!isDelimiterSafeIdentifier(joinId) || roles.some((role) => !isDelimiterSafeIdentifier(role))) {
+    diagnostics.push(
+      createDiagnostic({
+        severity: "warning",
+        code: "SEAMLINT_UNSAFE_JOIN_IDENTIFIER",
+        message: `Band seam "${joinId}" (${roles.join(", ")}) uses a part role or connector id containing a reserved separator (":", ".", "/", or "__"), so Loomit skipped it to avoid colliding Seamlint check ids or markers.`,
+        target: joinId,
+        suggestion: [
+          `Rename the part role or connector id to avoid ":", ".", "/", and "__" before handing this band seam to Seamlint.`
+        ]
+      })
+    );
+    return;
+  }
+
+  // pairwise の seam と同じく、参加が同じ縫い目の type で揃っていることを要求する。band と neighbours で type が
+  // 食い違う(手書き part.loom で waist と pocket が混在等)のは「その縫い目が何か」の宣言が割れているということ。
+  // Seamlint に nonsensical な band 測定を渡さないよう、揃うまで emit せず理由を出して skip する。
+  const bandType = band.connector.type;
+  const mismatchedRoles = neighbours
+    .filter((neighbour) => neighbour.connector.type !== bandType)
+    .map((neighbour) => neighbour.part.role);
+  if (mismatchedRoles.length > 0) {
+    diagnostics.push(
+      createDiagnostic({
+        severity: "warning",
+        code: "SEAMLINT_CONNECTOR_TYPE_MISMATCH",
+        message: `Band seam "${joinId}" uses different connector types across its parts (band "${band.part.role}" declares type "${bandType}"; mismatched: ${mismatchedRoles.join(", ")}), so Loomit cannot auto-build one Seamlint band-seam request for it yet.`,
+        target: joinId,
+        suggestion: [
+          `Keep connector "${joinId}" on the band and every neighbour aligned to one seam type before handing it off to Seamlint.`
+        ]
+      })
+    );
+    return;
+  }
+
+  // band + 全 neighbour を先に検証(mutation なし)。どれかが path_ref / 幾何ソース欠落なら何も commit せず抜ける。
+  const bandSide = resolveGeometrySide(band.part, joinId, band.connector, partSourceCache, diagnostics);
+  if (bandSide === undefined) {
+    return;
+  }
+
+  const neighbourSides: { readonly participant: JoinParticipant; readonly side: ResolvedGeometrySide }[] = [];
+  for (const neighbour of neighbours) {
+    const side = resolveGeometrySide(
+      neighbour.part,
+      joinId,
+      neighbour.connector,
+      partSourceCache,
+      diagnostics
+    );
+    if (side === undefined) {
+      return;
+    }
+    neighbourSides.push({ participant: neighbour, side });
+  }
+
+  // band-seam は band の辺分割(structuralEdges)を要するので全側 DXF 必須。seam-edge の SVG→sewn-seam のような
+  // fallback は band には無い(和は測れない)ので、DXF でない側があれば emit せず何を足せばよいか示す。
+  const nonDxfRoles = [
+    ...(bandSide.format === "dxf" ? [] : [band.part.role]),
+    ...neighbourSides
+      .filter(({ side }) => side.format !== "dxf")
+      .map(({ participant }) => participant.part.role)
+  ];
+  if (nonDxfRoles.length > 0) {
+    diagnostics.push(
+      createDiagnostic({
+        severity: "warning",
+        code: "SEAMLINT_BAND_SEAM_REQUIRES_DXF",
+        message: `Band seam "${joinId}" needs DXF geometry to sum the neighbour edges, but ${nonDxfRoles.join(", ")} resolved to a non-DXF (SVG) source, so Loomit did not build a band-seam check for it.`,
+        target: joinId,
+        suggestion: [
+          `Add files.geometry (DXF) for ${nonDxfRoles.join(", ")} so Loomit can hand Seamlint a band-seam check (SVG cannot be split into band edges).`
+        ]
+      })
+    );
+    return;
+  }
+
+  // 全側 DXF・検証済み。band と各 neighbour を commit してから band-seam を1本 push する。closure 許容は authoring
+  // 経路がまだ無いので載せない(Seamlint 既定 6% に委ねる)。neighbours は BLOCK target だけを渡す ── band 接辺は
+  // Seamlint が dart 畳み辺として発見するので、notch 署名も辺 id も送らない(送っても Seamlint は読まない)。
+  const bandPart = commitGeometrySide(geometryParts, bandSide);
+  const neighbourTargets: SeamlintGeometryTarget[] = neighbourSides.map(({ side }) => {
+    const part = commitGeometrySide(geometryParts, side);
+    return {
+      partId: part.partId,
+      pathRef: joinId,
+      connectorId: joinId
+    };
+  });
+
+  const neighbourIdSuffix = neighbours
+    .map((neighbour) => `${neighbour.part.role}.${joinId}`)
+    .join("/");
+
+  checks.push({
+    id: `band-seam:${band.part.role}.${joinId}/${neighbourIdSuffix}`,
+    kind: "band-seam",
+    from: {
+      partId: bandPart.partId,
+      pathRef: joinId,
+      connectorId: joinId
+    },
+    neighbours: neighbourTargets
+  });
 }
 
 function hasConnectorRanges(connector: Connector): boolean {
