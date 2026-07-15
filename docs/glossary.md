@@ -250,24 +250,34 @@ Loomit は Valentina が作成した `.val` ファイルを読み込み、解析
 ## Seamlint
 
 Loomit と連携する静的解析ツール。
-パーツ同士の互換性や縫製上の問題を検査する。
+パーツ同士の互換性や縫製上の問題を検査し、**幾何の実測**を担う。
+`loom slnt check` が渡す DXF(ASTM) から seam の**長さ・滑らかさ・閉じ**を測って verdict を出す
+（仕上がり線 = layer 14 を `structuralEdges` として測る／band seam の和は `matchBandSubrange`）。
+Loomit は幾何を計算しない([A案](work/diffable-domain.md): CAD エンジンは作らない)ので、
+「実際に何 mm か」の判定は Seamlint が持つ。責務境界は `design-history.md` の「責務境界が落ち着いた」章を正とする。
+
+### connector の `length_mm` について（測定の出どころ）
+
+`length_mm`(仕上がり seam 長)は `.val` に数値として実在せず、seam path の弧長 =
+パラメトリックモデル(点の数式＋寸法参照＋曲線)を評価して初めて出る**計算値**である。
+「`.val` が正本だから読めば取れるはず」は精神としては正しい(正本は `.val`)が、
+実務としては**読取り射影ではなく幾何測定**が要る。Loomit の系ではこの実測を **Seamlint** が
+DXF から行う（`loom slnt check`）。
+
+- part.loom の `connectors.*.length_mm` は**任意の宣言値**。`loom add` は手入力を強制せず optional(未測定可)にした(2026-07-08)。
+  未測定の connector は `type`(identity)だけを持つ。
+- `loom check` の `connector-length` rule は宣言値どうしの **sanity**(「469 と 470、許容内」程度)だけを見る。
+  未測定ペアは比較せず `CONNECTOR_LENGTH_UNMEASURED` warning を出し、`loom slnt check`(Seamlint)での実測を促す。
+  長さの本当の verdict は Seamlint が持つ(`design-history.md`)。
+  参照: `connectorSchema.length_mm`(optional 化)/ `connector-length` rule(未測定は比較せず warning)。
 
 ---
 
 ## Truer
 
 Loomit と連携するツール。
-CAD 側の形状補正や高度な幾何編集を担当する予定である。
+**Seamlint が見つけた問題を、人が承認したぶんだけ直す** — CAD 側の形状補正・
+ミリ単位の最終補正・CAD write を担当する予定である(`design-history.md` の「責務境界が落ち着いた」章)。
 
-### 担当する責務(メモ)
-
-- **connector の `length_mm`(仕上がり seam 長)の測定。**
-  この値は `.val` に数値として実在せず、seam path の弧長=パラメトリックモデル(点の数式＋寸法参照＋曲線)を
-  評価して初めて出る**計算値**である。「`.val` が正本だから読めば取れるはず」は精神としては正しい(正本は `.val`)が、
-  実務としては**読取り射影ではなく幾何計算**が要る。Loomit は幾何を計算しない([A案](work/diffable-domain.md):
-  CAD エンジンは作らない)ため、`.val` から seam 長を測って `connectors.*.length_mm` を埋めるのは
-  Truer(または Valentina)側の責務とする。
-  - 現状の Loomit 側(2026-07-08): `loom add` は `length_mm` を手入力で強制せず optional(未測定可)にした。
-    未測定の connector は `type`(identity)だけを持ち、`loom check` は未測定ペアを比較せず
-    `CONNECTOR_LENGTH_UNMEASURED` warning で「Valentina / truer で測って埋めて」と促す。
-    参照: `connectorSchema.length_mm`(optional 化)/ `connector-length` rule(未測定は比較せず warning)。
+> 📝 以前この節は seam 長の**測定**を Truer(または Valentina)の責務としていたが、それは古い(DXF-ASTM の幾何ハンドオフ以前の計画)。
+> 実測は **Seamlint**(上の節)。Truer の役割は測定ではなく**補正**である。

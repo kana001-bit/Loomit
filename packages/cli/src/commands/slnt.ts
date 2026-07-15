@@ -10,8 +10,8 @@ export interface SlntCommandOptions extends SeamlintRequestCommandOptions {
 }
 
 // slnt = Seamlint 連携の名前空間。相棒ツール Seamlint と同じ token に揃えている。
-// 今は request(幾何 handoff の組み立て)だけを持つが、動詞を subcommand として明示することで
-// 「slnt で何をするか」をコマンド名から読めるようにし、後の連携(結果取り込み等)にも拡張できる。
+// request(幾何 handoff の組み立て)と check(その handoff を Seamlint に渡して seam を実測)を
+// 動詞 subcommand として分け、「slnt で何をするか」をコマンド名から読めるようにしている。
 export async function runSlntCommand(
   args: readonly string[],
   options: SlntCommandOptions

@@ -12,15 +12,15 @@ it("reports length mismatch", () => {
 });
 ```
 
-For flags or disabled/enabled behavior, test both meanings and comment each one.
+For either/or behavior, test both meanings and comment each one.
 
 ```ts
-it("skips disabled connector checks", () => {
-  // 守る仕様: check: disabled は「この辺を縫わないため互換チェック対象から外す」という意味。
+it("reports unmeasured connectors instead of comparing length", () => {
+  // 守る仕様: length_mm 未指定の connector は connector-length 比較にかけず、CONNECTOR_LENGTH_UNMEASURED を出す。
 });
 
-it("checks enabled connectors", () => {
-  // 守る仕様: check が disabled でない connector は通常の互換チェック対象になる。
+it("compares length when both sides are measured", () => {
+  // 守る仕様: 両側が length_mm を持つ connector は connector-length 比較の対象になり、許容差超過で CONNECTOR_LENGTH_MISMATCH になる。
 });
 ```
 
@@ -47,7 +47,7 @@ When changing compatibility rules or diagnostics, prefer both:
 
 ```text
 CONNECTOR_LENGTH_MISMATCH
-PART_NOT_FOUND
+CONNECTOR_MISSING
 PROJECT_SCHEMA_INVALID
 ```
 
@@ -63,20 +63,16 @@ PROJECT_SCHEMA_INVALID
 
 Keep `Diagnostic.code` stable and English. Do not encode localization differences in `code`.
 
-`Diagnostic.target` should use a stable reference. For connectors, use:
+`Diagnostic.target` should use a stable reference. Current formats:
 
 ```text
-{part-role}.{connector-name}
+{role}.{connector-id}              # connector existence / length
+{connector-id}.{side}              # side / over-pair checks on a join
+{role}.requires.{path}             # requirement range checks
+{role}.{connector-id}.{property}   # resolved requirement target
 ```
 
-Examples:
-
-```text
-body.armhole
-sleeve.armhole
-```
-
-If another target format is needed, document it before introducing it.
+A connector id is the shared rendezvous key, so one seam can join more than two parts under a single id (see `docs/glossary.md`). If another target format is needed, document it before introducing it.
 
 ## Report Compatibility
 

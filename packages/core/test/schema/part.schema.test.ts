@@ -243,7 +243,7 @@ describe("part schema", () => {
 
   it("accepts a connector without a finished length (unmeasured at scaffold time)", () => {
     // 守る仕様: length_mm は幾何の測定値(.val 評価が要る)で、scaffold 時は未測定を許す。
-    // identity(type)だけの connector も正本 schema を満たす(値は後で Valentina / truer が埋める)。
+    // identity(type)だけの connector も正本 schema を満たす(実測は後で Seamlint(loom slnt check)が担う)。
     const result = partSchema.safeParse({
       schema: "loomit.part.v0",
       name: "puff-sleeve",
