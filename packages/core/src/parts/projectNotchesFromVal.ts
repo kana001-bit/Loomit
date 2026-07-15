@@ -38,7 +38,9 @@ export async function projectNotchesFromValFile(
           message:
             "source.val から合印(notch)を読み取れませんでした。 / Could not read notches from source.val.",
           target: filePath,
-          suggestion: ["source.val の読み取り権限を確認してください。 / Check read permissions for source.val."]
+          suggestion: [
+            "source.val の読み取り権限を確認してください。 / Check read permissions for source.val."
+          ]
         })
       ]
     };
@@ -190,8 +192,12 @@ function projectDetailNotches(
         continue;
       }
 
+      // 一意性は Seamlint の BLOCK 照合(blockName.trim().toUpperCase())に合わせて case-insensitive で見る。
+      // "Front" と "front" は同じ BLOCK に解決するので、大小違いも同名扱いにしないと DXF handoff が黙って壊れる。
+      const pieceKey = pieceName.trim().toLowerCase();
+
       // 同名 detail は契約違反(piece 名は一意)。最初を採用し、以降は warning を出して捨てる(黙って上書きしない)。
-      if (seenPieces.has(pieceName)) {
+      if (seenPieces.has(pieceKey)) {
         diagnostics.push(
           createDiagnostic({
             severity: "warning",
@@ -207,7 +213,7 @@ function projectDetailNotches(
         continue;
       }
 
-      seenPieces.add(pieceName);
+      seenPieces.add(pieceKey);
 
       const nodesBlock = collectFirstBlock(detail.content, "nodes");
 
