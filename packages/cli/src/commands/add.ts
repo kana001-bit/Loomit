@@ -1035,7 +1035,7 @@ async function promptName(
 
 // length_mm は seam path の弧長=幾何の測定値で、.val を評価しないと出ない(Loomit は幾何を計算しない: A案)。
 // ここで手打ちを強制せず、分かっていれば受け取り、空 Enter なら未測定のまま進める。未測定の値は後で
-// Valentina / seamlint / truer が測って埋める(connector は identity だけでも成立するよう length_mm を optional 化済み)。
+// Seamlint(loom slnt check)が実測する(connector は identity だけでも成立するよう length_mm を optional 化済み)。
 async function promptOptionalLengthMm(
   prompter: Prompter,
   notify: (text: string) => void,

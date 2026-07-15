@@ -67,7 +67,7 @@ describe("addPartToProject", () => {
 
   it("adds a connector without a length as identity only (deferred measurement)", async () => {
     // 守る仕様: length_mm 未測定の connector は type(identity)だけで生成し、length_mm は載せない。
-    // loom add は幾何の測定値を手打ちさせず、値は後で Valentina / truer が埋める前提。
+    // loom add は幾何の測定値を手打ちさせず、実測は後で Seamlint(loom slnt check)が担う前提。
     const projectRoot = await makeProject();
     const valPath = join(projectRoot, "body.val");
 

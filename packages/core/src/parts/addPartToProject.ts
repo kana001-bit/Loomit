@@ -25,7 +25,7 @@ export interface AddPartConnectorInput {
   readonly type?: string;
   // 仕上がり線上の長さ(mm)。幾何の測定値であり scaffold 時は未測定(undefined)を許す。
   // 値は .val を評価して初めて出る計算値なので、ここでは人が知っている場合だけ受け取り、
-  // 無ければ Valentina / seamlint / truer が後で埋める(connectorSchema も length_mm を optional にした)。
+  // 無ければ後で Seamlint(loom slnt check)が実測する(connectorSchema も length_mm を optional にした)。
   readonly lengthMm?: number;
 }
 

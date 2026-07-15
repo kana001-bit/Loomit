@@ -137,6 +137,14 @@ Example:
 // Sewing parts do not become better just because the variant label is larger.
 ```
 
+## Stale Comments
+
+A comment is part of the change, not a separate chore. When you modify behavior, schema, a rule, a field name, or a CLI surface, hunt down and fix every comment that described the old behavior — including comments in code you did not otherwise edit but that your change made false.
+
+- A comment that contradicts the current code is worse than no comment: it sends the next agent down a path that no longer exists.
+- When reviewing a diff, read each hunk's surrounding comments, not only the changed lines, and repair the ones your change invalidated.
+- The same rot spreads to `docs/` lines, `守る仕様:` test comments, and skill examples that pin down old behavior (a removed flag, a renamed field, a retired rule). Delete or correct them in the same change. If an example names a feature, confirm the feature still exists before leaving it.
+
 ## Documentation Precedence
 
 If docs and implementation disagree:

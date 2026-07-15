@@ -104,7 +104,7 @@ function comparePartConnectorLengths(
 
     // どちらかが未測定(length_mm 無し)なら長さを比較できない。0 とみなして差分を計算すると
     // 偽の一致/不一致(NaN 比較)になるため、比較を試みず「接続整合を未確認」の warning に振り替える。
-    // 値は Valentina / seamlint / truer が後で埋める前提(A案: 幾何の測定は Loomit の外)。
+    // 幾何の実測は Seamlint(loom slnt check)、宣言値なら手で埋める前提(A案: 測定は Loomit の外・Truer は補正役)。
     if (fromLengthMm === undefined || toLengthMm === undefined) {
       compatibility.push(
         buildUnmeasuredConnectorResult({ connectorId, fromPart, fromConnector, toPart, toConnector })
@@ -172,7 +172,7 @@ function compareConnectorLength(input: {
 }
 
 // 対になる connector があるのに、どちらかの length_mm が未測定で長さ比較できないときの結果。
-// 「合う/合わない」を断定せず、Valentina / truer で seam 長を測るよう促す warning にする。
+// 「合う/合わない」を断定せず、loom slnt check(Seamlint)で seam 長を実測するよう促す warning にする。
 function buildUnmeasuredConnectorResult(input: {
   readonly connectorId: string;
   readonly fromPart: ResolvedProjectPart;
@@ -200,7 +200,7 @@ function buildUnmeasuredConnectorResult(input: {
           "コネクタの仕上がり線の長さが未測定のため、接続整合を確認できません。/ Connector finished seam length is unmeasured; cannot verify the seam fit.",
         target: unmeasured.join(", "),
         suggestion: [
-          `Measure the seam length in Valentina and set length_mm on ${unmeasured.join(" and ")}.`
+          `Run \`loom slnt check\` to have Seamlint measure the seam, or set a declared length_mm on ${unmeasured.join(" and ")}.`
         ]
       })
     ]
@@ -589,7 +589,7 @@ function checkRequirement(
 
   if (actualValue === undefined) {
     // length_mm を参照しているのに未測定のケースは「未対応」ではなく「未測定」を伝える。
-    // property 自体は対応済みで、値が .val 評価待ちなだけ(A案: 測定は Valentina / truer が担う)。
+    // property 自体は対応済みで、値が実測待ちなだけ(A案: 幾何の測定は Seamlint が担う)。
     const unmeasuredLength =
       parsedPath.property === "length_mm" && targetConnector.length_mm === undefined;
 
@@ -607,7 +607,7 @@ function checkRequirement(
                 "要求条件の参照先コネクタの length_mm が未測定のため、条件を確認できません。/ The connector referenced by the requirement has an unmeasured length_mm; cannot check the requirement.",
               target: resolvedTarget,
               suggestion: [
-                `Measure the seam length in Valentina and set length_mm on ${parsedPath.role}.${parsedPath.connectorId}.`
+                `Run \`loom slnt check\` to have Seamlint measure the seam, or set a declared length_mm on ${parsedPath.role}.${parsedPath.connectorId}.`
               ]
             })
           : createDiagnostic({
