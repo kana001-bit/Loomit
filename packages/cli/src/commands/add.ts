@@ -143,6 +143,26 @@ export async function runAddCommand(
     return 0;
   }
 
+  // detail(piece)名は piece の identity=DXF export の BLOCK 名=Seamlint の突き合わせ住所であり、.val 内で一意で
+  // なければならない(Seamlint は BLOCK 名を大文字化して照合するので大小違いも衝突する)。同名 detail があると
+  // role を分けても両 part の files.piece が同じ=同じ BLOCK に解決し、Seamlint が物理ピースを区別できず notch も
+  // 片方 drop される(projectNotchesFromVal の PART_SOURCE_VAL_NOTCH_DUPLICATE_PIECE)。role 入力では直せない契約
+  // 違反なので、対話 / --yes どちらの経路に入る前にもここで止め、何も書かず Valentina 側で名前を分けさせる。
+  const duplicateDetailNames = findCollidingRoleNames(
+    detectedPieces.map((piece) => piece.pieceName),
+    true
+  );
+
+  if (duplicateDetailNames.length > 0) {
+    options.stderr(
+      `Duplicate detail name(s) in the .val (${duplicateDetailNames.join(", ")}). ` +
+        "Detail names must be unique because each identifies a DXF block (matched case-insensitively), so two pieces " +
+        "with the same name resolve to the same block and cannot be told apart. " +
+        "Give each piece a distinct detail name in Valentina, then run loom add again.\n"
+    );
+    return 1;
+  }
+
   // --yes: 対話をせず、検出した全ピースをデフォルトで一括生成する。prompter を作る前に分岐して
   // stdin を開かない(パイプ / CI でも動く)。連結の候補集めも要らないので collectExistingJoins より前で返す。
   if (parsedArgs.yes) {
@@ -469,19 +489,6 @@ async function addAllPiecesWithDefaults(
     if (ownPrompter) {
       prompter?.close();
     }
-  }
-
-  // 完全同名(綴りまで同じ)の detail は files.piece が同一 = 同じピースを指す part になる。role は分けたが
-  // 幾何ソースは同じ、という曖昧さを黙って通さないよう警告する。
-  const repeatedNames = findCollidingRoleNames(
-    addable.map((piece) => piece.pieceName),
-    false
-  );
-  if (repeatedNames.length > 0) {
-    options.stdout(
-      `Note: detail names (${repeatedNames.join(", ")}) repeat in the .val, so those parts point at the same piece. ` +
-        "Rename them in Valentina if they are meant to be different pieces.\n"
-    );
   }
 
   for (const [index, { piece, role }] of resolvedRoles.entries()) {
