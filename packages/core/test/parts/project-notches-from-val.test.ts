@@ -363,6 +363,41 @@ describe("projectNotchesFromValText", () => {
     expect(result.diagnostics[0]?.target).toBe("fixture.val#front");
   });
 
+  it("treats piece names differing only in case as duplicates (Seamlint matches case-insensitively)", () => {
+    // 守る仕様: Seamlint は BLOCK 名を toUpperCase して照合するので "Front" と "front" は同じ物理ピースに
+    //           解決する。projection も case-insensitive で重複を見て、大小違いも silent に通さず warning + drop する。
+    const result = projectNotchesFromValText(
+      `<?xml version="1.0" encoding="UTF-8"?>
+<pattern>
+  <draw name="main">
+    <details>
+      <detail id="1" name="Front">
+        <nodes>
+          <node idObject="10" passmark="true" passmarkLine="vMark" type="NodePoint"/>
+        </nodes>
+      </detail>
+      <detail id="2" name="front">
+        <nodes>
+          <node idObject="20" passmark="true" passmarkLine="tMark" type="NodePoint"/>
+        </nodes>
+      </detail>
+    </details>
+  </draw>
+</pattern>`,
+      {
+        filePath: "fixture.val"
+      }
+    );
+
+    // 最初の "Front" だけ残り、大小違いの "front" は重複として捨てられる。
+    expect(result.notches).toEqual({
+      "val:Front:notch:10": { piece: "Front", order: 0, type: "vMark" }
+    });
+    expect(result.diagnostics).toHaveLength(1);
+    expect(result.diagnostics[0]?.code).toBe("PART_SOURCE_VAL_NOTCH_DUPLICATE_PIECE");
+    expect(result.diagnostics[0]?.target).toBe("fixture.val#front");
+  });
+
   it("assigns distinct order to multiple same-type passmarks in one piece", () => {
     // 守る仕様: 同一 piece に同種(vMark)の合印が複数あるとき、DXF の seam 順(layer4=V の POINT 列)と 1:1 対応
     //           づけるための order を contour(node)順で 0,1,2... と割り振り、順序情報を境界に残す。

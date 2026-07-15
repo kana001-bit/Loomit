@@ -195,21 +195,17 @@ describe("loom add --yes", () => {
     }
   });
 
-  it("prompts only for the colliding piece and adds all with distinct roles", async () => {
-    // detail "front" が2つ。1件目は role=front で自動、2件目は衝突するので role を対話で訊く(scripted で front2)。
-    const root = await mkdtemp(join(tmpdir(), "loomit-add-yes-collide-"));
+  it("rejects a .val with duplicate detail names instead of scaffolding", async () => {
+    // detail "front" が2つ = piece 名(=DXF BLOCK identity)が衝突。role を分けても files.piece は同じで
+    // Seamlint が物理ピースを区別できないため、prompt せず何も書かずにエラーで止める(Valentina で名前を分けさせる)。
+    const root = await mkdtemp(join(tmpdir(), "loomit-add-dup-"));
     const out: string[] = [];
     const err: string[] = [];
 
     try {
       await writeFile(
         join(root, "loomit.yml"),
-        [
-          "schema: loomit.project.v0",
-          "name: add-yes-collide",
-          "garment: knickers",
-          "parts: {}"
-        ].join("\n"),
+        ["schema: loomit.project.v0", "name: add-dup", "garment: knickers", "parts: {}"].join("\n"),
         "utf8"
       );
       await writeFile(
@@ -230,23 +226,109 @@ describe("loom add --yes", () => {
         cwd: root,
         stdout: (text) => out.push(text),
         stderr: (text) => err.push(text),
-        prompter: scriptedPrompter(["front2"])
+        prompter: throwingPrompter
       });
 
-      expect(err.join("")).toBe("");
-      expect(code).toBe(0);
-      // 1件目は front、衝突した2件目は対話で front2 に。
-      const project = await readFile(join(root, "loomit.yml"), "utf8");
-      expect(project).toContain("front: ./parts/front/part.loom");
-      expect(project).toContain("front2: ./parts/front2/part.loom");
-      // どちらも同じ detail "front" を指す(完全同名なので警告を出す)。
-      expect(await readFile(join(root, "parts/front2/part.loom"), "utf8")).toContain(
-        "piece: front"
+      expect(code).toBe(1);
+      expect(err.join("")).toContain("Duplicate detail name(s) in the .val (front)");
+      // 何も書かない: loomit.yml は空のまま、parts/front も作られない。
+      expect(await readFile(join(root, "loomit.yml"), "utf8")).toContain("parts: {}");
+      const wrotePart = await readFile(join(root, "parts/front/part.loom"), "utf8").then(
+        () => true,
+        () => false
       );
-      expect(out.join("")).toContain("repeat in the .val");
-      // 衝突理由は「.val 内に同名 detail」なので、既存プロジェクト由来の文言ではなくこちらを出す。
-      expect(out.join("")).toContain("repeats another piece in this .val");
-      expect(out.join("")).not.toContain("already exists in this project");
+      expect(wrotePart).toBe(false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("treats detail names that differ only in case as duplicates", async () => {
+    // Seamlint は BLOCK 名を大文字化して照合するので "Front" と "front" は同じ BLOCK に衝突する。
+    // case 違いも handoff を壊すため弾く(projectNotchesFromVal の case-sensitive 判定が取りこぼす穴も塞ぐ)。
+    const root = await mkdtemp(join(tmpdir(), "loomit-add-dup-case-"));
+    const out: string[] = [];
+    const err: string[] = [];
+
+    try {
+      await writeFile(
+        join(root, "loomit.yml"),
+        ["schema: loomit.project.v0", "name: add-dup-case", "garment: knickers", "parts: {}"].join(
+          "\n"
+        ),
+        "utf8"
+      );
+      await writeFile(
+        join(root, "dup.val"),
+        [
+          "<pattern>",
+          '  <draw name="knickers">',
+          '    <detail name="Front"></detail>',
+          '    <detail name="front"></detail>',
+          "  </draw>",
+          "</pattern>",
+          ""
+        ].join("\n"),
+        "utf8"
+      );
+
+      const code = await runAddCommand(["dup.val", "--yes"], {
+        cwd: root,
+        stdout: (text) => out.push(text),
+        stderr: (text) => err.push(text),
+        prompter: throwingPrompter
+      });
+
+      expect(code).toBe(1);
+      expect(err.join("")).toContain("Duplicate detail name(s) in the .val");
+      expect(await readFile(join(root, "loomit.yml"), "utf8")).toContain("parts: {}");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects duplicate detail names in interactive mode too (no --yes)", async () => {
+    // 対話経路も同じゲートで守る。prompter を触る前に弾くので、throwingPrompter が呼ばれてはならない。
+    const root = await mkdtemp(join(tmpdir(), "loomit-add-dup-interactive-"));
+    const out: string[] = [];
+    const err: string[] = [];
+
+    try {
+      await writeFile(
+        join(root, "loomit.yml"),
+        ["schema: loomit.project.v0", "name: add-dup-i", "garment: knickers", "parts: {}"].join(
+          "\n"
+        ),
+        "utf8"
+      );
+      await writeFile(
+        join(root, "dup.val"),
+        [
+          "<pattern>",
+          '  <draw name="knickers">',
+          '    <detail name="front"></detail>',
+          '    <detail name="front"></detail>',
+          "  </draw>",
+          "</pattern>",
+          ""
+        ].join("\n"),
+        "utf8"
+      );
+
+      const code = await runAddCommand(["dup.val"], {
+        cwd: root,
+        stdout: (text) => out.push(text),
+        stderr: (text) => err.push(text),
+        prompter: throwingPrompter
+      });
+
+      expect(code).toBe(1);
+      expect(err.join("")).toContain("Duplicate detail name(s) in the .val (front)");
+      const wrotePart = await readFile(join(root, "parts/front/part.loom"), "utf8").then(
+        () => true,
+        () => false
+      );
+      expect(wrotePart).toBe(false);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -299,7 +381,8 @@ describe("loom add --yes", () => {
   });
 
   it("fails cleanly without partial writes when collision input is unavailable", async () => {
-    // 衝突分の role を訊く段で入力が尽きる(パイプ想定)。role は書き込み前に確定するので part は1つも書かれない。
+    // 既存 role(front/back)と衝突する .val を再 add。衝突分の role を訊く段で入力が尽きる(パイプ想定)。
+    // role は書き込み前に確定するので、新しい part は1つも書かれない(既存 front/back はそのまま)。
     const root = await mkdtemp(join(tmpdir(), "loomit-add-yes-eof-"));
     const out: string[] = [];
     const err: string[] = [];
@@ -307,26 +390,19 @@ describe("loom add --yes", () => {
     try {
       await writeFile(
         join(root, "loomit.yml"),
-        ["schema: loomit.project.v0", "name: add-yes-eof", "garment: knickers", "parts: {}"].join(
-          "\n"
-        ),
-        "utf8"
-      );
-      await writeFile(
-        join(root, "dup.val"),
         [
-          "<pattern>",
-          '  <draw name="knickers">',
-          '    <detail name="front"></detail>',
-          '    <detail name="front"></detail>',
-          "  </draw>",
-          "</pattern>",
-          ""
+          "schema: loomit.project.v0",
+          "name: add-yes-eof",
+          "garment: knickers",
+          "parts:",
+          "  front: ./parts/front/part.loom",
+          "  back: ./parts/back/part.loom"
         ].join("\n"),
         "utf8"
       );
+      await writeFile(join(root, "knickers.val"), TWO_PIECE_VAL, "utf8");
 
-      const code = await runAddCommand(["dup.val", "--yes"], {
+      const code = await runAddCommand(["knickers.val", "--yes"], {
         cwd: root,
         stdout: (text) => out.push(text),
         stderr: (text) => err.push(text),
@@ -335,9 +411,10 @@ describe("loom add --yes", () => {
 
       expect(code).toBe(1);
       expect(err.join("")).toContain("Input ended before all colliding roles");
-      // 部分適用なし: loomit.yml は空のまま、parts/front も作られない。
-      expect(await readFile(join(root, "loomit.yml"), "utf8")).not.toContain("parts/front");
-      const wrotePart = await readFile(join(root, "parts/front/part.loom"), "utf8").then(
+      // 部分適用なし: 新 role(front2 等)は書かれず、loomit.yml は既存の front/back だけ。
+      const project = await readFile(join(root, "loomit.yml"), "utf8");
+      expect(project).not.toContain("front2");
+      const wrotePart = await readFile(join(root, "parts/front2/part.loom"), "utf8").then(
         () => true,
         () => false
       );
@@ -359,27 +436,21 @@ describe("loom add --yes", () => {
     try {
       await writeFile(
         join(root, "loomit.yml"),
-        ["schema: loomit.project.v0", "name: add-yes-ni", "garment: knickers", "parts: {}"].join(
-          "\n"
-        ),
-        "utf8"
-      );
-      await writeFile(
-        join(root, "dup.val"),
         [
-          "<pattern>",
-          '  <draw name="knickers">',
-          '    <detail name="front"></detail>',
-          '    <detail name="front"></detail>',
-          "  </draw>",
-          "</pattern>",
-          ""
+          "schema: loomit.project.v0",
+          "name: add-yes-ni",
+          "garment: knickers",
+          "parts:",
+          "  front: ./parts/front/part.loom",
+          "  back: ./parts/back/part.loom"
         ].join("\n"),
         "utf8"
       );
+      await writeFile(join(root, "knickers.val"), TWO_PIECE_VAL, "utf8");
 
-      // prompter は渡さない = 実際の TTY 判定(false に固定済み)に委ねる。
-      const code = await runAddCommand(["dup.val", "--yes"], {
+      // prompter は渡さない = 実際の TTY 判定(false に固定済み)に委ねる。既存 role と衝突するので prompt が要るが、
+      // 非対話では stdin を開かず clean fail する。
+      const code = await runAddCommand(["knickers.val", "--yes"], {
         cwd: root,
         stdout: (text) => out.push(text),
         stderr: (text) => err.push(text)
@@ -387,13 +458,9 @@ describe("loom add --yes", () => {
 
       expect(code).toBe(1);
       expect(err.join("")).toContain("non-interactive shell");
-      // 部分適用なし: loomit.yml は空のまま、parts/front も作られない。
-      expect(await readFile(join(root, "loomit.yml"), "utf8")).not.toContain("parts/front");
-      const wrotePart = await readFile(join(root, "parts/front/part.loom"), "utf8").then(
-        () => true,
-        () => false
-      );
-      expect(wrotePart).toBe(false);
+      // 部分適用なし: 新 role(front2 等)は書かれない。
+      const project = await readFile(join(root, "loomit.yml"), "utf8");
+      expect(project).not.toContain("front2");
     } finally {
       process.stdin.isTTY = originalIsTTY;
       await rm(root, { recursive: true, force: true });
