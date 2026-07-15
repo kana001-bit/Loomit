@@ -20,11 +20,18 @@ docs は総覧しない。今のタスクに必要なものだけ読む。
   `docs/work/implementation-plan.md`
 - 技術選定や cross-platform 方針を確認するとき:
   `docs/technology-selection.md`
+- 縫い目ドメインの語彙(connector の id/type/side、band seam、coincident/contiguous、notch 署名)を確認するとき:
+  `docs/core-concepts.md` と `docs/glossary.md`
+- なぜ今の設計に至ったか(責務境界、seam=参加エッジの集合、assembly=tree、band)を確認するとき:
+  `docs/design-history.md`
 
-`docs/work/technical-plan.md` には旧設計の例が残っている可能性がある。特に `version: 3` や `requires: ">=4"` のような旧 schema 例を実装へコピーしない。
+`docs/work/technical-plan.md` には旧設計の例が残っている。実装へコピーしない(具体例は skill の Minimal Workflow を参照)。
 
-`loom diff` の役割、branch-driven な試作フロー、seamlint / truer との責務分担を確認するとき:
+`loom diff` の役割や branch-driven な試作フローを確認するとき:
 `docs/work/diffable-domain.md`
+
+Loomit / Seamlint / Truer の責務分担を確認するとき:
+`docs/design-history.md`(§「責務境界が落ち着いた」で確定)
 
 ## Required Project Skill
 

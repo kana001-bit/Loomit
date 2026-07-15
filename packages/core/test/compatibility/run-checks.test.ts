@@ -188,7 +188,7 @@ describe("runChecks", () => {
   it("warns instead of comparing when a matched connector length is unmeasured", async () => {
     // 守る仕様: 対になる connector があっても、片方の length_mm が未測定なら長さを比較できない。
     // 0 とみなして偽の不一致(NaN 比較)を出さず、「接続整合を未確認」の warning に振り替える。
-    // 値は Valentina / truer が後で測って埋める(A案: 幾何の測定は Loomit の外)。
+    // 実測は Seamlint(loom slnt check)、宣言値なら手で埋める(A案: 幾何の測定は Loomit の外)。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const body = getResolvedPart(resolvedProject, "body");
     const sleeve = getResolvedPart(resolvedProject, "sleeve");
@@ -227,7 +227,7 @@ describe("runChecks", () => {
             "コネクタの仕上がり線の長さが未測定のため、接続整合を確認できません。/ Connector finished seam length is unmeasured; cannot verify the seam fit.",
           target: "sleeve.armhole",
           suggestion: [
-            "Measure the seam length in Valentina and set length_mm on sleeve.armhole."
+            "Run `loom slnt check` to have Seamlint measure the seam, or set a declared length_mm on sleeve.armhole."
           ]
         }
       ]
@@ -244,7 +244,7 @@ describe("runChecks", () => {
 
   it("warns that a requirement cannot be checked when the target length is unmeasured", async () => {
     // 守る仕様: requires が参照する connector が未測定のとき、「未対応」ではなく「未測定」を伝える
-    // (property は対応済みで、値が .val 評価待ちなだけ)。
+    // (property は対応済みで、値が実測待ちなだけ)。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const body = getResolvedPart(resolvedProject, "body");
     const sleeve = getResolvedPart(resolvedProject, "sleeve");
@@ -282,7 +282,7 @@ describe("runChecks", () => {
             "要求条件の参照先コネクタの length_mm が未測定のため、条件を確認できません。/ The connector referenced by the requirement has an unmeasured length_mm; cannot check the requirement.",
           target: "sleeve.armhole.length_mm",
           suggestion: [
-            "Measure the seam length in Valentina and set length_mm on sleeve.armhole."
+            "Run `loom slnt check` to have Seamlint measure the seam, or set a declared length_mm on sleeve.armhole."
           ]
         }
       ]
