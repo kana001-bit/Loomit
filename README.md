@@ -79,7 +79,7 @@ Loomit is a pnpm monorepo. `@loomit/core` holds the domain logic — schema vali
 
 ## How This Was Built
 
-Loomit is built with AI coding agents, directed by me. The design, architecture, domain modeling, and every judgment call are mine; the agents write the code under rules I set. Those rules live in [`AGENT.md`](AGENT.md) — my engineering conventions, written down so the agents follow them (for example: `core` never depends on the CLI; `variant` is not compared as a version; `length_mm` always means the finished measurement). The reasoning behind the design — including decisions I later reversed, and why — is recorded in [Design History](docs/design-history.md).
+Loomit is built with AI coding agents, directed by me. The design, architecture, domain modeling, and every judgment call are mine; the agents write the code under rules I set. Those rules live in [`AGENTS.md`](AGENTS.md) — my engineering conventions, written down so the agents follow them (for example: `core` never depends on the CLI; `variant` is not compared as a version; `length_mm` always means the finished measurement). The reasoning behind the design — including decisions I later reversed, and why — is recorded in [Design History](docs/design-history.md).
 
 ## Quick Start
 

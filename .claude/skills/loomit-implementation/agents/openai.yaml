@@ -1,0 +1,4 @@
+interface:
+  display_name: "Loomit Implementation"
+  short_description: "Project-specific Loomit implementation guidance"
+  default_prompt: "Read the Loomit implementation skill and follow its guardrails before changing Loomit code, schemas, diagnostics, tests, or CLI."

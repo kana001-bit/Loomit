@@ -5,7 +5,7 @@ description: Project-specific Loomit implementation guidance. Use when Codex or 
 
 # Loomit Implementation
 
-Use this skill when working on Loomit implementation tasks. It keeps detailed project-specific rules out of the always-loaded `AGENT.md` while preserving the guardrails needed during coding.
+Use this skill when working on Loomit implementation tasks. It keeps detailed project-specific rules out of the always-loaded `AGENTS.md` while preserving the guardrails needed during coding.
 
 ## Minimal Workflow
 

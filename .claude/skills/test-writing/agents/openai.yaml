@@ -1,0 +1,4 @@
+interface:
+  display_name: "Loomit Test Writing"
+  short_description: "Add Loomit vitest tests and fixtures that pin diagnostics with should-fire and must-not-fire cases."
+  default_prompt: "Use $test-writing to pin a Loomit diagnostic / check change with vitest tests and fixtures under packages/*/test — both a should-fire and a must-not-fire case. Canonical rules: testing-diagnostics.md."
