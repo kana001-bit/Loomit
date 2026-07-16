@@ -4,6 +4,7 @@ import { createCheckReport, createCompatibilityResult } from "../../src/index.js
 
 describe("check report", () => {
   it("returns ok when there are no diagnostics or compatibility results", () => {
+    // 守る仕様: 診断も compatibility 結果も無い check は status:"ok" で、diagnostics/compatibility ともに空配列になる。
     const report = createCheckReport({});
 
     expect(report).toEqual({
@@ -14,6 +15,7 @@ describe("check report", () => {
   });
 
   it("derives status from nested compatibility diagnostics", () => {
+    // 守る仕様: report の status は入れ子の compatibility 結果の診断から導く。error を含む結果があれば report も error になり、トップレベル diagnostics は空のまま。
     const compatibility = createCompatibilityResult({
       from: "body.armhole",
       to: "sleeve.armhole",

@@ -61,6 +61,7 @@ async function makeProject(): Promise<string> {
 
 describe("loom add --yes", () => {
   it("scaffolds one part per detail with defaults and asks nothing", async () => {
+    // 守る仕様: 衝突が無ければ --yes は何も訊かず、detail ごとに1 part(type=body/variant=v1/files.piece/連結なし)を scaffold し loomit.yml に登録する。
     const root = await makeProject();
     const out: string[] = [];
     const err: string[] = [];
@@ -101,6 +102,7 @@ describe("loom add --yes", () => {
   });
 
   it("falls back to a single default part when the .val has no detail pieces", async () => {
+    // 守る仕様: draw/detail の無い .val は旧来の単一 part 経路(role==type="body")に倒れる。--yes はその既存挙動を踏襲する。
     const root = await mkdtemp(join(tmpdir(), "loomit-add-yes-single-"));
     const out: string[] = [];
     const err: string[] = [];
@@ -142,7 +144,7 @@ describe("loom add --yes", () => {
   });
 
   it("keeps the source .val when a piece is skipped so it can still be added by hand", async () => {
-    // 元 .val を parts/ 内に置く = 消費(削除)条件が成立する配置。安全でない名前("a/b")のピースが
+    // 守る仕様: 元 .val を parts/ 内に置く = 消費(削除)条件が成立する配置。安全でない名前("a/b")のピースが
     // skip される場合、案内どおり後から手動追加できるよう元 .val を残す(P1 の退行防止)。
     const root = await mkdtemp(join(tmpdir(), "loomit-add-yes-skip-"));
     const out: string[] = [];
@@ -196,7 +198,7 @@ describe("loom add --yes", () => {
   });
 
   it("rejects a .val with duplicate detail names instead of scaffolding", async () => {
-    // detail "front" が2つ = piece 名(=DXF BLOCK identity)が衝突。role を分けても files.piece は同じで
+    // 守る仕様: detail "front" が2つ = piece 名(=DXF BLOCK identity)が衝突。role を分けても files.piece は同じで
     // Seamlint が物理ピースを区別できないため、prompt せず何も書かずにエラーで止める(Valentina で名前を分けさせる)。
     const root = await mkdtemp(join(tmpdir(), "loomit-add-dup-"));
     const out: string[] = [];
@@ -244,7 +246,7 @@ describe("loom add --yes", () => {
   });
 
   it("treats detail names that differ only in case as duplicates", async () => {
-    // Seamlint は BLOCK 名を大文字化して照合するので "Front" と "front" は同じ BLOCK に衝突する。
+    // 守る仕様: Seamlint は BLOCK 名を大文字化して照合するので "Front" と "front" は同じ BLOCK に衝突する。
     // case 違いも handoff を壊すため弾く(projectNotchesFromVal の case-sensitive 判定が取りこぼす穴も塞ぐ)。
     const root = await mkdtemp(join(tmpdir(), "loomit-add-dup-case-"));
     const out: string[] = [];
@@ -288,7 +290,7 @@ describe("loom add --yes", () => {
   });
 
   it("rejects duplicate detail names in interactive mode too (no --yes)", async () => {
-    // 対話経路も同じゲートで守る。prompter を触る前に弾くので、throwingPrompter が呼ばれてはならない。
+    // 守る仕様: 対話経路も同じゲートで守る。prompter を触る前に弾くので、throwingPrompter が呼ばれてはならない。
     const root = await mkdtemp(join(tmpdir(), "loomit-add-dup-interactive-"));
     const out: string[] = [];
     const err: string[] = [];
@@ -335,7 +337,7 @@ describe("loom add --yes", () => {
   });
 
   it("says the role already exists when re-adding a .val whose pieces are already parts", async () => {
-    // ユーザ実例の再現: 同じ .val をもう一度 add。detail "front" は既にプロジェクトの part role なので、
+    // 守る仕様: ユーザ実例の再現: 同じ .val をもう一度 add。detail "front" は既にプロジェクトの part role なので、
     // 「.val 内重複」ではなく「もう add 済みかも」を真っ先に伝える(一番効く情報)。scripted で front2 に。
     const root = await mkdtemp(join(tmpdir(), "loomit-add-yes-readd-"));
     const out: string[] = [];
@@ -381,7 +383,7 @@ describe("loom add --yes", () => {
   });
 
   it("fails cleanly without partial writes when collision input is unavailable", async () => {
-    // 既存 role(front/back)と衝突する .val を再 add。衝突分の role を訊く段で入力が尽きる(パイプ想定)。
+    // 守る仕様: 既存 role(front/back)と衝突する .val を再 add。衝突分の role を訊く段で入力が尽きる(パイプ想定)。
     // role は書き込み前に確定するので、新しい part は1つも書かれない(既存 front/back はそのまま)。
     const root = await mkdtemp(join(tmpdir(), "loomit-add-yes-eof-"));
     const out: string[] = [];
@@ -425,7 +427,7 @@ describe("loom add --yes", () => {
   });
 
   it("does not open stdin on collision in a non-interactive shell", async () => {
-    // prompter を注入せず、非対話(isTTY=false)で衝突を起こす。--yes は stdin を開かず clean fail し
+    // 守る仕様: prompter を注入せず、非対話(isTTY=false)で衝突を起こす。--yes は stdin を開かず clean fail し
     // (automation を止めない契約)、part を1つも書かない。isTTY は runner 依存なので明示的に false に固定する。
     const root = await mkdtemp(join(tmpdir(), "loomit-add-yes-noninteractive-"));
     const out: string[] = [];
@@ -470,19 +472,20 @@ describe("loom add --yes", () => {
 
 describe("findCollidingRoleNames", () => {
   it("flags exact duplicates in either filesystem mode", () => {
-    // 完全一致はどちらの FS でも role 衝突する。初出の綴りを1回だけ返す。
+    // 守る仕様: 完全一致はどちらの FS でも role 衝突する。初出の綴りを1回だけ返す。
     expect(findCollidingRoleNames(["front", "back", "front"], false)).toEqual(["front"]);
     expect(findCollidingRoleNames(["front", "back", "front"], true)).toEqual(["front"]);
   });
 
   it("flags case-only differences only on case-insensitive filesystems", () => {
-    // 大文字小文字を区別しない FS(Windows/macOS): Front と front は同じ parts/ に解決 = 衝突。両綴りを返す。
+    // 守る仕様: 大文字小文字を区別しない FS(Windows/macOS): Front と front は同じ parts/ に解決 = 衝突。両綴りを返す。
     expect(findCollidingRoleNames(["Front", "front"], true)).toEqual(["Front", "front"]);
     // 区別する FS(Linux 等): 別ディレクトリなので衝突しない。
     expect(findCollidingRoleNames(["Front", "front"], false)).toEqual([]);
   });
 
   it("returns nothing when every name is distinct", () => {
+    // 守る仕様: すべて別名なら衝突は無く空配列を返す。
     expect(findCollidingRoleNames(["front", "back", "sleeve"], true)).toEqual([]);
   });
 });

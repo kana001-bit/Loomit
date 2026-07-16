@@ -15,6 +15,7 @@ const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../fixtures"
 
 describe("runChecks", () => {
   it("returns ok connector compatibility and requirement checks for a valid project", async () => {
+    // 守る仕様: 整合の取れたプロジェクトは connector-length と requirement-range の両チェックが ok になり、diagnostics は空。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const report = runChecks(resolvedProject);
 
@@ -68,6 +69,7 @@ describe("runChecks", () => {
   });
 
   it("reports connector length and requirement range mismatches", async () => {
+    // 守る仕様: 許容差を超えた connector は CONNECTOR_LENGTH_MISMATCH、範囲外の requires は REQUIREMENT_RANGE_UNSATISFIED を出し、report は error になる。
     const resolvedProject = await loadResolvedFixture("length-mismatch");
     const report = runChecks(resolvedProject);
 
@@ -154,6 +156,7 @@ describe("runChecks", () => {
   });
 
   it("does not compare direct connector lengths with different connector ids", async () => {
+    // 守る仕様: connector は id が一致したときだけペアになる。id が違えば(armhole と cuff)connector-length 比較は発生しない。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const body = getResolvedPart(resolvedProject, "body");
     const sleeve = getResolvedPart(resolvedProject, "sleeve");
@@ -290,6 +293,7 @@ describe("runChecks", () => {
   });
 
   it("reports missing connectors referenced by requirements", async () => {
+    // 守る仕様: requires が参照する connector が相手パーツに存在しないときは CONNECTOR_MISSING(error)。未測定(値待ち)とは区別する。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const body = getResolvedPart(resolvedProject, "body");
     const sleeve = getResolvedPart(resolvedProject, "sleeve");
@@ -333,6 +337,7 @@ describe("runChecks", () => {
   });
 
   it("can run a supplied compatibility rule registry instead of the default rules", async () => {
+    // 守る仕様: rules を渡すと既定ルールの代わりにその registry で検査する(ルール差し替えの拡張点)。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const customRule: CompatibilityRule = {
       id: "custom-project-name",
@@ -593,7 +598,7 @@ describe("runChecks", () => {
   });
 
   it("does not add a connector-pairing result for a healthy two-part join", async () => {
-    // 健全な N=2 のペア(armhole を body と sleeve が宣言)には connector-pairing の結果を出さない。
+    // 守る仕様: 健全な N=2 のペア(armhole を body と sleeve が宣言)には connector-pairing の結果を出さない。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const report = runChecks(resolvedProject);
 

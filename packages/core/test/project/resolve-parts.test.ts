@@ -10,6 +10,7 @@ const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../fixtures"
 
 describe("resolveParts", () => {
   it("loads every part referenced by a valid project", async () => {
+    // 守る仕様: 妥当な project は参照している全 part を読み込み、role をキーに type と filePath を解決する。
     const projectRoot = join(fixturesRoot, "valid-blouse");
     const loadedProject = expectLoaded(await loadProject(projectRoot));
     const result = await resolveParts(loadedProject);
@@ -24,6 +25,7 @@ describe("resolveParts", () => {
   });
 
   it("returns diagnostics when referenced part files cannot be loaded", async () => {
+    // 守る仕様: 参照先の part ファイルが読めない場合は FILE_READ_FAILED をファイルごとに返す。
     const projectRoot = join(fixturesRoot, "missing-sleeve");
     const loadedProject = expectLoaded(await loadProject(projectRoot));
     const result = await resolveParts(loadedProject);

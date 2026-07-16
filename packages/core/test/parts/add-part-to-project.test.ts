@@ -20,6 +20,7 @@ async function makeProject(): Promise<string> {
 
 describe("addPartToProject", () => {
   it("generates part.loom, copies the .val, and registers the part", async () => {
+    // 守る仕様: loom add は part.loom を生成し .val を part ディレクトリへコピー(元は残す)し、loomit.yml に project 相対で登録する。
     const projectRoot = await makeProject();
     const valPath = join(projectRoot, "body.val");
 
@@ -177,7 +178,7 @@ describe("addPartToProject", () => {
   });
 
   it("consumes a .val that already lives inside parts/ (no leftover for check to flag)", async () => {
-    // parts/ 内に置いた生 .val は、取り込み後に元を削除する(= 実質 move)。コピーのままだと
+    // 守る仕様: parts/ 内に置いた生 .val は、取り込み後に元を削除する(= 実質 move)。コピーのままだと
     // parts/waist.val と parts/body/waist.val の二重になり、check が「未登録の .val」と咎めてしまう。
     const projectRoot = await makeProject();
     const valPath = join(projectRoot, "parts", "waist.val");
@@ -207,6 +208,7 @@ describe("addPartToProject", () => {
   });
 
   it("errors when the .val source does not exist", async () => {
+    // 守る仕様: 参照先 .val が存在しなければ PART_ADD_SOURCE_NOT_FOUND を返し、何も書き込まない。
     const projectRoot = await makeProject();
 
     try {
@@ -228,7 +230,7 @@ describe("addPartToProject", () => {
   });
 
   it("rejects a type that is not a single path segment before touching the filesystem", async () => {
-    // type は loomit.yml の role key かつ parts/<type>/ の segment。".." は project root の外を指すため弾く。
+    // 守る仕様: type は loomit.yml の role key かつ parts/<type>/ の segment。".." など単一 segment を逸脱する値は書き込み前に PART_ADD_SEGMENT_INVALID で弾く。
     const projectRoot = await makeProject();
     const valPath = join(projectRoot, "body.val");
 
@@ -253,6 +255,7 @@ describe("addPartToProject", () => {
   });
 
   it("does not overwrite a part that is already registered", async () => {
+    // 守る仕様: 既に登録済みの part は上書きせず PART_ADD_ALREADY_REGISTERED を返す。
     const projectRoot = await makeProject();
     const valPath = join(projectRoot, "body.val");
 

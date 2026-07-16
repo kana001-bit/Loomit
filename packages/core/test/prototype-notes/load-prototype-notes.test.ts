@@ -10,6 +10,7 @@ const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../fixtures/
 
 describe("prototype notes schema", () => {
   it("accepts a note with a test case and applies_to tags", () => {
+    // 守る仕様: prototype notes schema は creates_test_case と applies_to タグを持つ note を受理する。
     const result = prototypeNotesSchema.safeParse({
       schema: "loomit.prototype_notes.v0",
       notes: [
@@ -28,6 +29,7 @@ describe("prototype notes schema", () => {
   });
 
   it("rejects a test case without applies_to tags", () => {
+    // 守る仕様: creates_test_case があって applies_to が無い note は不正(この2つは対で必要)。
     const result = prototypeNotesSchema.safeParse({
       schema: "loomit.prototype_notes.v0",
       notes: [
@@ -47,6 +49,7 @@ describe("prototype notes schema", () => {
 
 describe("loadPrototypeNotesFile", () => {
   it("loads valid prototype notes", async () => {
+    // 守る仕様: 妥当な prototype notes ファイルは ok で読め、creates_test_case / applies_to をそのまま参照できる。
     const result = await loadPrototypeNotesFile(join(fixturesRoot, "valid/prototype-notes.yml"));
 
     expect(result.ok).toBe(true);
@@ -58,6 +61,7 @@ describe("loadPrototypeNotesFile", () => {
   });
 
   it("returns diagnostics for invalid prototype notes", async () => {
+    // 守る仕様: schema 不適合の prototype notes は PROTOTYPE_NOTES_SCHEMA_INVALID(問題箇所つき)を返す。
     const filePath = join(fixturesRoot, "invalid-missing-applies-to/prototype-notes.yml");
     const result = await loadPrototypeNotesFile(filePath);
 

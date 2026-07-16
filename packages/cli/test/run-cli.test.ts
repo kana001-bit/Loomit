@@ -15,6 +15,7 @@ const fixturesRoot = join(workspaceRoot, "packages/core/test/fixtures");
 
 describe("runCli", () => {
   it("prints main help", async () => {
+    // 守る仕様: loom --help はメインの使い方を表示して exit 0。
     const output = createOutputCollector();
     const exitCode = await runCli(["node", "loom", "--help"], {
       cwd: workspaceRoot,
@@ -27,6 +28,7 @@ describe("runCli", () => {
   });
 
   it("runs check with text output for a valid project", async () => {
+    // 守る仕様: 妥当な project の check は text 出力で "ok" と各 connector-length 行を出し exit 0。
     const output = createOutputCollector();
     const exitCode = await runCli(
       ["node", "loom", "check", join(fixturesRoot, "valid-blouse")],
@@ -43,6 +45,7 @@ describe("runCli", () => {
   });
 
   it("runs check with JSON output for an invalid project", async () => {
+    // 守る仕様: 不正な project の check --format json は exit 1 で status:error、CONNECTOR_LENGTH_MISMATCH / REQUIREMENT_RANGE_UNSATISFIED を含む。
     const output = createOutputCollector();
     const exitCode = await runCli(
       [
@@ -69,6 +72,7 @@ describe("runCli", () => {
   });
 
   it("runs doctor with text output for an invalid project", async () => {
+    // 守る仕様: 不正な project の doctor は text 出力で "error" と平易文の問題説明を出し exit 1。
     const output = createOutputCollector();
     const exitCode = await runCli(
       ["node", "loom", "doctor", join(fixturesRoot, "length-mismatch")],
@@ -90,6 +94,7 @@ describe("runCli", () => {
   });
 
   it("runs doctor with JSON output for a valid project", async () => {
+    // 守る仕様: 妥当な project の doctor --format json は "No problems found." の ok report を返し exit 0。
     const output = createOutputCollector();
     const exitCode = await runCli(
       ["node", "loom", "doctor", join(fixturesRoot, "valid-blouse"), "--format", "json"],
@@ -116,6 +121,7 @@ describe("runCli", () => {
   });
 
   it("runs diff with text output for changed dart parameters", async () => {
+    // 守る仕様: dart パラメータが変わった part 同士の diff は text 出力で [modified] dart と各値の変化を出す。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-diff-"));
     const beforePath = join(tempRoot, "before.part.loom");
     const afterPath = join(tempRoot, "after.part.loom");
@@ -180,6 +186,7 @@ describe("runCli", () => {
   });
 
   it("runs diff with JSON output", async () => {
+    // 守る仕様: part 同士の diff は --format json でも意味差分を JSON で返す。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-diff-"));
     const beforePath = join(tempRoot, "before.part.loom");
     const afterPath = join(tempRoot, "after.part.loom");
@@ -285,6 +292,7 @@ describe("runCli", () => {
   });
 
   it("runs diff for the same part role across two projects", async () => {
+    // 守る仕様: 同じ part role を持つ2プロジェクトを diff すると、その role の part 差分を読む(project 間差分)。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-project-diff-"));
     const fromProject = join(tempRoot, "from-project");
     const toProject = join(tempRoot, "to-project");
@@ -545,6 +553,7 @@ describe("runCli", () => {
   });
 
   it("prints connector and requirement changes in diff output", async () => {
+    // 守る仕様: diff の text 出力は connector と requirement の変更も表示する。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-diff-connectors-"));
     const beforePath = join(tempRoot, "before.part.loom");
     const afterPath = join(tempRoot, "after.part.loom");
@@ -712,6 +721,7 @@ describe("runCli", () => {
   });
 
   it("runs fit with text output for a valid project and profile", async () => {
+    // 守る仕様: 妥当な project と profile の fit は text 出力で "ok" と各測定の ease 行を出し exit 0。
     const output = createOutputCollector();
     const exitCode = await runCli(
       [
@@ -737,6 +747,7 @@ describe("runCli", () => {
   });
 
   it("runs slnt request with JSON output for a valid project", async () => {
+    // 守る仕様: slnt request --format json は ok の request を返し、sewn-seam check を含める。
     const output = createOutputCollector();
     const exitCode = await runCli(
       ["node", "loom", "slnt", "request", join(fixturesRoot, "valid-blouse"), "--format", "json"],
@@ -765,6 +776,7 @@ describe("runCli", () => {
   });
 
   it("reports a usage error for an unknown slnt subcommand", async () => {
+    // 守る仕様: 未知の slnt サブコマンドは usage error(exit 2)で、その名を添えて拒否する。
     const output = createOutputCollector();
     const exitCode = await runCli(["node", "loom", "slnt", "bogus"], {
       cwd: workspaceRoot,
@@ -777,6 +789,7 @@ describe("runCli", () => {
   });
 
   it("routes slnt check through the injected Seamlint runner", async () => {
+    // 守る仕様: runCli の dispatch は slnt check を注入された Seamlint runner に配線し、その結果(seamlint.kind="ran")を返す。
     const output = createOutputCollector();
     const seamlintReport = {
       status: "ok" as const,
@@ -807,6 +820,7 @@ describe("runCli", () => {
   });
 
   it("requires a profile for fit", async () => {
+    // 守る仕様: fit は --profile 必須。無ければ usage error(exit 2)で --profile を促す。
     const output = createOutputCollector();
     const exitCode = await runCli(["node", "loom", "fit", join(fixturesRoot, "valid-blouse")], {
       cwd: workspaceRoot,
@@ -818,6 +832,7 @@ describe("runCli", () => {
   });
 
   it("returns a usage error for unknown commands", async () => {
+    // 守る仕様: 未知のコマンドは usage error(exit 2)で、そのコマンド名を添えて拒否する。
     const output = createOutputCollector();
     const exitCode = await runCli(["node", "loom", "unknown"], {
       cwd: workspaceRoot,
@@ -866,6 +881,7 @@ describe("runCli", () => {
   });
 
   it("blocks build on an empty project and points to loom add", async () => {
+    // 守る仕様: parts が空の project の build は PROJECT_HAS_NO_PARTS で止め(exit 1)、先に loom add を促す。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-build-empty-"));
 
     try {
@@ -916,6 +932,7 @@ describe("runCli", () => {
   });
 
   it("adds a .val as a part via the interactive wizard and can then check it", async () => {
+    // 守る仕様: loom add の対話 wizard で .val を part 化でき、その後 check が通る(add→check の end-to-end 配線)。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-"));
     const projectPath = join(tempRoot, "add-blouse");
 
@@ -1758,6 +1775,7 @@ describe("runCli", () => {
   });
 
   it("refuses to add a part when the name is already registered", async () => {
+    // 守る仕様: 同名の part を再度 add しようとすると既存を黙って上書きせず PART_ADD_ALREADY_REGISTERED(exit 1)にする。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-dup-"));
 
     try {
@@ -1789,6 +1807,7 @@ describe("runCli", () => {
   });
 
   it("does not overwrite an existing Loomit project with init", async () => {
+    // 守る仕様: 既存 Loomit プロジェクトの場所で init を再実行しても上書きせず PROJECT_ALREADY_EXISTS(exit 1)。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-init-"));
 
     try {
@@ -1815,6 +1834,7 @@ describe("runCli", () => {
   });
 
   it("forks a project and keeps prototype notes", async () => {
+    // 守る仕様: loom fork は project を複製し、prototype notes を引き継ぐ。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-fork-"));
     const sourcePath = join(tempRoot, "source-blouse");
     const targetPath = join(tempRoot, "target-blouse");
@@ -1865,6 +1885,7 @@ describe("runCli", () => {
   });
 
   it("publishes, lists, and adds a part from the library", async () => {
+    // 守る仕様: publish → list → add の library ワークフローが CLI 経由で一通り通る。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-library-"));
     const libraryRoot = join(tempRoot, "library");
     const projectRoot = join(tempRoot, "project");
@@ -1947,6 +1968,7 @@ describe("runCli", () => {
   });
 
   it("builds a project output manifest from referenced part files", async () => {
+    // 守る仕様: build は参照された part ファイルから output/manifest.json(build_manifest.v0)と成果物を生成し exit 0。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-build-"));
 
     try {
@@ -2005,6 +2027,7 @@ describe("runCli", () => {
   });
 
   it("suggests movement tests for a valid blouse", async () => {
+    // 守る仕様: suggest-tests は blouse に arm-raise を Recommended として出す。
     const output = createOutputCollector();
     const exitCode = await runCli(
       ["node", "loom", "suggest-tests", join(fixturesRoot, "valid-blouse")],
@@ -2024,6 +2047,7 @@ describe("runCli", () => {
   });
 
   it("runs an arm raise movement test for a valid blouse", async () => {
+    // 守る仕様: test arm-raise は blouse で ARM_RAISE_FITTED_ARMHOLE_RISK を warning として出す。
     const output = createOutputCollector();
     const exitCode = await runCli(
       ["node", "loom", "test", "arm-raise", join(fixturesRoot, "valid-blouse")],
