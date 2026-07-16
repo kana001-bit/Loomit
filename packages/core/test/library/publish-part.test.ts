@@ -72,6 +72,7 @@ describe("publishPart", () => {
   });
 
   it("does not overwrite an existing library entry", async () => {
+    // 守る仕様: 同名の library entry が既にあれば上書きせず、LIBRARY_PART_ALREADY_EXISTS(error)で止める。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-library-"));
     const libraryRoot = join(tempRoot, "library");
     const partPath = join(fixturesRoot, "valid-blouse/parts/sleeve");
@@ -109,6 +110,7 @@ describe("publishPart", () => {
 
 describe("listLibraryParts", () => {
   it("lists published library parts", async () => {
+    // 守る仕様: publish 済みの part は listLibraryParts で type ごとに列挙できる。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-library-"));
     const libraryRoot = join(tempRoot, "library");
 
@@ -140,6 +142,7 @@ describe("listLibraryParts", () => {
 
 describe("addLibraryPartToProject", () => {
   it("copies a library part into a project and updates loomit.yml", async () => {
+    // 守る仕様: library part を project へ取り込むと part ディレクトリをコピーし、loomit.yml の role をそのパスへ更新する。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-library-"));
     const libraryRoot = join(tempRoot, "library");
     const projectRoot = join(tempRoot, "project");
@@ -224,6 +227,7 @@ describe("addLibraryPartToProject", () => {
   });
 
   it("does not replace an existing project role by default", async () => {
+    // 守る仕様: 既存 role があるとき既定では置換せず PROJECT_PART_ROLE_ALREADY_EXISTS(error)。--replace を明示したときだけ更新する。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-library-"));
     const libraryRoot = join(tempRoot, "library");
     const projectRoot = join(tempRoot, "project");

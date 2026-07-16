@@ -101,22 +101,23 @@ Build overwrites `output/` and does not remove stale files, so the manifest can 
 
 ## Type Safety
 
-`any`, `unknown`, and explicit `undefined` types are not allowed without a local explanatory comment.
+Do not use the `any` type. For genuinely-unknown values use `unknown` and narrow at the use site.
+
+`unknown` needs no comment at untrusted-input boundaries and in caught errors — the existing patterns: `catch (error: unknown)`, type predicates (`isRecord(value: unknown): value is Record<string, unknown>`), schema/report validation (`validateSchema(input: unknown)`, `parseYamlText`), and `expected?`/`actual?: unknown` contract fields. Other intentional `unknown`, and explicit `undefined` type annotations, get a one-line reason.
 
 ```ts
-// Intentionally unknown: external YAML input is validated immediately below.
+// boundary: external YAML input, validated immediately below
 const parsed: unknown = parseYaml(source);
 ```
 
-Avoid:
+Avoid gratuitous widening:
 
 ```ts
-const value: any = input;
-const value: unknown = input;
-type MaybeName = string | undefined;
+const value: any = input;      // banned outright
+const value: unknown = input;  // unknown with no boundary/validation reason
 ```
 
-Prefer domain types, schema types, discriminated unions, or optional properties.
+Prefer domain types, schema types, discriminated unions, or optional properties. `src` is currently `any`-free — keep it.
 
 ## Design Decision Comments
 

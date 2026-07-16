@@ -70,6 +70,7 @@ async function readNotes(root: string): Promise<readonly PrototypeNote[]> {
 
 describe("loom note", () => {
   it("records a note with only the required result and issue", async () => {
+    // 守る仕様: result と issue だけ答えれば note を1件記録し、任意項目(observation/creates_test_case/applies_to 等)は入れなければ載らない。
     const root = await makeProject();
     const out: string[] = [];
     const err: string[] = [];
@@ -106,6 +107,7 @@ describe("loom note", () => {
   });
 
   it("records a movement test case with applies-to tags when confirmed", async () => {
+    // 守る仕様: movement test を確認したら creates_test_case と applies_to タグを対で記録する。
     const root = await makeProject();
     const out: string[] = [];
     const err: string[] = [];
@@ -147,6 +149,7 @@ describe("loom note", () => {
   });
 
   it("appends to an existing note file across two invocations", async () => {
+    // 守る仕様: 2回目の loom note は既存 note ファイルに追記し、以前の note を保つ。
     const root = await makeProject();
 
     try {
@@ -182,6 +185,7 @@ describe("loom note", () => {
   });
 
   it("fails cleanly (writing nothing) when input ends before the required issue", async () => {
+    // 守る仕様: 必須の issue に届く前に入力が尽きたら clean fail(exit 1)し、note ファイルは作らない。
     const root = await makeProject();
     const err: string[] = [];
 
@@ -202,6 +206,7 @@ describe("loom note", () => {
   });
 
   it("fails before prompting when there is no Loomit project", async () => {
+    // 守る仕様: Loomit プロジェクトが無い場所では prompt する前に失敗する(prompter は呼ばれない)。
     const root = await mkdtemp(join(tmpdir(), "loomit-note-noproj-"));
     const err: string[] = [];
 
@@ -221,6 +226,7 @@ describe("loom note", () => {
   });
 
   it("prints help and exits 0 on --help", async () => {
+    // 守る仕様: --help は使い方を表示して exit 0(prompt しない)。
     const out: string[] = [];
 
     const code = await runNoteCommand(["--help"], {

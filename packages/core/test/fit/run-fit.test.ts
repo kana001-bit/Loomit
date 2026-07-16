@@ -12,6 +12,7 @@ const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../fixtures"
 
 describe("runFit", () => {
   it("reports ok ease for available basic body measurements", async () => {
+    // 守る仕様: 基本寸法(bust/waist/hip)が揃っていれば、各測定の ease を cm で算出し status:"ok" を返す。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const profile = await loadProfileFixture("my-size.yml");
     const report = runFit(resolvedProject, profile);
@@ -61,6 +62,7 @@ describe("runFit", () => {
   });
 
   it("reports negative bust ease as an error", async () => {
+    // 守る仕様: 仕上がり幅が身体寸法より小さい(ease が負)なら FIT_EASE_NEGATIVE を error として出す。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const profile = await loadProfileFixture("my-size.yml");
     const report = runFit(withBodyBustWidth(resolvedProject, 410), profile);
@@ -89,6 +91,7 @@ describe("runFit", () => {
   });
 
   it("reports low positive bust ease as a warning", async () => {
+    // 守る仕様: ease が正でも推奨最小(bust=6cm)を下回れば FIT_EASE_LOW を warning として出す。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const profile = await loadProfileFixture("my-size.yml");
     const report = runFit(withBodyBustWidth(resolvedProject, 440), profile);
@@ -108,6 +111,7 @@ describe("runFit", () => {
   });
 
   it("reports low waist ease with waist-specific source information", async () => {
+    // 守る仕様: waist の ease 不足は、waist 固有の source(measurements.finished.waist_width_mm)を添えて FIT_EASE_LOW を出す。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const profile = await loadProfileFixture("my-size.yml");
     const report = runFit(
@@ -141,6 +145,7 @@ describe("runFit", () => {
   });
 
   it("can run supplied fit rules instead of the default ease rule", async () => {
+    // 守る仕様: rules を渡すと既定の ease ルールの代わりにその fit ルールで検査できる(ルール差し替えの拡張点)。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const profile = await loadProfileFixture("my-size.yml");
     const customRule: FitRule = {

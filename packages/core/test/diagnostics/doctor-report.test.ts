@@ -11,6 +11,7 @@ const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../fixtures"
 
 describe("doctor report", () => {
   it("summarizes an ok check report", async () => {
+    // 守る仕様: 問題の無い check report は doctor で status:"ok"・"No problems found." にまとめ、findings は空になる。
     const report = createDoctorReport(await checkFixture("valid-blouse"));
 
     expect(report).toEqual({
@@ -22,6 +23,7 @@ describe("doctor report", () => {
   });
 
   it("explains connector length and requirement range failures", async () => {
+    // 守る仕様: connector-length と requirement-range の失敗は、原因を平易文にした findings(code/title/detail/source)へ翻訳される。
     const report = createDoctorReport(await checkFixture("length-mismatch"));
 
     expect(report.status).toBe("error");
@@ -76,6 +78,7 @@ describe("doctor report", () => {
   });
 
   it("explains an open connector join", async () => {
+    // 守る仕様: 相手のいない open join は CONNECTOR_JOIN_OPEN の finding として、縫い合わせ相手が無い旨と対処を説明する。
     const project = await resolveFixture("valid-blouse");
     const body = getPart(project, "body");
     const sleeve = getPart(project, "sleeve");
@@ -114,6 +117,7 @@ describe("doctor report", () => {
   });
 
   it("explains a seam that declares more than two sides", async () => {
+    // 守る仕様: 1本の縫い目に3側以上あるときは CONNECTOR_JOIN_TOO_MANY_SIDES の finding として、縫い目は2側までである旨を説明する。
     const project = await resolveFixture("valid-blouse");
     const body = getPart(project, "body");
     const sleeve = getPart(project, "sleeve");
