@@ -1,0 +1,4 @@
+interface:
+  display_name: "Loomit Task Spec Manager"
+  short_description: "Persist long-task specs (confirmed vs open, with evidence) under docs/work/task-specs."
+  default_prompt: "Use $task-spec-manager to record a long, cross-session Loomit task in docs/work/task-specs/<slug>/task-spec.md, separating confirmed facts (with evidence) from open questions."
