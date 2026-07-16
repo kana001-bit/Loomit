@@ -103,6 +103,7 @@ async function makeBandProject(options?: { readonly previewFor?: readonly string
 
 describe("loom connect", () => {
   it("writes a paired connector into both parts with defaults", async () => {
+    // 守る仕様: connect は両 part に同じ id の connector を対で書く。type は既定で id、path_ref は既定で files.piece、notch_count は --notches。
     const root = await makeProject();
     const out: string[] = [];
     const err: string[] = [];
@@ -137,6 +138,7 @@ describe("loom connect", () => {
   });
 
   it("honors --type and explicit --path-ref-a/--path-ref-b", async () => {
+    // 守る仕様: --type と --path-ref-a/--path-ref-b を渡すと、既定でなくその値が両 part の connector に書かれる。
     const root = await makeProject();
     const out: string[] = [];
     const err: string[] = [];
@@ -174,6 +176,7 @@ describe("loom connect", () => {
   });
 
   it("notes when a part has no files.geometry so slnt check can't measure yet", async () => {
+    // 守る仕様: path_ref は取れても geometry ソースが無い part は、slnt check でまだ測れない旨を案内する。
     const root = await makeProject();
     const out: string[] = [];
 
@@ -193,6 +196,7 @@ describe("loom connect", () => {
   });
 
   it("fails when a role is not registered and writes nothing", async () => {
+    // 守る仕様: 未登録の role を指すと CONNECT_ROLE_NOT_FOUND で失敗し、どの part にも書かない(部分適用なし)。
     const root = await makeProject();
     const out: string[] = [];
     const err: string[] = [];
@@ -216,6 +220,7 @@ describe("loom connect", () => {
   });
 
   it("rejects connecting a part to itself", async () => {
+    // 守る仕様: 同じ role 同士の connect は CONNECT_SAME_ROLE で弾く(自己シームは connector でなく Seamlint 側の扱い)。
     const root = await makeProject();
     const err: string[] = [];
 
@@ -234,7 +239,7 @@ describe("loom connect", () => {
   });
 
   it("fails without a partial write when one part already declares the id", async () => {
-    // front に既に outseam があるプロジェクト。connect は書き込み前に両側を検証するので、back も書かれない。
+    // 守る仕様: front に既に outseam があるプロジェクト。connect は書き込み前に両側を検証するので、back も書かれない。
     const root = await makeProject({
       frontExtra: ["connectors:", "  outseam:", "    type: outseam"]
     });
@@ -257,7 +262,7 @@ describe("loom connect", () => {
   });
 
   it("rejects a connector id that Seamlint would drop and writes nothing", async () => {
-    // ":" "." "/" "__" を含む id は書けても loom slnt check で Seamlint が測定対象から外す。
+    // 守る仕様: ":" "." "/" "__" を含む id は書けても loom slnt check で Seamlint が測定対象から外す。
     // authoring 時に弾き、黙って測れない connector を作らせない。
     for (const badId of ["sleeve.armhole", "a/b", "a__b", ".."]) {
       const root = await makeProject();
@@ -286,7 +291,7 @@ describe("loom connect", () => {
   });
 
   it("rejects two roles that resolve to the same part.loom and writes nothing", async () => {
-    // loomit.yml の parts で2つの role が同じファイルを指す(schema は値の重複を禁止しない)。物理パーツは1つ
+    // 守る仕様: loomit.yml の parts で2つの role が同じファイルを指す(schema は値の重複を禁止しない)。物理パーツは1つ
     // なので connect は成功に見せかけず弾く(同じファイルを2度書くだけで「2パーツを縫った」ことにならない)。
     const root = await mkdtemp(join(tmpdir(), "loomit-connect-samefile-"));
     const err: string[] = [];
@@ -337,7 +342,7 @@ describe("loom connect", () => {
   });
 
   it("rejects two roles whose different paths are the same physical file", async () => {
-    // 別パス(parts/front と parts/back)を hardlink で同一 inode にする。文字列一致では拾えないが、dev+ino で
+    // 守る仕様: 別パス(parts/front と parts/back)を hardlink で同一 inode にする。文字列一致では拾えないが、dev+ino で
     // 同一実ファイルと判定して弾く(= case-insensitive FS の Front vs front と同じ穴を、OS 非依存に再現する)。
     const root = await mkdtemp(join(tmpdir(), "loomit-connect-hardlink-"));
     const err: string[] = [];
@@ -394,6 +399,7 @@ describe("loom connect", () => {
   });
 
   it("returns a usage error when --as is missing", async () => {
+    // 守る仕様: --as が無い pairwise connect は usage error(exit 2)で、--as が必須である旨を伝える。
     const root = await makeProject();
     const err: string[] = [];
 
@@ -412,6 +418,7 @@ describe("loom connect", () => {
   });
 
   it("writes a band connector across the band and its neighbours (--to)", async () => {
+    // 守る仕様: band mode(--to)は共有 id を band と全 neighbours に書く。band 側は side:band で notch なし、neighbours は side:neighbour + notch_count。
     const root = await makeBandProject();
     const out: string[] = [];
     const err: string[] = [];
@@ -449,6 +456,7 @@ describe("loom connect", () => {
   });
 
   it("honors --band-side / --neighbour-side overrides", async () => {
+    // 守る仕様: --band-side / --neighbour-side を渡すと既定の band/neighbour ではなく、その side 名で書かれる。
     const root = await makeBandProject();
     const out: string[] = [];
 
@@ -469,6 +477,7 @@ describe("loom connect", () => {
   });
 
   it("rejects a band whose role also appears as a neighbour and writes nothing", async () => {
+    // 守る仕様: band role が neighbour にも現れる指定は「distinct であること」を要求して弾き、何も書かない。
     const root = await makeBandProject();
     const err: string[] = [];
 
@@ -489,6 +498,7 @@ describe("loom connect", () => {
   });
 
   it("fails without a partial write when a neighbour role is not registered", async () => {
+    // 守る仕様: neighbour に未登録 role があると失敗し、band にも neighbours にも書かない(部分適用なし)。
     const root = await makeBandProject();
     const err: string[] = [];
 
@@ -510,6 +520,7 @@ describe("loom connect", () => {
   });
 
   it("rejects --path-ref-a in band mode", async () => {
+    // 守る仕様: --path-ref-a は pairwise 専用。band mode で渡すと usage error(exit 2)で拒否する。
     const root = await makeBandProject();
     const err: string[] = [];
 
@@ -527,6 +538,7 @@ describe("loom connect", () => {
   });
 
   it("returns a usage error when --to has no roles", async () => {
+    // 守る仕様: --to に role が1つも無いと usage error(exit 2)。
     const root = await makeBandProject();
     const err: string[] = [];
 
@@ -545,7 +557,7 @@ describe("loom connect", () => {
   });
 
   it("warns that a preview-only (SVG) band part still needs DXF before slnt check", async () => {
-    // band-seam は DXF 必須。files.preview(SVG)だけの側は hasGeometrySource=true でも測れないので、
+    // 守る仕様: band-seam は DXF 必須。files.preview(SVG)だけの側は hasGeometrySource=true でも測れないので、
     // 成功出力で「DXF が要る」と明示する(黙って Next: loom slnt check に流さない)。
     const root = await makeBandProject({ previewFor: ["waistband"] });
     const out: string[] = [];

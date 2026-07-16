@@ -14,6 +14,7 @@ const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../fixtures"
 
 describe("suggestTests", () => {
   it("recommends arm-raise for a fitted armhole blouse with sleeves", async () => {
+    // 守る仕様: 袖付き・fitted armhole の blouse には arm-raise を recommended として提案する。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const report = suggestTests(resolvedProject);
 
@@ -33,6 +34,7 @@ describe("suggestTests", () => {
   });
 
   it("uses prototype notes when all applies_to tags match", async () => {
+    // 守る仕様: applies_to タグが全て一致した prototype note は、その note を出典に recommended として提案へ加える。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const prototypeNotes = await loadPrototypeNotesFixture();
     const report = suggestTests(withExtraSleeveTag(resolvedProject, "non-stretch-fabric"), {
@@ -48,6 +50,7 @@ describe("suggestTests", () => {
   });
 
   it("honors ignored project test suite entries", async () => {
+    // 守る仕様: project の test_suite.ignored に挙げたシナリオは recommended に出さず、理由つきで skipped に振り分ける。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const report = suggestTests({
       ...resolvedProject,
@@ -74,6 +77,7 @@ describe("suggestTests", () => {
   });
 
   it("can run supplied suggestion rules instead of the default rules", async () => {
+    // 守る仕様: rules を渡すと既定ルールの代わりにその suggestion ルールで提案できる(ルール差し替えの拡張点)。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const customRule: TestSuggestionRule = {
       id: "custom-sit",

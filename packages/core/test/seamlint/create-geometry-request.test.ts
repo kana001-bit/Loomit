@@ -432,6 +432,7 @@ describe("createSeamlintGeometryRequest", () => {
   });
 
   it("does not emit a gathered-seam check while the gather direction is unresolved", async () => {
+    // 守る仕様: Loomit はギャザーの向き(元/先)を測れないので、逆向きになりうる gathered-seam check は request に載せず、向き未確定の warning に留める。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const body = resolvedProject.parts.body;
     const sleeve = resolvedProject.parts.sleeve;
@@ -691,6 +692,7 @@ describe("createSeamlintGeometryRequest", () => {
   });
 
   it("warns when connector range ids do not match across the two seam sides", async () => {
+    // 守る仕様: 両側の range id が揃わない ranged connector は対にできず check を出せない。参照されない part path も残さず warning にする。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const body = resolvedProject.parts.body;
     const sleeve = resolvedProject.parts.sleeve;
@@ -1160,6 +1162,7 @@ describe("createSeamlintGeometryRequest", () => {
   });
 
   it("warns and skips a connector id declared by only one part (open join)", async () => {
+    // 守る仕様: 相手のいない open join(1パーツだけが宣言)は SEAMLINT_CONNECTOR_JOIN_OPEN で warning し、check には載せない。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const body = resolvedProject.parts.body;
     const sleeve = resolvedProject.parts.sleeve;
@@ -1242,6 +1245,7 @@ describe("createSeamlintGeometryRequest", () => {
   });
 
   it("does not orphan a part in the request when its seam partner fails to resolve", async () => {
+    // 守る仕様: 相手側が解決に失敗した seam は、解決できた側も request に孤立エントリとして残さない(check から参照されない part は commit しない)。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const body = resolvedProject.parts.body;
     const sleeve = resolvedProject.parts.sleeve;
@@ -1289,6 +1293,7 @@ describe("createSeamlintGeometryRequest", () => {
   });
 
   it("warns when the two gathered sides declare different allowance_mm", async () => {
+    // 守る仕様: 両側の gathered range が異なる allowance_mm を宣言したら SEAMLINT_CONNECTOR_RANGE_ALLOWANCE_MISMATCH を warning で拾う。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const body = resolvedProject.parts.body;
     const sleeve = resolvedProject.parts.sleeve;
@@ -1357,6 +1362,7 @@ describe("createSeamlintGeometryRequest", () => {
   });
 
   it("reports a missing geometry source once for a part shared by multiple joins", async () => {
+    // 守る仕様: geometry source 欠落は part 単位の1事実なので、その part が複数 join に参加していても警告は join 数だけ重複させず1度だけ出す。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const body = resolvedProject.parts.body;
     const sleeve = resolvedProject.parts.sleeve;
@@ -1415,6 +1421,7 @@ describe("createSeamlintGeometryRequest", () => {
   });
 
   it("skips a join whose identifier contains a reserved separator to avoid key collisions", async () => {
+    // 守る仕様: join id に予約セパレータ(".")を含む seam は、request key の衝突を避けるため SEAMLINT_UNSAFE_JOIN_IDENTIFIER で warning し skip する。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const body = resolvedProject.parts.body;
     const sleeve = resolvedProject.parts.sleeve;

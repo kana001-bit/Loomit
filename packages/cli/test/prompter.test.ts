@@ -20,6 +20,7 @@ function inputFrom(text: string): Readable {
 
 describe("createReadlinePrompter EOF handling", () => {
   it("consumes buffered lines in order, then signals EOF", async () => {
+    // 守る仕様: バッファ済みの行は与えた順に返し、尽きたら EOF になる。
     const prompter = createReadlinePrompter(inputFrom("first\nsecond\n"), sink());
 
     try {
@@ -43,6 +44,7 @@ describe("createReadlinePrompter EOF handling", () => {
   });
 
   it("throws EndOfInputError for a no-default select at EOF (does not loop)", async () => {
+    // 守る仕様: default の無い select は EOF で無限ループせず EndOfInputError を投げる。
     const prompter = createReadlinePrompter(inputFrom(""), sink());
 
     try {
@@ -53,7 +55,7 @@ describe("createReadlinePrompter EOF handling", () => {
   });
 
   it("falls back to the default at EOF for input, select, and confirm", async () => {
-    // default を持つ prompt は EOF でもハングせず default を返す(全 default の非対話実行を壊さない)。
+    // 守る仕様: default を持つ prompt は EOF でもハングせず default を返す(全 default の非対話実行を壊さない)。
     const prompter = createReadlinePrompter(inputFrom(""), sink());
 
     try {

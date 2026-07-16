@@ -138,6 +138,7 @@ describe("loom diff <revision>", () => {
   });
 
   it("supports --format json for a revision diff", async () => {
+    // 守る仕様: revision 差分でも --format json を受け付け、status を JSON で返す。
     const repo = await makeRepoWithTwoRevisions();
 
     try {
@@ -176,6 +177,7 @@ describe("loom diff <revision>", () => {
   });
 
   it("returns a usage error (exit 2) for an unknown revision", async () => {
+    // 守る仕様: 未知の revision を渡したら usage error(exit 2)で、その revision 名を添えて理由を告げる。
     const repo = await makeRepoWithTwoRevisions();
 
     try {

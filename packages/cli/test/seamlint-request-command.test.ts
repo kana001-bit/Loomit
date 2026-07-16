@@ -11,6 +11,7 @@ const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../../core/t
 
 describe("runSeamlintRequestCommand", () => {
   it("builds a JSON Seamlint request for a healthy project", async () => {
+    // 守る仕様: 健全な project では ok の JSON request を組み、parts と sewn-seam check を含める。
     const stdout: string[] = [];
     const stderr: string[] = [];
 
@@ -50,6 +51,7 @@ describe("runSeamlintRequestCommand", () => {
   });
 
   it("surfaces warning diagnostics for skipped ease ranges without failing the command", async () => {
+    // 守る仕様: range で check を出せない ease は、コマンドを失敗させず warning 診断で surface する(status:warning・parts/checks は空)。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-seamlint-request-"));
 
     try {

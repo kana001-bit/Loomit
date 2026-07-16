@@ -4,6 +4,7 @@ import { parseSeamlintGeometryReport } from "../../src/index.js";
 
 describe("parseSeamlintGeometryReport", () => {
   it("accepts a complete geometry report payload", () => {
+    // 守る仕様: 完全な geometry report payload(reports と入れ子 diagnostics つき)は parse できる。
     const parsed = parseSeamlintGeometryReport(
       JSON.stringify({
         status: "ok",
@@ -33,6 +34,7 @@ describe("parseSeamlintGeometryReport", () => {
   });
 
   it("rejects a report whose nested check payload is malformed", () => {
+    // 守る仕様: 入れ子の check payload が壊れている report は parse せず undefined を返す(部分的に受理しない)。
     const parsed = parseSeamlintGeometryReport(
       JSON.stringify({
         status: "ok",

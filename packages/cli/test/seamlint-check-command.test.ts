@@ -47,6 +47,7 @@ function collect() {
 
 describe("runSeamlintCheckCommand", () => {
   it("materializes geometry, hands a self-contained request to the runner, and reports a passing run", async () => {
+    // 守る仕様: slnt check は geometry を materialize して self-contained request(各 part に inline geometryText)を runner に渡し、成功実行を報告する。
     const seamlintReport = {
       status: "ok" as const,
       target: "geometry-request",
@@ -85,6 +86,7 @@ describe("runSeamlintCheckCommand", () => {
   });
 
   it("fails with exit 1 when Seamlint reports an error", async () => {
+    // 守る仕様: Seamlint が error を返したら exit 1 で、report.status も error になる。
     const seamlintReport = {
       status: "error" as const,
       target: "geometry-request",
@@ -118,6 +120,7 @@ describe("runSeamlintCheckCommand", () => {
   });
 
   it("degrades to an error report when the Seamlint executable is unavailable", async () => {
+    // 守る仕様: Seamlint 実行ファイルが無いときは crash せず、seamlint.kind="unavailable" + SEAMLINT_NOT_FOUND 診断つきの error report に落とす。
     const { runner } = fakeRunner({ ok: false, code: "SEAMLINT_NOT_FOUND", message: "spawn slnt ENOENT" });
     const out = collect();
 
@@ -142,6 +145,7 @@ describe("runSeamlintCheckCommand", () => {
   });
 
   it("classifies a missing subprocess executable as SEAMLINT_NOT_FOUND", async () => {
+    // 守る仕様: subprocess runner は実行ファイルが見つからない場合を SEAMLINT_NOT_FOUND に分類する。
     const runner = createSubprocessSeamlintRunner({ bin: "loomit-slnt-missing-executable-test-8d0d1e9c" });
     const result = await runner.run('{"parts":[],"checks":[]}');
 
@@ -149,7 +153,7 @@ describe("runSeamlintCheckCommand", () => {
   });
 
   it("classifies a resolvable-but-failing executable as bad output, not a missing executable", async () => {
-    // 実行ファイルは解決できるが request を処理できず非0終了するケース(= Seamlint 側の失敗)。
+    // 守る仕様: 実行ファイルは解決できるが request を処理できず非0終了するケース(= Seamlint 側の失敗)。
     // node を "check-request" という存在しないスクリプトで呼び、非0終了させる。実体は存在するので
     // SEAMLINT_NOT_FOUND に誤分類せず、SEAMLINT_BAD_OUTPUT として失敗を素通しさせる(P2)。
     const runner = createSubprocessSeamlintRunner({ bin: process.execPath });
@@ -159,6 +163,7 @@ describe("runSeamlintCheckCommand", () => {
   });
 
   it("skips Seamlint when there are no seams to measure", async () => {
+    // 守る仕様: 測る seam が無い project では runner を呼ばず、seamlint.kind="skipped" / checksCount:0 / exit 0 で返す。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-slnt-check-noseams-"));
 
     try {
@@ -206,6 +211,7 @@ describe("runSeamlintCheckCommand", () => {
 
 describe("quoteForCmd", () => {
   it("always quotes the executable so cmd.exe metacharacters do not split the path", () => {
+    // 守る仕様: 実行ファイルパスは常に "" で括り、cmd.exe のメタ文字(& など)でパスが分割されないようにする。
     expect(quoteForCmd("slnt")).toBe('"slnt"');
     expect(quoteForCmd("C:\\bin\\a & b\\slnt.exe")).toBe('"C:\\bin\\a & b\\slnt.exe"');
     expect(quoteForCmd("C:\\Program Files (x86)\\Seamlint\\slnt.cmd")).toBe(
@@ -215,24 +221,25 @@ describe("quoteForCmd", () => {
   });
 
   it("does not double-quote an already-quoted path", () => {
+    // 守る仕様: すでに "" で括られたパスは二重引用しない。
     expect(quoteForCmd('"C:\\bin\\slnt.exe"')).toBe('"C:\\bin\\slnt.exe"');
   });
 });
 
 describe("resolveExecutable", () => {
   it("resolves an existing absolute executable", () => {
-    // node 実体は必ず存在する。locale に依らず解決できることを確認する。
+    // 守る仕様: node 実体は必ず存在する。locale に依らず絶対パスの実行ファイルを解決できる。
     expect(resolveExecutable(process.execPath, process.cwd())).toBeDefined();
   });
 
   it("resolves a bare command found on PATH", () => {
-    // "node" は PATH 上にある(Windows は PATHEXT を補って解決する)。
+    // 守る仕様: "node" は PATH 上にある(Windows は PATHEXT を補って解決する)ので、素のコマンド名も解決できる。
     const resolved = resolveExecutable("node", process.cwd());
     expect(resolved).toBeDefined();
   });
 
   it("resolves a relative executable against the given cwd, not process.cwd()", async () => {
-    // 埋め込み利用で cwd を差し替えたとき、相対 --slnt が渡した cwd 基準で解決されることを確認する。
+    // 守る仕様: 埋め込み利用で cwd を差し替えたとき、相対 --slnt は process.cwd() ではなく渡した cwd 基準で解決する。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-slnt-relbin-"));
     try {
       await mkdir(join(tempRoot, "tools"), { recursive: true });
@@ -250,6 +257,7 @@ describe("resolveExecutable", () => {
   });
 
   it("returns undefined for a missing executable so callers can report NOT_FOUND", () => {
+    // 守る仕様: 実行ファイルが見つからなければ undefined を返し、呼び出し側が NOT_FOUND を報告できるようにする。
     expect(resolveExecutable("loomit-slnt-missing-executable-test-8d0d1e9c", process.cwd())).toBeUndefined();
     // パス区切りを含む指定は PATH 探索せず、実体が無ければ undefined。
     expect(
