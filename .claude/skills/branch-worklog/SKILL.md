@@ -9,35 +9,28 @@ Use this skill to keep a durable, branch-local record that another session can r
 
 ## Workflow
 
-1. Read the current branch with `git branch --show-current`.
-2. Map that branch to `docs/work/branch/<branch>.md`.
-3. Keep `/` from the branch name as directories, so `feature/diff-decision-summary` becomes `docs/work/branch/feature/diff-decision-summary.md`.
-4. Create any missing parent directories before writing the file.
-5. If the worklog does not exist yet, seed it from the most relevant existing docs:
+1. Run `node ./.claude/skills/branch-worklog/scripts/ensure_branch_note.mjs` from the repository root. It resolves the current branch, creates the note under `docs/work/branch/` if missing, and prints the resolved path.
+2. Slash-separated branch names become nested folders (e.g. `feature/diff-decision-summary` -> `docs/work/branch/feature/diff-decision-summary.md`).
+3. If the worklog is new and a matching task doc exists, seed it from the durable parts:
    - Prefer `docs/work/tasks/<branch-with-slashes-replaced-by-hyphens>.md` when it exists.
    - Otherwise use the active user request and the directly related project docs.
-6. Update the worklog at the start of substantial work and again when the plan or status changes.
-7. Preserve history. Edit summary sections in place, but append dated entries in `## Progress Log` instead of rewriting old notes.
+4. Update the worklog at the start of substantial work and again when the plan or status changes.
+5. Preserve history. Edit summary sections in place, but append dated entries in `## Progress` instead of rewriting old notes.
 
 ## Required Format
 
-Use the template in `references/worklog-format.md`.
+Use the template in `references/worklog-format.md`. Keep these sections:
 
-Keep these sections:
-
-- Title: full branch name
-- `Status:` `planned | in progress | blocked | done`
-- `Updated:` exact date in `YYYY-MM-DD`
-- `## Goal`: one short paragraph
-- `## Plan`: short numbered list of remaining work
-- `## Progress Log`: dated bullets, newest first
-- `## Risks / Questions`: only unresolved items
-- `## Next Step`: one concrete next action
-- `## References`: relevant docs, tests, branches, or files
+- `## Goal`: one short paragraph (say so if inferred)
+- `## Plan`: short checklist of remaining work
+- `## Progress`: dated bullets
+- `## Open Questions`: only unresolved items
+- `## Validation`: checks run or skipped, with reason
+- `## Next Handoff`: one concrete resume point
 
 ## Updating Rules
 
-- Keep `## Plan` future-facing. Move finished items into `## Progress Log`.
+- Keep `## Plan` future-facing. Move finished items into `## Progress`.
 - Use exact dates, not relative words like "today" or "yesterday".
 - Mention validation status in progress entries, even when checks were not run.
 - Record decisions that would be expensive to rediscover: target files, test commands, blockers, and explicit deferrals.
@@ -46,11 +39,10 @@ Keep these sections:
 ## Task Seeding
 
 - If a matching task doc exists, copy only the durable parts: goal, scope, done criteria, and known follow-up branches.
-- If a branch is clearly tied to a roadmap slice, add the relevant roadmap doc to `## References`.
 - Do not duplicate large docs verbatim; summarize them into branch-specific action items.
 
 ## Handoff Standard
 
 - Assume the next reader has no access to prior chat context.
 - Prefer concrete statements over vague summaries.
-- When work is complete, set `Status: done`, set `## Next Step` to `None.`, and leave a final dated entry summarizing code changes, tests, and docs touched.
+- When work is complete, set `## Next Handoff` to `None.` and leave a final dated `## Progress` entry summarizing code changes, tests, and docs touched.

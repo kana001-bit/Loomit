@@ -9,6 +9,7 @@ import type { SeamlintGeometryCheckRequest } from "../../src/index.js";
 
 describe("materializeSeamlintGeometry", () => {
   it("inlines each part's geometry source text into the request", async () => {
+    // 守る仕様: materialize は各 part の geometry source ファイルの中身を読み、geometryText として request に埋め込む。
     const dir = await mkdtemp(join(tmpdir(), "loomit-materialize-"));
 
     try {
@@ -38,6 +39,7 @@ describe("materializeSeamlintGeometry", () => {
   });
 
   it("warns and leaves geometryText unset when a source cannot be read", async () => {
+    // 守る仕様: geometry source が読めない場合は geometryText を未設定のまま残し、SEAMLINT_GEOMETRY_SOURCE_UNREADABLE を warning で出す。
     const request: SeamlintGeometryCheckRequest = {
       parts: [
         {

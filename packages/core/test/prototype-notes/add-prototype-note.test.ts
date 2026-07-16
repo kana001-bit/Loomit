@@ -21,6 +21,7 @@ async function makeProject(): Promise<string> {
 
 describe("addPrototypeNote", () => {
   it("creates notes/prototype-notes.yml from scratch and writes a schema-valid note", async () => {
+    // 守る仕様: 初回は notes/prototype-notes.yml を新規作成し、id を date+slug から組んで schema 妥当な note を書く。
     const projectRoot = await makeProject();
 
     try {
@@ -65,6 +66,7 @@ describe("addPrototypeNote", () => {
   });
 
   it("appends to an existing notes file, keeping earlier notes", async () => {
+    // 守る仕様: 既存の notes ファイルには追記し、以前の note を消さず順序を保つ(created は false)。
     const projectRoot = await makeProject();
 
     try {
@@ -106,6 +108,7 @@ describe("addPrototypeNote", () => {
   });
 
   it("disambiguates a colliding id (same date and slug) with a numeric suffix", async () => {
+    // 守る仕様: date と slug が同じで id が衝突する場合は、-2 のような数値 suffix で一意化する。
     const projectRoot = await makeProject();
 
     try {
@@ -138,6 +141,7 @@ describe("addPrototypeNote", () => {
   });
 
   it("falls back to a 'note' slug when the label has no ascii tokens", async () => {
+    // 守る仕様: label に ascii トークンが無い(日本語のみ等)ときは slug を "note" にフォールバックする(id は date で一意化される)。
     const projectRoot = await makeProject();
 
     try {
@@ -158,6 +162,7 @@ describe("addPrototypeNote", () => {
   });
 
   it("rejects creates_test_case without applies_to (paired fields) before writing", async () => {
+    // 守る仕様: creates_test_case と applies_to は対で、片方だけの入力は書き込み前に PROTOTYPE_NOTE_ADD_SCHEMA_INVALID で弾く。
     const projectRoot = await makeProject();
 
     try {
@@ -182,6 +187,7 @@ describe("addPrototypeNote", () => {
   });
 
   it("returns the load failure when an existing notes file is malformed", async () => {
+    // 守る仕様: 既存 notes ファイルが壊れているときは追記を試みず、読み込み時の PROTOTYPE_NOTES_SCHEMA_INVALID を返す。
     const projectRoot = await makeProject();
 
     try {
@@ -209,6 +215,7 @@ describe("addPrototypeNote", () => {
   });
 
   it("keeps leftover_fabric only when it carries a field", async () => {
+    // 守る仕様: leftover_fabric は中身(field)があるときだけ書き、空なら省く(空オブジェクトを残さない)。
     const projectRoot = await makeProject();
 
     try {

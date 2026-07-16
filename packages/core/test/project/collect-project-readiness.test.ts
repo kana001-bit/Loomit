@@ -51,6 +51,7 @@ async function writeBodyPart(projectRoot: string): Promise<void> {
 
 describe("collectProjectReadinessDiagnostics", () => {
   it("errors when the project has no parts at all", async () => {
+    // 守る仕様: parts が空の project は PROJECT_HAS_NO_PARTS を error で出す。
     const projectRoot = await mkdtemp(join(tmpdir(), "loomit-readiness-empty-"));
 
     try {
@@ -66,6 +67,7 @@ describe("collectProjectReadinessDiagnostics", () => {
   });
 
   it("warns about a .val under parts/ that no part references", async () => {
+    // 守る仕様: どの part も参照しない parts/ 下の .val は UNREGISTERED_VAL_SOURCE を warning で出し、loom add を促す。
     const projectRoot = await mkdtemp(join(tmpdir(), "loomit-readiness-stray-"));
 
     try {
@@ -86,6 +88,7 @@ describe("collectProjectReadinessDiagnostics", () => {
   });
 
   it("suggests deleting a stray .val that duplicates an already-registered part", async () => {
+    // 守る仕様: 登録済み part と同一内容の残骸 .val は、loom add ではなく登録済み source を指した削除を促す。
     const projectRoot = await mkdtemp(join(tmpdir(), "loomit-readiness-dup-"));
 
     try {
@@ -110,6 +113,7 @@ describe("collectProjectReadinessDiagnostics", () => {
   });
 
   it("is silent when every .val under parts/ is registered", async () => {
+    // 守る仕様: parts/ 下の .val が全て登録済みなら診断を出さない。
     const projectRoot = await mkdtemp(join(tmpdir(), "loomit-readiness-ok-"));
 
     try {

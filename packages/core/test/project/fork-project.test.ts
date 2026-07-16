@@ -10,6 +10,7 @@ import { forkProject } from "../../src/project/forkProject.js";
 
 describe("forkProject", () => {
   it("copies a project, updates the project name, and keeps prototype notes", async () => {
+    // 守る仕様: fork は project を複製し、project.name を fork 先の名前に更新し、prototype notes と part files は引き継ぐ。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-fork-"));
     const sourcePath = join(tempRoot, "source-blouse");
     const targetPath = join(tempRoot, "target-blouse");
@@ -130,6 +131,7 @@ describe("forkProject", () => {
   });
 
   it("does not overwrite an existing target path", async () => {
+    // 守る仕様: fork 先が既に存在する場合は上書きせず PROJECT_ALREADY_EXISTS を返す。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-fork-"));
     const sourcePath = join(tempRoot, "source-blouse");
     const targetPath = join(tempRoot, "target-blouse");
@@ -169,6 +171,7 @@ describe("forkProject", () => {
   });
 
   it("rejects targets inside the source project", async () => {
+    // 守る仕様: fork 先を fork 元の内側に置くのは PROJECT_FORK_TARGET_INSIDE_SOURCE で拒否する(自己参照コピーを防ぐ)。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-fork-"));
     const sourcePath = join(tempRoot, "source-blouse");
 

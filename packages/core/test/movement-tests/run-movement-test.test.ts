@@ -15,6 +15,7 @@ const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../fixtures"
 
 describe("runMovementTest", () => {
   it("reports arm raise risk for fitted armhole blouses with sleeves", async () => {
+    // 守る仕様: 袖付き・fitted armhole の blouse に arm-raise をかけると ARM_RAISE_FITTED_ARMHOLE_RISK を warning で出す。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const report = runMovementTest(resolvedProject, "arm-raise");
 
@@ -52,6 +53,7 @@ describe("runMovementTest", () => {
   });
 
   it("includes matching prototype note risks", async () => {
+    // 守る仕様: applies_to タグが一致する過去の prototype note は MOVEMENT_TEST_PROTOTYPE_NOTE_RISK として movement test の結果に合流する。
     const resolvedProject = withExtraSleeveTag(await loadResolvedFixture("valid-blouse"), "non-stretch-fabric");
     const prototypeNotes = await loadPrototypeNotesFixture();
     const report = runMovementTest(resolvedProject, "arm-raise", {
@@ -95,6 +97,7 @@ describe("runMovementTest", () => {
   });
 
   it("returns an error for unsupported movement test scenarios", async () => {
+    // 守る仕様: 未対応シナリオ(squat)は MOVEMENT_TEST_UNSUPPORTED を error で返し、checks は空になる。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const report = runMovementTest(resolvedProject, "squat");
 
@@ -115,6 +118,7 @@ describe("runMovementTest", () => {
   });
 
   it("can run supplied movement test rules instead of the default rules", async () => {
+    // 守る仕様: rules を渡すと既定ルールの代わりにその movement test ルールで検査できる(ルール差し替えの拡張点)。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const customRule: MovementTestRule = {
       id: "arm-raise.custom-note",

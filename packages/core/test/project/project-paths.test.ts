@@ -10,6 +10,7 @@ const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../fixtures"
 
 describe("project path resolution", () => {
   it("finds the project root from a nested directory", async () => {
+    // 守る仕様: findProjectRoot は入れ子ディレクトリから loomit.yml を上へ辿って project root を特定する。
     const projectRoot = join(fixturesRoot, "valid-blouse");
     const nestedDirectory = join(projectRoot, "parts/body");
     const result = await findProjectRoot(nestedDirectory);
@@ -19,6 +20,7 @@ describe("project path resolution", () => {
   });
 
   it("finds the project root from the project file path", async () => {
+    // 守る仕様: findProjectRoot は loomit.yml のファイルパスを渡してもその project root を返す。
     const projectRoot = join(fixturesRoot, "valid-blouse");
     const result = await findProjectRoot(join(projectRoot, "loomit.yml"));
 
@@ -27,6 +29,7 @@ describe("project path resolution", () => {
   });
 
   it("returns a diagnostic when no project root can be found", async () => {
+    // 守る仕様: loomit.yml が見つからない場所では PROJECT_ROOT_NOT_FOUND を返す。
     const startPath = join(fixturesRoot, "not-a-loomit-project");
     const result = await findProjectRoot(startPath);
 
@@ -47,6 +50,7 @@ describe("project path resolution", () => {
   });
 
   it("resolves project part paths from the project root", () => {
+    // 守る仕様: resolveProjectPaths は project root を基点に、各 part の相対パスを絶対パスへ解決する。
     const projectRoot = join(fixturesRoot, "valid-blouse");
     const project: Project = {
       schema: "loomit.project.v0",
@@ -67,6 +71,7 @@ describe("project path resolution", () => {
   });
 
   it("loads a project without rewriting stored relative paths", async () => {
+    // 守る仕様: load しても loomit.yml に保存された相対パス表記は書き換えず、解決結果は別途 絶対パスとして持つ。
     const projectRoot = join(fixturesRoot, "valid-blouse");
     const result = await loadProject(join(projectRoot, "parts/body"));
 
@@ -78,6 +83,7 @@ describe("project path resolution", () => {
   });
 
   it("keeps Windows-style resolved paths usable by Node path operations", async () => {
+    // 守る仕様: 解決後の絶対パスは Node の path 操作(relative/normalize)でそのまま扱える(Windows 区切りでも壊れない)。
     const projectRoot = join(fixturesRoot, "valid-blouse");
     const result = await loadProject(projectRoot);
 

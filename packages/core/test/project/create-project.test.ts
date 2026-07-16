@@ -9,6 +9,7 @@ import { createProject } from "../../src/project/createProject.js";
 
 describe("createProject", () => {
   it("creates a schema-valid empty project scaffold", async () => {
+    // 守る仕様: init は schema 妥当な空 scaffold(loomit.yml + notes/output/parts/profiles)を作り、name はディレクトリ名から取る。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-create-"));
     const targetPath = join(tempRoot, "my-blouse");
 
@@ -48,6 +49,7 @@ describe("createProject", () => {
   });
 
   it("initializes an existing empty target directory", async () => {
+    // 守る仕様: 既存の空ディレクトリを対象に init できる(その中へ scaffold を作る)。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-create-"));
 
     try {
@@ -90,6 +92,7 @@ describe("createProject", () => {
   });
 
   it("does not overwrite an existing loomit.yml", async () => {
+    // 守る仕様: 既に loomit.yml がある場所では上書きせず PROJECT_ALREADY_EXISTS を返す。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-create-"));
     const projectFilePath = join(tempRoot, "loomit.yml");
 

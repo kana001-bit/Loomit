@@ -1,0 +1,4 @@
+interface:
+  display_name: "Loomit Code Review"
+  short_description: "Review a Loomit diff or PR for report/contract safety, finished-line semantics, and core purity."
+  default_prompt: "Use $code-review to review the current Loomit diff or PR before merge: report/schema contract stability, variant/requires misuse, length_mm finished-line semantics, core independence, file I/O safety, any/unknown hygiene, and stale comments. Point out issues; do not write code."
