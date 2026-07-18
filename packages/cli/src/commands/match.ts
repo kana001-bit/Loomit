@@ -189,9 +189,11 @@ export async function runMatchCommand(
   const materialized = await materializeSeamlintGeometry(pair.request);
   diagnostics.push(...materialized.diagnostics);
 
+  // slnt は loom 自身の測定だけでなく Truer も内部で呼ぶ(preview の edge 解決)。両者が同じ実行ファイルを
+  // 使うよう一度だけ解決し、Truer にも --slnt で転送する(でないと Truer が PATH の slnt を探して落ちる)。
+  const slntBin = resolveSlntBin(parsedArgs.slntBin);
   const runner =
-    options.runner ??
-    createSubprocessSeamlintRunner({ bin: resolveSlntBin(parsedArgs.slntBin), cwd: options.cwd });
+    options.runner ?? createSubprocessSeamlintRunner({ bin: slntBin, cwd: options.cwd });
   const runResult = await runner.run(JSON.stringify(materialized.request));
 
   if (!runResult.ok) {
@@ -226,6 +228,7 @@ export async function runMatchCommand(
       roleB: parsedArgs.roleB,
       cwd: options.cwd,
       bin: resolveTruerBin(parsedArgs.truBin),
+      slntBin,
       ...(options.truerRunner === undefined ? {} : { runner: options.truerRunner })
     });
     truer = proposeResult.outcome;

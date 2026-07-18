@@ -396,6 +396,9 @@ describe("runMatchCommand", () => {
       expect((args[args.indexOf("--out") + 1] ?? "").replace(/\\/g, "/")).toContain(
         "output/match/front-back.proposal.json"
       );
+      // loom は自分が使う slnt を Truer にも転送する(Truer は preview の edge 解決で slnt を内部起動するため)。
+      // --slnt 未指定なので既定の "slnt"。
+      expect(args[args.indexOf("--slnt") + 1]).toBe("slnt");
     } finally {
       await rm(root, { recursive: true, force: true });
     }
