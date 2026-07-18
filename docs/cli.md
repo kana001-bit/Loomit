@@ -194,7 +194,7 @@ loom match <partA> <partB> [--reference <part>] [--slnt <path>] [--tru <path>] [
 
 - `--reference` は名指しした2パーツのどちらかでなければ usage エラー（exit 2）。固定でない側（follower）が Truer の補正対象。
 - follower は DXF が要る（Truer は `files.geometry` の DXF の辺を書き換える）。follower に `files.geometry` が無ければ `MATCH_REFERENCE_NEEDS_DXF` を出し、測定結果は返しつつ Truer は呼ばない。
-- loom は follower の DXF・reference の BLOCK 名・出力先を組み立てて `tru propose <dxf> --diagnostic <report> --reference <BLOCK> --out <path>` を spawn する。report は一時ファイルで渡す。
+- loom は follower の DXF・reference の BLOCK 名・出力先を組み立てて `tru propose <dxf> --diagnostic <report> --reference <BLOCK> --out <path> --slnt <slnt>` を spawn する。report は一時ファイルで渡す。Truer も preview の edge 解決で内部から Seamlint を呼ぶため、loom が測定に使ったのと**同じ slnt を `--slnt` で転送**する（渡さないと Truer が PATH 上の `slnt` を探して失敗する）。
 - proposal の出力先は **`output/match/<partA>-<partB>.proposal.json`**（`outputs.dir` 配下・無ければ `./output`）。**advisory（preview-only）**で、人が Valentina で当てるための指示ログ。loom は幾何を書き換えない。
 - Truer 実行ファイルの解決は `--tru` > `LOOMIT_TRU` > PATH 上の `tru`。見つからなければ error。
 - `--reference` を付けなければ、従来どおり測定のみ（Truer は呼ばない）。
