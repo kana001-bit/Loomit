@@ -175,7 +175,7 @@ loom slnt check [path] [--slnt <path>] [--format text|json]
 名指しした2パーツの縫い目**だけ**を測り、長さが合っているかを pair 単位で報告する。project 全体を測る `loom slnt check` に対し、`loom match` は「front と back は合っているか」を局所的に問う導線。`front` を `back` に「合わせる」＝ `match`。
 
 ```text
-loom match <partA> <partB> [--slnt <path>] [--format text|json]
+loom match <partA> <partB> [--reference <part>] [--slnt <path>] [--tru <path>] [--format text|json]
 ```
 
 補足:
@@ -187,7 +187,17 @@ loom match <partA> <partB> [--slnt <path>] [--format text|json]
   - `MATCH_ROLE_NOT_FOUND`（登録されていない role）／`MATCH_SAME_ROLE`（同じ role 同士）は error（exit 1）。
   - `MATCH_NO_SEAM` は**縫い合うと宣言されていない**（共有 connector が1つも無い）2パーツにだけ出し、`loom connect` を促す（exit 1）。
   - 接続はあるが check を組めない（`path_ref` 欠落・多パーツで defer・側の宣言不完全など）ときは `MATCH_NO_SEAM` にはせず、その**理由の診断**を出して測定を skip する（既に接続済みの pair に `loom connect` を勧めない）。
-- ずれの直し方の提案（Truer 連携）は将来スライス。現状は測って見せるところまで。
+
+### `--reference <part>`（Truer に直し方を提案させる）
+
+`--reference` に2パーツのどちらか一方を渡すと、その辺を**固定側**とみなし、測定済み report を Truer に渡して**もう片方をその長さに合わせる**直し方（proposal）を提案させる。
+
+- `--reference` は名指しした2パーツのどちらかでなければ usage エラー（exit 2）。固定でない側（follower）が Truer の補正対象。
+- follower は DXF が要る（Truer は `files.geometry` の DXF の辺を書き換える）。follower に `files.geometry` が無ければ `MATCH_REFERENCE_NEEDS_DXF` を出し、測定結果は返しつつ Truer は呼ばない。
+- loom は follower の DXF・reference の BLOCK 名・出力先を組み立てて `tru propose <dxf> --diagnostic <report> --reference <BLOCK> --out <path>` を spawn する。report は一時ファイルで渡す。
+- proposal の出力先は **`output/match/<partA>-<partB>.proposal.json`**（`outputs.dir` 配下・無ければ `./output`）。**advisory（preview-only）**で、人が Valentina で当てるための指示ログ。loom は幾何を書き換えない。
+- Truer 実行ファイルの解決は `--tru` > `LOOMIT_TRU` > PATH 上の `tru`。見つからなければ error。
+- `--reference` を付けなければ、従来どおり測定のみ（Truer は呼ばない）。
 
 ## `loom diff`
 
