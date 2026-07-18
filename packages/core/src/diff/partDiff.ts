@@ -42,8 +42,8 @@ export interface PartDiffConnectorRecheckHint {
 }
 
 export interface PartDiffRecheckHints {
-  // Design decision: diff compares the part role/type axis stored in `Part.type`.
-  // Keep the handoff wording "part role" while reusing Loomit's existing field instead of inventing another role key.
+  // 設計判断: diff は `Part.type` に入っている part の役割/種類(role/type)軸を比較する。
+  // 別の role キーを新設せず Loomit 既存フィールドを再利用しつつ、受け渡しの語としては "part role" を保つ。
   readonly partRole: {
     readonly from: string;
     readonly to: string;

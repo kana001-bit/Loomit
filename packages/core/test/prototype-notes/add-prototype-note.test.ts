@@ -171,7 +171,7 @@ describe("addPrototypeNote", () => {
         result: "failed",
         issue: "armhole tight",
         createsTestCase: "arm-raise"
-        // applies_to intentionally omitted
+        // applies_to はわざと省略している
       });
 
       expect(result.ok).toBe(false);
