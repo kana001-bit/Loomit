@@ -88,7 +88,7 @@ describe("forkProject", () => {
       expect(result.ok).toBe(true);
       const targetEntries = await readdir(targetPath);
       expect(targetEntries).not.toContain("output");
-      // The rest of the project (durable state) is still forked.
+      // プロジェクトの残り(永続する状態)はちゃんと fork される。
       expect(await readFile(join(targetPath, "parts/body/part.loom"), "utf8")).toBe(
         "example body file\n"
       );
