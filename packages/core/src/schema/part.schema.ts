@@ -117,6 +117,10 @@ export const connectorSchema = z
     // Seamlint は同じ2 BLOCK を共有する複数 seam(front↔back の outseam/inseam 等)を「辺ごとの notch 署名」で
     // 区別する。notch の位置測定は Seamlint(幾何)だが、「どの seam に合印が何個あるか」は型紙の知識=人が宣言する
     // identity なので Loomit 側に持つ(A案を守る)。数のみ(将来 order/type/位置へ拡張余地)。
+    // 数え方: その辺に落ちる全 passmark 種別(V/スリット・T・castle・check・U…)の合計を数える。V だけ数えない。
+    // Seamlint は DXF notch を全レイヤ(layer 4/80/81/82/83)から読み、辺の実測数と notch_count を厳密一致で
+    // 照合するので、V のみだと T を持つ seam で数が食い違い no-notch-match を誤発火させる(.val reader も種別を
+    // 区別せず全 passmark を拾うため、この規約は Loomit の抽出結果とも一致する)。
     // 0 も有効値: 「合印の無い seam」と明示すれば、notch を持つ候補を弾いて識別子になる(nonnegative)。
     notch_count: z.number().int().nonnegative().optional(),
     // 設計判断: side は「この縫い目で、このピースがどちらの unit(側)に属すか」のラベル。armhole のように

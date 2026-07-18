@@ -86,7 +86,7 @@ loom connect <band> --to <n1> <n2>... --as <id> [options]  # band seam（1枚 �
 - `--as <id>`（必須）— 縫い目の一意 id。参加 part 全部に同じ id が書かれ、それがペアの成立条件になる。
 - `--to <roles...>` — band モードに切り替える。band が縫い付く neighbour ピース群（1枚以上）。
 - `--type <type>` — 縫い目の種類ラベル（例: `side`, `armhole`）。ペアリングには使われない。未指定なら id にフォールバック。
-- `--notches <n>` — この seam の合印（notch）数（非負整数）。band モードでは neighbours 側に書く。同じピースを共有する複数 seam を Seamlint が辺ごとに区別するための識別子。
+- `--notches <n>` — この seam の合印（notch）数（非負整数）。**その辺に落ちる全 passmark 種別（V・T・castle…）の合計を数える**（V だけ数えない。Seamlint が全レイヤの notch を読んで数を厳密一致で照合するため）。band モードでは neighbours 側に書く。同じピースを共有する複数 seam を Seamlint が辺ごとに区別するための識別子。
 - `--band-side <s>` / `--neighbour-side <s>` — band モードの side ラベル。既定は `band` / `neighbour`。値は2側が別なら任意（`classifyJoinSides` が2側の contiguous と見なせればよい）。
 - `--path-ref-a <block>` / `--path-ref-b <block>` — 各 part の測定用 DXF BLOCK 名（**素の seam 専用**）。未指定なら各 part の `files.piece` を既定にする（BLOCK 照合は大文字小文字を無視するので `front` が `FRONT` に当たる）。
 
