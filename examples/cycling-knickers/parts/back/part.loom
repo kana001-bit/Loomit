@@ -1,0 +1,35 @@
+schema: loomit.part.v0
+name: knickers-back
+variant: cycling-v1
+type: back
+status: active
+measurements:
+  finished:
+    hip_width_mm: 400
+    back_rise_mm: 330
+connectors:
+  outseam:
+    type: outseam
+    length_mm: 315
+    tolerance_mm: 3
+    notch_count: 4
+  inseam:
+    type: inseam
+    length_mm: 175
+    tolerance_mm: 3
+    notch_count: 2
+  waist:
+    type: waist
+    side: neighbour
+    length_mm: 340
+    tolerance_mm: 4
+requires:
+  front.outseam.length_mm:
+    min: 312
+    max: 318
+  front.inseam.length_mm:
+    min: 172
+    max: 178
+tags:
+  - cycling
+  - knickers
