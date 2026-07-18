@@ -15,6 +15,7 @@ import { runSlntCommand } from "./commands/slnt.js";
 import { runSuggestTestsCommand } from "./commands/suggestTests.js";
 import { runTestCommand } from "./commands/test.js";
 import type { SeamlintRunner } from "./commands/seamlintCheck.js";
+import type { TruerRunner } from "./commands/truerPropose.js";
 import type { Prompter } from "./prompter.js";
 
 export interface CliIo {
@@ -29,6 +30,8 @@ export interface RunCliOptions {
   readonly prompter?: Prompter;
   // slnt check 用。テストは fake runner を注入する。未指定なら subprocess で slnt を呼ぶ。
   readonly seamlintRunner?: SeamlintRunner;
+  // match --reference 用。テストは fake runner を注入する。未指定なら subprocess で tru を呼ぶ。
+  readonly truerRunner?: TruerRunner;
 }
 
 export async function runCli(
@@ -134,7 +137,8 @@ export async function runCli(
       stdout: io.stdout,
       stderr: io.stderr,
       // slnt check と同じ runner を注入口として共有する(テストは fake、既定は subprocess)。
-      ...(options.seamlintRunner === undefined ? {} : { runner: options.seamlintRunner })
+      ...(options.seamlintRunner === undefined ? {} : { runner: options.seamlintRunner }),
+      ...(options.truerRunner === undefined ? {} : { truerRunner: options.truerRunner })
     });
   }
 
