@@ -1,0 +1,17 @@
+schema: loomit.part.v0
+name: knickers-waistband
+variant: cycling-v1
+type: waistband
+status: active
+measurements:
+  finished:
+    waist_length_mm: 680
+connectors:
+  waist:
+    type: waist
+    side: band
+    length_mm: 680
+    tolerance_mm: 4
+tags:
+  - cycling
+  - knickers
