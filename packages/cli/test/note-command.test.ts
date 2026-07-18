@@ -120,14 +120,14 @@ describe("loom note", () => {
         prompter: scriptedPrompter({
           selects: ["failed"],
           inputs: [
-            "armhole tight when raising arms", // issue
-            "", // label (skip)
-            "", // observation list (finish)
-            "", // suggested_change list (finish)
-            "arm-raise", // creates_test_case
-            "fitted-armhole", // applies_to (required first)
-            "non-stretch-fabric", // applies_to (another)
-            "" // applies_to (finish)
+            "armhole tight when raising arms", // issue(問題点)
+            "", // label(スキップ)
+            "", // observation リスト(終了)
+            "", // suggested_change リスト(終了)
+            "arm-raise", // creates_test_case(生成する動作テスト)
+            "fitted-armhole", // applies_to(必須の1件目)
+            "non-stretch-fabric", // applies_to(もう1件)
+            "" // applies_to(終了)
           ],
           confirms: [true]
         })

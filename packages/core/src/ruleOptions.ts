@@ -1,9 +1,9 @@
 /**
- * Options for choosing which rules a checker runs.
+ * checker がどのルールを走らせるかを選ぶためのオプション。
  *
- * `registry` and `rules` are mutually exclusive: pass a fully built registry,
- * or the rules to build a default registry from — but not both. Supplying both
- * would silently ignore `rules`, so the types forbid it.
+ * `registry` と `rules` は排他。組み立て済みの registry を渡すか、
+ * デフォルト registry を組むための rules を渡すかのどちらか一方で、両方は不可。
+ * 両方渡すと `rules` が黙って無視されてしまうので、型レベルで禁じている。
  */
 export type ExclusiveRuleOptions<Registry, Rule> =
   | { readonly registry?: Registry; readonly rules?: never }
