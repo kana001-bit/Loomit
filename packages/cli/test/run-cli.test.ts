@@ -746,6 +746,33 @@ describe("runCli", () => {
     expect(output.stderr).toEqual([]);
   });
 
+  it("runs fit with JSON output for a valid project and profile", async () => {
+    // 守る仕様: fit --format json は parseable な JSON を stdout に出し(json 配線)、status:ok を返す。
+    const output = createOutputCollector();
+    const exitCode = await runCli(
+      [
+        "node",
+        "loom",
+        "fit",
+        join(fixturesRoot, "valid-blouse"),
+        "--profile",
+        join(fixturesRoot, "profiles/my-size.yml"),
+        "--format",
+        "json"
+      ],
+      {
+        cwd: workspaceRoot,
+        io: output.io
+      }
+    );
+
+    const report = JSON.parse(output.stdout.join("")) as { readonly status: string };
+
+    expect(exitCode).toBe(0);
+    expect(report.status).toBe("ok");
+    expect(output.stderr).toEqual([]);
+  });
+
   it("runs slnt request with JSON output for a valid project", async () => {
     // 守る仕様: slnt request --format json は ok の request を返し、sewn-seam check を含める。
     const output = createOutputCollector();
@@ -1937,6 +1964,36 @@ describe("runCli", () => {
       expect(listOutput.stdout.join("")).toContain("sleeve/basic-sleeve");
       expect(listOutput.stderr).toEqual([]);
 
+      // json 配線: 同じ list を --format json でも取り、parseable な配列に公開された part が載ることを確認する。
+      const listJsonOutput = createOutputCollector();
+      const listJsonExitCode = await runCli(
+        [
+          "node",
+          "loom",
+          "library",
+          "list",
+          "--library",
+          libraryRoot,
+          "--type",
+          "sleeve",
+          "--format",
+          "json"
+        ],
+        {
+          cwd: workspaceRoot,
+          io: listJsonOutput.io
+        }
+      );
+
+      const entries = JSON.parse(listJsonOutput.stdout.join("")) as readonly {
+        readonly meta: { readonly name: string; readonly type: string };
+      }[];
+      expect(listJsonExitCode).toBe(0);
+      expect(
+        entries.some((entry) => entry.meta.name === "basic-sleeve" && entry.meta.type === "sleeve")
+      ).toBe(true);
+      expect(listJsonOutput.stderr).toEqual([]);
+
       const addOutput = createOutputCollector();
       const addExitCode = await runCli(
         [
@@ -2026,6 +2083,29 @@ describe("runCli", () => {
     }
   });
 
+  it("builds with JSON output and reports status ok", async () => {
+    // 守る仕様: build --format json は parseable な JSON を stdout に出し(json 配線)、status:ok を返す。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-build-json-"));
+
+    try {
+      await writeCliBuildFixture(tempRoot);
+
+      const output = createOutputCollector();
+      const exitCode = await runCli(["node", "loom", "build", tempRoot, "--format", "json"], {
+        cwd: workspaceRoot,
+        io: output.io
+      });
+
+      const report = JSON.parse(output.stdout.join("")) as { readonly status: string };
+
+      expect(exitCode).toBe(0);
+      expect(report.status).toBe("ok");
+      expect(output.stderr).toEqual([]);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   it("suggests movement tests for a valid blouse", async () => {
     // 守る仕様: suggest-tests は blouse に arm-raise を Recommended として出す。
     const output = createOutputCollector();
@@ -2046,6 +2126,24 @@ describe("runCli", () => {
     expect(output.stderr).toEqual([]);
   });
 
+  it("suggests movement tests with JSON output", async () => {
+    // 守る仕様: suggest-tests --format json は parseable な JSON を stdout に出し(json 配線)、status:ok を返す。
+    const output = createOutputCollector();
+    const exitCode = await runCli(
+      ["node", "loom", "suggest-tests", join(fixturesRoot, "valid-blouse"), "--format", "json"],
+      {
+        cwd: workspaceRoot,
+        io: output.io
+      }
+    );
+
+    const report = JSON.parse(output.stdout.join("")) as { readonly status: string };
+
+    expect(exitCode).toBe(0);
+    expect(report.status).toBe("ok");
+    expect(output.stderr).toEqual([]);
+  });
+
   it("runs an arm raise movement test for a valid blouse", async () => {
     // 守る仕様: test arm-raise は blouse で ARM_RAISE_FITTED_ARMHOLE_RISK を warning として出す。
     const output = createOutputCollector();
@@ -2062,6 +2160,24 @@ describe("runCli", () => {
     expect(exitCode).toBe(0);
     expect(stdout).toContain("Loomit test arm-raise: warning");
     expect(stdout).toContain("ARM_RAISE_FITTED_ARMHOLE_RISK");
+    expect(output.stderr).toEqual([]);
+  });
+
+  it("runs a movement test with JSON output", async () => {
+    // 守る仕様: test <movement> --format json は parseable な JSON を stdout に出し(json 配線)、status:warning を返す。
+    const output = createOutputCollector();
+    const exitCode = await runCli(
+      ["node", "loom", "test", "arm-raise", join(fixturesRoot, "valid-blouse"), "--format", "json"],
+      {
+        cwd: workspaceRoot,
+        io: output.io
+      }
+    );
+
+    const report = JSON.parse(output.stdout.join("")) as { readonly status: string };
+
+    expect(exitCode).toBe(0);
+    expect(report.status).toBe("warning");
     expect(output.stderr).toEqual([]);
   });
 
