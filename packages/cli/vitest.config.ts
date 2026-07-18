@@ -1,7 +1,7 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 const configDir = dirname(fileURLToPath(import.meta.url));
 
@@ -15,6 +15,9 @@ export default defineConfig({
   test: {
     globals: false,
     include: ["test/**/*.test.ts"],
+    // dist/main.js を実バイナリとして起動する E2E は src を見る既定 suite から外す。
+    // `pnpm test:e2e`(pnpm -r build 込み)で vitest.e2e.config.ts から明示的に回す。
+    exclude: [...configDefaults.exclude, "test/**/*.e2e.test.ts"],
     passWithNoTests: true
   }
 });
