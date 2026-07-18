@@ -29,7 +29,7 @@ export async function runInitCommand(
     return 0;
   }
 
-  // `loom init` initializes in the current directory (git init style).
+  // `loom init` は今いるディレクトリで初期化する(git init と同じ流儀)。
   const result = await createProject({
     targetPath: options.cwd,
     ...(parsedArgs.name === undefined ? {} : { name: parsedArgs.name }),

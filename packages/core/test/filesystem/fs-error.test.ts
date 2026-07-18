@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { describeFsError } from "../../src/index.js";
 
-// Build an Error carrying a Node-style errno label, without using `any`.
+// `any` を使わずに、Node 流の errno ラベルを持たせた Error を組み立てる。
 function fsError(code: string): Error {
   const error = new Error(code);
   Object.assign(error, { code });
