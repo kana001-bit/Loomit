@@ -28,6 +28,21 @@ export function formatMatchText(report: MatchReport): string {
     lines.push(`seamlint: unavailable (${seamlint.code})`);
   }
 
+  // --reference 指定時の Truer proposal の顛末。
+  if (report.reference !== undefined) {
+    lines.push(`reference: ${report.reference}`);
+  }
+  const truer = report.truer;
+  if (truer !== undefined) {
+    if (truer.kind === "proposed") {
+      lines.push(`truer: proposal written to ${truer.proposalPath}`);
+    } else if (truer.kind === "skipped") {
+      lines.push(`truer: skipped (${truer.reason})`);
+    } else {
+      lines.push(`truer: unavailable (${truer.code})`);
+    }
+  }
+
   if (report.diagnostics.length > 0) {
     lines.push("", "Diagnostics:", ...formatDiagnosticsText(report.diagnostics));
   }
