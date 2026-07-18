@@ -51,6 +51,9 @@ export interface RunTruerProposeInput {
   readonly roleB: string;
   readonly cwd: string;
   readonly bin: string;
+  // Truer が preview の edge 解決で内部から呼ぶ Seamlint 実行ファイル。loom が測定に使ったものと同じを渡す
+  // (渡さないと Truer は PATH の "slnt" を探して落ちる)。
+  readonly slntBin: string;
   readonly runner?: TruerRunner;
 }
 
@@ -211,7 +214,10 @@ export async function runTruerPropose(input: RunTruerProposeInput): Promise<True
       "--reference",
       referenceBlock,
       "--out",
-      proposalPath
+      proposalPath,
+      // Truer は preview の edge 解決で slnt を内部起動する。loom が使ったのと同じ実行ファイルを渡す。
+      "--slnt",
+      input.slntBin
     ]);
 
     if (!runResult.ok) {
