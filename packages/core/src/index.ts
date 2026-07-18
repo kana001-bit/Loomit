@@ -175,6 +175,8 @@ export type {
   SeamlintGeometryTolerance,
   SeamlintJoinKind
 } from "./seamlint/createGeometryRequest.js";
+export { buildPairSeamRequest } from "./seamlint/buildPairSeamRequest.js";
+export type { PairSeamRequestResult } from "./seamlint/buildPairSeamRequest.js";
 export { materializeSeamlintGeometry } from "./seamlint/materializeGeometry.js";
 export type { SeamlintMaterializeResult } from "./seamlint/materializeGeometry.js";
 export { parseSeamlintGeometryReport } from "./seamlint/geometryReport.js";

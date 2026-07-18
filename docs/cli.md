@@ -170,6 +170,25 @@ loom slnt check [path] [--slnt <path>] [--format text|json]
 - 測る seam が1つも無ければ Seamlint は呼ばず、`seamlint: skipped` を返す。
 - responsibility 分担は不変（Loomit=構造とグラフ＋request 発行、Seamlint=幾何測定）。Loomit は幾何を計算しない。
 
+## `loom match`
+
+名指しした2パーツの縫い目**だけ**を測り、長さが合っているかを pair 単位で報告する。project 全体を測る `loom slnt check` に対し、`loom match` は「front と back は合っているか」を局所的に問う導線。`front` を `back` に「合わせる」＝ `match`。
+
+```text
+loom match <partA> <partB> [--slnt <path>] [--format text|json]
+```
+
+補足:
+
+- **pair-local**。2パーツが互いに縫い合う縫い目だけを対象に request を組み、**その縫い目についての診断だけ**を返す。project 全体の readiness や無関係パーツの connector 問題は結果にも exit code にも混ざらない（project 全体の健全性は `loom check` の役割）。
+- 縫い目の絞り込みは side を見て行う（band-seam では band と neighbour は反対側なので拾うが、neighbour どうしは同じ側＝互いには縫わないので拾わない）。どの辺が共有 seam かは Seamlint が幾何から発見する（`loom slnt check` と同じ seam-edge / band-seam の測定）。辺の座標は渡さない。
+- Seamlint 実行ファイルの解決は `loom slnt check` と同じ（`--slnt` > `LOOMIT_SLNT` > PATH 上の `slnt`）。
+- 早期に弾くケース（Seamlint を呼ばない）:
+  - `MATCH_ROLE_NOT_FOUND`（登録されていない role）／`MATCH_SAME_ROLE`（同じ role 同士）は error（exit 1）。
+  - `MATCH_NO_SEAM` は**縫い合うと宣言されていない**（共有 connector が1つも無い）2パーツにだけ出し、`loom connect` を促す（exit 1）。
+  - 接続はあるが check を組めない（`path_ref` 欠落・多パーツで defer・側の宣言不完全など）ときは `MATCH_NO_SEAM` にはせず、その**理由の診断**を出して測定を skip する（既に接続済みの pair に `loom connect` を勧めない）。
+- ずれの直し方の提案（Truer 連携）は将来スライス。現状は測って見せるところまで。
+
 ## `loom diff`
 
 2つの part、2つの project 内の同一 role part、または **Git の revision 間**で同一 role part を比較する。
