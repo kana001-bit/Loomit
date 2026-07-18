@@ -1,0 +1,7 @@
+schema: loomit.project.v0
+name: cycling-knickers
+garment: cycling-knickers
+parts:
+  front: ./parts/front/part.loom
+  back: ./parts/back/part.loom
+  waistband: ./parts/waistband/part.loom
