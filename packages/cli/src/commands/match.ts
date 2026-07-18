@@ -17,17 +17,26 @@ import {
   type SeamlintCheckOutcome,
   type SeamlintRunner
 } from "./seamlintCheck.js";
+import {
+  resolveTruerBin,
+  runTruerPropose,
+  type TruerProposeOutcome,
+  type TruerRunner
+} from "./truerPropose.js";
 
 export type MatchOutputFormat = "text" | "json";
 
 // loom match の結果。roleA/roleB を pair として測り、seamCount(両者を繋ぐ縫い目の数)と Seamlint の顛末を返す。
+// --reference 指定時は Truer に直し方を提案させ、reference(固定側)と truer の顛末も載せる。
 export interface MatchReport {
   readonly status: ReportStatus;
   readonly roleA: string;
   readonly roleB: string;
+  readonly reference?: string;
   readonly seamCount: number;
   readonly diagnostics: readonly Diagnostic[];
   readonly seamlint: SeamlintCheckOutcome;
+  readonly truer?: TruerProposeOutcome;
 }
 
 export interface MatchCommandOptions {
@@ -36,6 +45,8 @@ export interface MatchCommandOptions {
   readonly stderr: (text: string) => void;
   // 注入用。未指定なら subprocess アダプタ(既定 bin=slnt)で Seamlint を呼ぶ。テストは fake を渡す。
   readonly runner?: SeamlintRunner;
+  // Truer 注入用(--reference 時)。未指定なら subprocess アダプタ(既定 bin=tru)。テストは fake を渡す。
+  readonly truerRunner?: TruerRunner;
 }
 
 interface ParsedMatchArgs {
@@ -45,6 +56,9 @@ interface ParsedMatchArgs {
   readonly roleA: string;
   readonly roleB: string;
   readonly slntBin: string | undefined;
+  // 固定辺とみなす側の role(a か b)。未指定なら測定のみで Truer は呼ばない。
+  readonly reference: string | undefined;
+  readonly truBin: string | undefined;
 }
 
 // loom match <a> <b>: 2パーツの縫い目を pair 単位で測る。プロジェクト全体を測る loom slnt check と違い、
@@ -196,15 +210,39 @@ export async function runMatchCommand(
     );
   }
 
+  // --reference が指定されていれば、測定済み report を Truer に渡して直し方(proposal)を提案させる。
+  // follower = reference でない側 = Truer が DXF を書き換える対象。DXF が無い等で呼べなければ理由を診断で示す。
+  let truer: TruerProposeOutcome | undefined;
+  if (parsedArgs.reference !== undefined) {
+    const followerRole =
+      parsedArgs.reference === parsedArgs.roleA ? parsedArgs.roleB : parsedArgs.roleA;
+    const proposeResult = await runTruerPropose({
+      resolvedProject,
+      request: pair.request,
+      report: runResult.report,
+      referenceRole: parsedArgs.reference,
+      followerRole,
+      roleA: parsedArgs.roleA,
+      roleB: parsedArgs.roleB,
+      cwd: options.cwd,
+      bin: resolveTruerBin(parsedArgs.truBin),
+      ...(options.truerRunner === undefined ? {} : { runner: options.truerRunner })
+    });
+    truer = proposeResult.outcome;
+    diagnostics.push(...proposeResult.diagnostics);
+  }
+
   const status = worstStatus(getStatusForDiagnostics(diagnostics), runResult.report.status);
   return writeReport(
     {
       status,
       roleA: parsedArgs.roleA,
       roleB: parsedArgs.roleB,
+      ...(parsedArgs.reference === undefined ? {} : { reference: parsedArgs.reference }),
       seamCount: pair.request.checks.length,
       diagnostics,
-      seamlint: { kind: "ran", report: runResult.report }
+      seamlint: { kind: "ran", report: runResult.report },
+      ...(truer === undefined ? {} : { truer })
     },
     parsedArgs,
     options
@@ -214,19 +252,27 @@ export async function runMatchCommand(
 export function formatMatchHelp(): string {
   return (
     [
-      "Usage: loom match <partA> <partB> [--slnt <path>] [--format text|json]",
+      "Usage: loom match <partA> <partB> [--reference <part>] [options]",
       "",
       "Measure the seam(s) that join two parts and report whether they match in",
       "length. Only the seams between the two named parts are measured (not the whole",
       "project). Which edge is the shared seam is found by Seamlint from the geometry.",
       "",
+      "With --reference <part> (one of the two parts), the measured report is handed",
+      "to Truer to propose how to adjust the other part to the reference length. The",
+      "proposal is advisory (preview-only) and written under output/match/.",
+      "",
       "Options:",
+      "  --reference <part>  Fix this part's edge and propose adjusting the other to it",
+      "                      (must be one of the two named parts). Runs Truer.",
       "  --slnt <path>       Seamlint executable to run. Defaults to LOOMIT_SLNT or \"slnt\" on PATH.",
+      "  --tru <path>        Truer executable to run. Defaults to LOOMIT_TRU or \"tru\" on PATH.",
       "  --format text|json  Output format. Defaults to text.",
       "  --help              Show this help.",
       "",
-      "Example:",
-      "  loom match front back"
+      "Examples:",
+      "  loom match front back",
+      "  loom match front back --reference back"
     ].join("\n") + "\n"
   );
 }
@@ -286,6 +332,8 @@ function parseMatchArgs(args: readonly string[], cwd: string): ParsedMatchArgs |
   let format: MatchOutputFormat = "text";
   let help = false;
   let slntBin: string | undefined;
+  let truBin: string | undefined;
+  let reference: string | undefined;
   const positional: string[] = [];
 
   for (let index = 0; index < args.length; index += 1) {
@@ -316,6 +364,26 @@ function parseMatchArgs(args: readonly string[], cwd: string): ParsedMatchArgs |
       continue;
     }
 
+    if (arg === "--tru") {
+      const value = args[index + 1];
+      if (value === undefined || value.startsWith("--")) {
+        return "Expected --tru to be followed by an executable path.";
+      }
+      truBin = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--reference") {
+      const value = args[index + 1];
+      if (value === undefined || value.startsWith("--")) {
+        return "Expected --reference to be followed by a part role.";
+      }
+      reference = value;
+      index += 1;
+      continue;
+    }
+
     if (arg?.startsWith("--") === true) {
       return `Unknown option: ${arg}`;
     }
@@ -327,7 +395,7 @@ function parseMatchArgs(args: readonly string[], cwd: string): ParsedMatchArgs |
 
   if (help) {
     // --help は role より優先(引数不足でも help は出す)。startPath/role はダミーで埋める。
-    return { help: true, format, startPath: cwd, roleA: "", roleB: "", slntBin };
+    return { help: true, format, startPath: cwd, roleA: "", roleB: "", slntBin, truBin, reference };
   }
 
   if (positional.length !== 2) {
@@ -340,5 +408,10 @@ function parseMatchArgs(args: readonly string[], cwd: string): ParsedMatchArgs |
     return "Expected exactly two part roles: loom match <partA> <partB>.";
   }
 
-  return { help, format, startPath: cwd, roleA, roleB, slntBin };
+  // --reference は「どちらを固定側とみなすか」なので、名指しした2パーツのどちらかでなければならない。
+  if (reference !== undefined && reference !== roleA && reference !== roleB) {
+    return `Expected --reference to be one of the two parts (${roleA} or ${roleB}).`;
+  }
+
+  return { help, format, startPath: cwd, roleA, roleB, slntBin, truBin, reference };
 }

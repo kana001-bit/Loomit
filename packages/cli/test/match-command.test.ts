@@ -7,6 +7,24 @@ import { describe, expect, it } from "vitest";
 
 import { runMatchCommand } from "../src/commands/match.js";
 import type { SeamlintRunResult, SeamlintRunner } from "../src/commands/seamlintCheck.js";
+import type { TruerRunResult, TruerRunner } from "../src/commands/truerPropose.js";
+
+// 最小の DXF テキスト。materialize は本文を inline するだけ・fake seamlint は canned report を返すので、
+// 内容は問わない(format は .dxf 拡張子から dxf になる)。
+const DXF = "0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n";
+
+function fakeTruerRunner(result: TruerRunResult): { runner: TruerRunner; calls: string[][] } {
+  const calls: string[][] = [];
+  return {
+    calls,
+    runner: {
+      run: async (args: readonly string[]): Promise<TruerRunResult> => {
+        calls.push([...args]);
+        return result;
+      }
+    }
+  };
+}
 
 const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../../core/test/fixtures");
 
@@ -321,5 +339,113 @@ describe("runMatchCommand", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+
+  it("hands the measured report to Truer and reports the written proposal (--reference)", async () => {
+    // 守る仕様: --reference <part> は測定後に Truer を spawn し、follower の DXF・reference の BLOCK・出力先(output/match/<a>-<b>.proposal.json)を渡して proposal を書かせ、その場所を報告する。
+    const root = await writeTempProject([
+      {
+        role: "front",
+        partLoom:
+          "schema: loomit.part.v0\nname: front\nvariant: v1\ntype: front\nfiles:\n  geometry: front.dxf\nconnectors:\n  outseam:\n    type: outseam\n    path_ref: FRONT\n",
+        files: { "front.dxf": DXF }
+      },
+      {
+        role: "back",
+        partLoom:
+          "schema: loomit.part.v0\nname: back\nvariant: v1\ntype: back\nfiles:\n  geometry: back.dxf\nconnectors:\n  outseam:\n    type: outseam\n    path_ref: BACK\n",
+        files: { "back.dxf": DXF }
+      }
+    ]);
+
+    try {
+      const seamlintReport = {
+        status: "ok" as const,
+        target: "geometry-request",
+        diagnostics: [],
+        reports: [{ status: "ok" as const, target: "front.outseam/back.outseam", lengthMm: 800, diagnostics: [] }]
+      };
+      const { runner } = fakeRunner({ ok: true, report: seamlintReport, exitCode: 0 });
+      const { runner: truer, calls: truerCalls } = fakeTruerRunner({ ok: true, exitCode: 0 });
+      const out = collect();
+
+      const exitCode = await runMatchCommand(["front", "back", "--reference", "back", "--format", "json"], {
+        cwd: root,
+        stdout: out.io.stdout,
+        stderr: out.io.stderr,
+        runner,
+        truerRunner: truer
+      });
+
+      const report = JSON.parse(out.stdout.join("")) as {
+        readonly reference?: string;
+        readonly truer?: { readonly kind: string; readonly proposalPath?: string };
+      };
+
+      expect(exitCode).toBe(0);
+      expect(report.reference).toBe("back");
+      expect(report.truer?.kind).toBe("proposed");
+      expect(report.truer?.proposalPath?.replace(/\\/g, "/")).toContain("output/match/front-back.proposal.json");
+
+      // Truer は follower(=reference でない front)の DXF・reference の BLOCK(BACK)・--out を受け取る。
+      expect(truerCalls.length).toBe(1);
+      const args = truerCalls[0] ?? [];
+      expect(args[0]).toBe("propose");
+      expect((args[1] ?? "").replace(/\\/g, "/")).toContain("front/front.dxf");
+      expect(args[args.indexOf("--reference") + 1]).toBe("BACK");
+      expect((args[args.indexOf("--out") + 1] ?? "").replace(/\\/g, "/")).toContain(
+        "output/match/front-back.proposal.json"
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects --reference that is not one of the two parts", async () => {
+    // 守る仕様: --reference は名指しした2パーツのどちらかでなければ usage エラー(exit 2)で弾く。
+    const { runner } = fakeRunner({ ok: false, code: "SHOULD_NOT_RUN", message: "must not run" });
+    const out = collect();
+
+    const exitCode = await runMatchCommand(["body", "sleeve", "--reference", "collar"], {
+      cwd: join(fixturesRoot, "valid-blouse"),
+      stdout: out.io.stdout,
+      stderr: out.io.stderr,
+      runner
+    });
+
+    expect(exitCode).toBe(2);
+    expect(out.stderr.join("")).toContain("--reference");
+  });
+
+  it("skips Truer with MATCH_REFERENCE_NEEDS_DXF when the follower has no DXF", async () => {
+    // 守る仕様: follower(reference でない側)に files.geometry(DXF)が無ければ Truer を呼ばず、MATCH_REFERENCE_NEEDS_DXF で skip する(測定は済んでいる)。
+    const seamlintReport = {
+      status: "ok" as const,
+      target: "geometry-request",
+      diagnostics: [],
+      reports: [{ status: "ok" as const, target: "body.armhole/sleeve.armhole", lengthMm: 100, diagnostics: [] }]
+    };
+    const { runner } = fakeRunner({ ok: true, report: seamlintReport, exitCode: 0 });
+    const { runner: truer, calls: truerCalls } = fakeTruerRunner({ ok: true, exitCode: 0 });
+    const out = collect();
+
+    // valid-blouse は SVG preview のみ(files.geometry 無し)。reference=body → follower=sleeve は DXF が無い。
+    const exitCode = await runMatchCommand(["body", "sleeve", "--reference", "body", "--format", "json"], {
+      cwd: join(fixturesRoot, "valid-blouse"),
+      stdout: out.io.stdout,
+      stderr: out.io.stderr,
+      runner,
+      truerRunner: truer
+    });
+
+    const report = JSON.parse(out.stdout.join("")) as {
+      readonly truer?: { readonly kind: string };
+      readonly diagnostics: readonly { readonly code: string }[];
+    };
+
+    expect(exitCode).toBe(0);
+    expect(report.truer?.kind).toBe("skipped");
+    expect(report.diagnostics.some((diagnostic) => diagnostic.code === "MATCH_REFERENCE_NEEDS_DXF")).toBe(true);
+    expect(truerCalls).toEqual([]);
   });
 });
