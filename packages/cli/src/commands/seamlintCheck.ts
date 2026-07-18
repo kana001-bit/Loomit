@@ -232,7 +232,9 @@ export function formatSeamlintCheckHelp(): string {
   ].join("\n") + "\n";
 }
 
-function resolveSlntBin(flagValue: string | undefined): string {
+// slnt 実行ファイルの解決。明示 --slnt > LOOMIT_SLNT 環境変数 > PATH 上の "slnt"。loom match も同じ
+// 解決規則で Seamlint を呼ぶため export する。
+export function resolveSlntBin(flagValue: string | undefined): string {
   return flagValue ?? process.env.LOOMIT_SLNT ?? "slnt";
 }
 

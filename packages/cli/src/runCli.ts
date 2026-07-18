@@ -8,6 +8,7 @@ import { runFitCommand } from "./commands/fit.js";
 import { runForkCommand } from "./commands/fork.js";
 import { runInitCommand } from "./commands/init.js";
 import { runLibraryCommand } from "./commands/library.js";
+import { runMatchCommand } from "./commands/match.js";
 import { runNoteCommand } from "./commands/note.js";
 import { runPublishCommand } from "./commands/publish.js";
 import { runSlntCommand } from "./commands/slnt.js";
@@ -127,6 +128,16 @@ export async function runCli(
     });
   }
 
+  if (command === "match") {
+    return runMatchCommand(args.slice(1), {
+      cwd,
+      stdout: io.stdout,
+      stderr: io.stderr,
+      // slnt check と同じ runner を注入口として共有する(テストは fake、既定は subprocess)。
+      ...(options.seamlintRunner === undefined ? {} : { runner: options.seamlintRunner })
+    });
+  }
+
   if (command === "publish") {
     return runPublishCommand(args.slice(1), {
       cwd,
@@ -196,6 +207,7 @@ export function formatMainHelp(): string {
       "  fork   Copy an existing Loomit project.",
       "  init   Create a Loomit project in the current directory.",
       "  library List published Loomit library parts.",
+      "  match  Measure the seam(s) joining two parts and report if they match.",
       "  note   Record a prototype note into notes/prototype-notes.yml.",
       "  publish Copy a part into the Loomit library.",
       "  slnt   Geometry checks via Seamlint (loom slnt request|check).",
