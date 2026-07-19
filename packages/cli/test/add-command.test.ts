@@ -470,6 +470,254 @@ describe("loom add --yes", () => {
   });
 });
 
+// 引数省略の add で、選択(select)と wizard 本体の質問を1つの instance で受ける scripted prompter。
+// 回答キューが尽きたら prompt の default に落とす(= 空 Enter を模す。default の無い prompt は "" になり
+// 呼び手の再質問/内部エラーで露見する)。
+function fullScriptedPrompter(script: {
+  readonly inputs?: readonly string[];
+  readonly selects?: readonly string[];
+  readonly confirms?: readonly boolean[];
+}): Prompter {
+  const inputs = [...(script.inputs ?? [])];
+  const selects = [...(script.selects ?? [])];
+  const confirms = [...(script.confirms ?? [])];
+
+  return {
+    input: (_question, options) => Promise.resolve(inputs.shift() ?? options?.default ?? ""),
+    select: (_question, _choices, options) => Promise.resolve(selects.shift() ?? options?.default ?? ""),
+    confirm: (_question, options) => Promise.resolve(confirms.shift() ?? options?.default ?? false),
+    close: () => {}
+  };
+}
+
+describe("loom add (no .val argument)", () => {
+  it("discovers the single unregistered .val in the project root with --yes", async () => {
+    // 守る仕様: 引数を省略しても、未取り込みの .val が1つならそれを自動発見して --yes の一括 scaffold を行う
+    // (1 project = 1 .val の普通のケースでは loom add --yes だけで足りる)。何を選んだかは表示する。
+    const root = await makeProject();
+    const out: string[] = [];
+    const err: string[] = [];
+
+    try {
+      const code = await runAddCommand(["--yes"], {
+        cwd: root,
+        stdout: (text) => out.push(text),
+        stderr: (text) => err.push(text),
+        prompter: throwingPrompter
+      });
+
+      expect(err.join("")).toBe("");
+      expect(code).toBe(0);
+      // どのファイルに手を付けたか黙らない。
+      expect(out.join("")).toContain("Adding knickers.val");
+
+      const project = await readFile(join(root, "loomit.yml"), "utf8");
+      expect(project).toContain("front: ./parts/front/part.loom");
+      expect(project).toContain("back: ./parts/back/part.loom");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("reports nothing to add when re-run after the import, instead of re-adding", async () => {
+    // 守る仕様: 取り込み済みプロジェクトでの再実行は「取り込むものが無い」で正常終了する(exit 0・書き込みなし)。
+    // root に残った原本は登録済みコピーと同一内容 = 残骸として候補から除き、role 衝突エラーの藪に落とさない。
+    const root = await makeProject();
+    const out: string[] = [];
+    const err: string[] = [];
+
+    try {
+      const firstCode = await runAddCommand(["knickers.val", "--yes"], {
+        cwd: root,
+        stdout: () => undefined,
+        stderr: (text) => err.push(text),
+        prompter: throwingPrompter
+      });
+      expect(firstCode).toBe(0);
+
+      const code = await runAddCommand(["--yes"], {
+        cwd: root,
+        stdout: (text) => out.push(text),
+        stderr: (text) => err.push(text),
+        prompter: throwingPrompter
+      });
+
+      expect(err.join("")).toBe("");
+      expect(code).toBe(0);
+      // 残骸(root の原本)は理由つきで候補から外し、取り込むものが無いことを明言する。
+      expect(out.join("")).toContain("Skipped knickers.val");
+      expect(out.join("")).toContain("nothing to add");
+      // 書き込みなし: front2 のような追加 role は作られない。
+      const project = await readFile(join(root, "loomit.yml"), "utf8");
+      expect(project).not.toContain("front2");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("fails with the scan diagnostic when parts/ cannot be scanned", async () => {
+    // 守る仕様: 自動発見は走査の I/O 失敗(ENOENT 以外。ここでは parts がファイル)を「.val が無い」に
+    // 偽装しない。errno 分類済みの診断を出して失敗し、root に発見可能な .val があっても進まない
+    // (登録済み判定・残骸判定が不完全なまま取り込まないため)。
+    const root = await makeProject();
+    const out: string[] = [];
+    const err: string[] = [];
+
+    try {
+      await writeFile(join(root, "parts"), "not a directory\n", "utf8");
+
+      const code = await runAddCommand(["--yes"], {
+        cwd: root,
+        stdout: (text) => out.push(text),
+        stderr: (text) => err.push(text),
+        prompter: throwingPrompter
+      });
+
+      expect(code).toBe(1);
+      expect(err.join("")).toContain("Could not scan for .val files");
+      expect(err.join("")).not.toContain("No .val file to add was found");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("fails with placement guidance when the project has no .val at all", async () => {
+    // 守る仕様: 候補ゼロ+part ゼロは「.val をどこに置くか」を案内して失敗する(exit 1)。候補が無いので
+    // 何も訊かない(throwingPrompter が呼ばれない)。
+    const root = await mkdtemp(join(tmpdir(), "loomit-add-noval-"));
+    const out: string[] = [];
+    const err: string[] = [];
+
+    try {
+      await writeFile(
+        join(root, "loomit.yml"),
+        ["schema: loomit.project.v0", "name: add-noval", "garment: knickers", "parts: {}"].join(
+          "\n"
+        ),
+        "utf8"
+      );
+
+      const code = await runAddCommand([], {
+        cwd: root,
+        stdout: (text) => out.push(text),
+        stderr: (text) => err.push(text),
+        prompter: throwingPrompter
+      });
+
+      expect(code).toBe(1);
+      expect(err.join("")).toContain("No .val file to add was found");
+      expect(err.join("")).toContain("loom add <file.val>");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("fails cleanly listing the candidates when --yes is ambiguous in a non-interactive shell", async () => {
+    // 守る仕様: 複数候補+--yes+非対話は stdin を開かず、候補一覧と明示パスの案内を出して何も書かずに失敗する
+    // (--yes は automation を止めない契約。role 衝突時の非対話 clean fail と同じ流儀)。
+    const root = await makeProject();
+    const out: string[] = [];
+    const err: string[] = [];
+    const originalIsTTY = process.stdin.isTTY;
+    process.stdin.isTTY = false;
+
+    try {
+      // 2つ目の未取り込み .val(内容は別物)で候補を曖昧にする。
+      await writeFile(join(root, "other.val"), "<pattern></pattern>\n", "utf8");
+
+      // prompter は渡さない = 実際の TTY 判定(false に固定済み)に委ねる。
+      const code = await runAddCommand(["--yes"], {
+        cwd: root,
+        stdout: (text) => out.push(text),
+        stderr: (text) => err.push(text)
+      });
+
+      expect(code).toBe(1);
+      const errText = err.join("");
+      expect(errText).toContain("Multiple unregistered .val files");
+      expect(errText).toContain("knickers.val");
+      expect(errText).toContain("other.val");
+      expect(errText).toContain("loom add <file.val>");
+      // 書き込みなし。
+      expect(await readFile(join(root, "loomit.yml"), "utf8")).toContain("parts: {}");
+    } finally {
+      process.stdin.isTTY = originalIsTTY;
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("asks which .val with --yes when a prompter is available, then scaffolds without other questions", async () => {
+    // 守る仕様: 複数候補でも対話できるなら --yes は「どの .val か」だけを訊き、選ばれた .val を通常の --yes と
+    // 同じデフォルトで一括 scaffold する(選ばれなかった .val には手を付けない)。
+    const root = await makeProject();
+    const out: string[] = [];
+    const err: string[] = [];
+
+    try {
+      await writeFile(join(root, "other.val"), "<pattern></pattern>\n", "utf8");
+
+      // select 以外が呼ばれたら失敗させ、「訊くのは .val の選択だけ」を保証する。
+      const selectOnlyPrompter: Prompter = {
+        input: () => Promise.reject(new Error("input() must not be called with --yes")),
+        select: (_question, choices) => {
+          expect(choices).toEqual(["knickers.val", "other.val"]);
+          return Promise.resolve("knickers.val");
+        },
+        confirm: () => Promise.reject(new Error("confirm() must not be called with --yes")),
+        close: () => {}
+      };
+
+      const code = await runAddCommand(["--yes"], {
+        cwd: root,
+        stdout: (text) => out.push(text),
+        stderr: (text) => err.push(text),
+        prompter: selectOnlyPrompter
+      });
+
+      expect(err.join("")).toBe("");
+      expect(code).toBe(0);
+
+      const project = await readFile(join(root, "loomit.yml"), "utf8");
+      expect(project).toContain("front: ./parts/front/part.loom");
+      expect(project).toContain("back: ./parts/back/part.loom");
+      // 選ばれなかった other.val は取り込まれない(details 無し .val の legacy 経路 role "body" が無い)。
+      expect(project).not.toContain("body:");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("runs the selection and the wizard on the same prompter in interactive mode", async () => {
+    // 守る仕様: 引数省略の wizard は「どの .val か」の選択と本体の質問を同じ prompter で続けて消費する
+    // (パイプ入力が選択→wizard を跨いで壊れない)。選択後は通常の detail wizard(default 回答)が走る。
+    const root = await makeProject();
+    const out: string[] = [];
+    const err: string[] = [];
+
+    try {
+      await writeFile(join(root, "other.val"), "<pattern></pattern>\n", "utf8");
+
+      // 1問目(val 選択)だけ明示回答し、以降の質問は default(role=piece 名, type=body, connector なし)に落とす。
+      const code = await runAddCommand([], {
+        cwd: root,
+        stdout: (text) => out.push(text),
+        stderr: (text) => err.push(text),
+        prompter: fullScriptedPrompter({ selects: ["knickers.val"] })
+      });
+
+      expect(err.join("")).toBe("");
+      expect(code).toBe(0);
+
+      const project = await readFile(join(root, "loomit.yml"), "utf8");
+      expect(project).toContain("front: ./parts/front/part.loom");
+      expect(project).toContain("back: ./parts/back/part.loom");
+      expect(project).not.toContain("body:");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("findCollidingRoleNames", () => {
   it("flags exact duplicates in either filesystem mode", () => {
     // 守る仕様: 完全一致はどちらの FS でも role 衝突する。初出の綴りを1回だけ返す。

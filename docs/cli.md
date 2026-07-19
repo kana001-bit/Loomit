@@ -43,7 +43,7 @@ loom fork <source> <target> [--name name]
 Valentina の `.val` を project に取り込む。1着 = 1 `.val` = 複数ピースという実データに合わせ、`.val` の `<detail>`（裁断ピース）ごとに part を1つずつ用意する。
 
 ```text
-loom add <file.val>
+loom add [file.val] [--yes]
 ```
 
 挙動:
@@ -53,6 +53,18 @@ loom add <file.val>
 - 生成した各 `part.loom` は `files.source`（共有 `.val`）と `files.piece`（担当する detail 名）を記録する。
 - `<draw>` はあるが `<detail>` が1つも無い `.val`（construction のみ）は、案内を表示して何も追加せずに終了する。
 - draw も detail も検出できない `.val` は、従来どおり単一 part の対話に倒す。
+
+`file.val` を省略した場合（自動発見）:
+
+- 「まだ取り込まれていない `.val`」を project root 直下と `parts/` 配下（再帰）から探す。判定は `loom check` の `UNREGISTERED_VAL_SOURCE` と同じ実装を共有する: どの part の `files.source` でもなく、登録済み `.val` と同一内容の残骸コピーでもないものが候補になる（残骸は理由つきで候補から除外される）。
+- 候補が **1つ** — それを取り込む。どのファイルを選んだかを表示する。
+- 候補が **0** — part が1つも無ければ、`.val` の置き場所（root 直下か `parts/` 配下）を案内して失敗する（exit 1）。part があれば「取り込むものは無い」と表示して正常終了する（exit 0。取り込み済み project で再実行しても安全）。
+- 候補が **複数** — どれを取り込むか対話で選ぶ。`--yes` のときは対話端末に限って選択だけを訊き、非対話（CI・パイプ）では候補一覧と明示パスの案内を出して、何も書かずに失敗する（exit 1）。
+- 走査自体が失敗した場合（権限エラー等。`parts/` が無いだけなら正常な不在として扱う）— 候補ゼロに見せかけず、原因つきの診断を出して失敗する（exit 1）。
+
+オプション:
+
+- `--yes`, `-y` — 対話をせず、検出した全ピースをデフォルト（role=ピース名、type `body`、variant `v1`、connector なし）で一括 scaffold する。多ピースの `.val` を最短で `loom check` が通る骨組みにする用途。role が既存 part と衝突するときだけ、対話端末に限って distinct な role を訊く（非対話では何も書かずに失敗する）。
 
 対話で尋ねる項目:
 
