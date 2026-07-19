@@ -57,6 +57,7 @@ export type { FitRule, FitRuleRegistry } from "./fit/rules.js";
 export { describeFsError, getErrno } from "./filesystem/fsError.js";
 export type { FsErrorContext } from "./filesystem/fsError.js";
 export { parseYamlText } from "./filesystem/parseYamlText.js";
+export { isCaseInsensitiveFileSystemAt } from "./filesystem/caseSensitivity.js";
 export { isPathWithin, isSafePathSegment } from "./filesystem/pathWithin.js";
 export { readText } from "./filesystem/readText.js";
 export { writeFileAtomic } from "./filesystem/writeFileAtomic.js";
@@ -151,6 +152,8 @@ export type {
 export { createProject } from "./project/createProject.js";
 export type { CreatedProject, CreateProjectOptions } from "./project/createProject.js";
 export { collectProjectReadinessDiagnostics } from "./project/collectProjectReadiness.js";
+export { findUnregisteredValSources } from "./project/findUnregisteredValSources.js";
+export type { UnregisteredValSource } from "./project/findUnregisteredValSources.js";
 export { findProjectRoot } from "./project/findProjectRoot.js";
 export { forkProject } from "./project/forkProject.js";
 export type { ForkedProject, ForkProjectOptions } from "./project/forkProject.js";

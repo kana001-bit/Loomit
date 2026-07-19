@@ -112,6 +112,27 @@ describe("collectProjectReadinessDiagnostics", () => {
     }
   });
 
+  it("surfaces a scan failure instead of pretending the project has no unregistered .val", async () => {
+    // 守る仕様: 走査の失敗(ENOENT 以外。ここでは parts がファイル)は握り潰して「未登録なし」に
+    // 見せかけず、errno 分類済みの VAL_SOURCE_SCAN_FAILED を診断に出す(判定できる parts 空 error は併記)。
+    const projectRoot = await mkdtemp(join(tmpdir(), "loomit-readiness-scanfail-"));
+
+    try {
+      await writeProject(projectRoot, "parts: {}");
+      // parts をディレクトリでなくファイルにして readdir を失敗させる(移植可能な失敗注入)。
+      await writeFile(join(projectRoot, "parts"), "not a directory\n", "utf8");
+
+      const diagnostics = await collectProjectReadinessDiagnostics(await resolve(projectRoot));
+
+      expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+        "VAL_SOURCE_SCAN_FAILED",
+        "PROJECT_HAS_NO_PARTS"
+      ]);
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
+
   it("is silent when every .val under parts/ is registered", async () => {
     // 守る仕様: parts/ 下の .val が全て登録済みなら診断を出さない。
     const projectRoot = await mkdtemp(join(tmpdir(), "loomit-readiness-ok-"));

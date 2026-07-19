@@ -46,14 +46,15 @@ export async function runInitCommand(
 }
 
 // init 直後に「次に何をするか」だけを案内する。長いチュートリアルにはせず最短導線を1画面に収める。
-// part.loom は手書きさせず、`loom add` に .val を渡して生成する導線に統一する(ユーザーは .val を
-// 用意するだけでよい)。
+// part.loom は手書きさせず、`loom add` で生成する導線に統一する(ユーザーは .val をこの中に置いて
+// add するだけでよい。add は未取り込みの .val を自動で見つけるので、パスは書かなくてよい)。
 export function formatNextSteps(): string {
   return [
     "Next steps:",
     "",
-    "  1. Add a Valentina .val as a part (generates part.loom for you):",
-    "       loom add path/to/your.val",
+    "  1. Copy your Valentina .val into this directory, then add it",
+    "     (generates part.loom for you):",
+    "       loom add",
     "  2. Check it:  loom check",
     "  3. Build it:  loom build",
     "",
