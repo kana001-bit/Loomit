@@ -1,15 +1,16 @@
-import { access } from "node:fs/promises";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, relative, resolve } from "node:path";
 
 import {
   addPartToProject,
   checkValSourceExists,
+  findUnregisteredValSources,
+  isCaseInsensitiveFileSystemAt,
   isSafePathSegment,
   listValDetailsFromFile,
   loadProject,
   resolveParts
 } from "@loomit/core";
-import type { AddedPart, AddPartConnectorInput } from "@loomit/core";
+import type { AddedPart, AddPartConnectorInput, UnregisteredValSource } from "@loomit/core";
 import { formatDiagnosticsText } from "../formatters/diagnosticsText.js";
 import { createReadlinePrompter, EndOfInputError } from "../prompter.js";
 import type { Prompter } from "../prompter.js";
@@ -99,13 +100,33 @@ export async function runAddCommand(
     return 2;
   }
 
-  if (parsedArgs.help || parsedArgs.valPath === undefined) {
+  if (parsedArgs.help) {
     options.stdout(formatAddHelp());
-    return parsedArgs.help ? 0 : 2;
+    return 0;
   }
 
-  const valPath = resolve(options.cwd, parsedArgs.valPath);
-  const defaultName = stripExtension(basename(parsedArgs.valPath));
+  // 引数省略時に自動発見の選択で開いた readline。wizard 本体が同じ instance を引き継いで使う
+  // (readline はパイプ入力を先読みして貯めるため、選択と wizard を別 instance に分けると2つ目が
+  // 残りの行を受け取れず、`loom add < answers.txt` の非対話入力が壊れる)。--yes 経路では持ち帰らない。
+  let carriedPrompter: Prompter | undefined;
+  let valPath: string;
+
+  if (parsedArgs.valPath === undefined) {
+    // .val を指定しない add: 「まだ取り込まれていない .val」を check と同じ定義で探し、1つに定まれば
+    // それを取り込む。1 project = 1着 = 1 .val が普通なので、大半の add は引数なしで足りる。
+    const discovered = await discoverValToAdd(options, parsedArgs.yes);
+
+    if (typeof discovered === "number") {
+      return discovered;
+    }
+
+    valPath = discovered.valPath;
+    carriedPrompter = discovered.prompter;
+  } else {
+    valPath = resolve(options.cwd, parsedArgs.valPath);
+  }
+
+  const defaultName = stripExtension(basename(valPath));
 
   // 対話を始める前に .val の存在を確認する。無ければ即座に失敗させ、name/type/seam を全部入力させた
   // 最後に「見つからない」と言う無駄をなくす(core も書き込み直前に同じ関門を持つ)。
@@ -113,6 +134,9 @@ export async function runAddCommand(
 
   if (missingSource !== undefined) {
     options.stderr(`${formatDiagnosticsText([missingSource]).join("\n")}\n`);
+    // wizard に達しない早期 return では、選択用に開いた readline をここで閉じる(開いた stdin が
+    // process を生かし続けるため)。以降の早期 return も同様。
+    carriedPrompter?.close();
     return 1;
   }
 
@@ -122,6 +146,7 @@ export async function runAddCommand(
 
   if (!detailList.ok) {
     options.stderr(`${formatDiagnosticsText(detailList.diagnostics).join("\n")}\n`);
+    carriedPrompter?.close();
     return 1;
   }
 
@@ -140,6 +165,7 @@ export async function runAddCommand(
     options.stdout(
       "No detail pieces were added. Add <detail> pieces in Valentina, then run loom add again.\n"
     );
+    carriedPrompter?.close();
     return 0;
   }
 
@@ -160,6 +186,7 @@ export async function runAddCommand(
         "with the same name resolve to the same block and cannot be told apart. " +
         "Give each piece a distinct detail name in Valentina, then run loom add again.\n"
     );
+    carriedPrompter?.close();
     return 1;
   }
 
@@ -201,7 +228,9 @@ export async function runAddCommand(
     }
   };
 
-  const prompter = options.prompter ?? createReadlinePrompter();
+  // 引数省略の選択で開いた readline があればそれを引き継ぐ(選択と wizard で1 instance を共有し、
+  // パイプ入力の残り行を取りこぼさない)。close は下の finally が担う。
+  const prompter = carriedPrompter ?? options.prompter ?? createReadlinePrompter();
 
   try {
     // detail を割り出せない .val(draw も detail も無い等)は、旧来の 1 .val=1 part 経路に倒す。
@@ -269,12 +298,18 @@ export async function runAddCommand(
 export function formatAddHelp(): string {
   return (
     [
-      "Usage: loom add <file.val> [--yes]",
+      "Usage: loom add [file.val] [--yes]",
       "",
       "Add a Valentina .val to the project. If Loomit detects <detail> pieces,",
       "it scaffolds one part per piece and records files.piece in each part. If",
       "the file has draws but no pieces yet, Loomit prints guidance and adds",
       "nothing. Otherwise it falls back to the legacy single-part prompt.",
+      "",
+      "If file.val is omitted, loom add looks for a .val that is not yet",
+      "registered as a part (in the project root and under parts/ — the same",
+      "rule loom check uses). Exactly one match is added; several matches ask",
+      "which one (with --yes only in an interactive terminal); none explains",
+      "where to put the file.",
       "",
       "Options:",
       "  --yes, -y  Scaffold every detected piece with defaults (role = piece name,",
@@ -285,6 +320,170 @@ export function formatAddHelp(): string {
       "             (writing nothing) instead of prompting.",
       "  --help     Show this help."
     ].join("\n") + "\n"
+  );
+}
+
+// 引数省略時の発見結果。prompter は、複数候補の選択のために自分で開いた readline(呼び手の wizard が
+// 引き継いで close まで面倒を見る)。注入 prompter や --yes(選択後すぐ閉じる)では載せない。
+interface DiscoveredVal {
+  readonly valPath: string;
+  readonly prompter?: Prompter;
+}
+
+// .val を指定しない add の自動発見。「まだ取り込まれていない .val」を check(UNREGISTERED_VAL_SOURCE)と
+// 同じ実装(findUnregisteredValSources)で探す。root 直下も見るのは add だけ(初回 add は root に .val を
+// 置く導線が普通。理由の詳細は core 側のコメント)。候補が1つならそれに確定、0なら案内、複数なら選択させる。
+// 戻り値が number のときは exit code(発見だけで add を終える/失敗させる)。
+async function discoverValToAdd(
+  options: AddCommandOptions,
+  yes: boolean
+): Promise<DiscoveredVal | number> {
+  const loaded = await loadProject(options.cwd);
+
+  if (!loaded.ok) {
+    options.stderr(`${formatDiagnosticsText(loaded.diagnostics).join("\n")}\n`);
+    return 1;
+  }
+
+  const resolved = await resolveParts(loaded.value);
+
+  // 壊れた part.loom があると「登録済み source」を正しく判定できず、取り込み済みの .val を再 add
+  // しかねない。発見はあきらめて診断を見せる(明示パスの add は従来どおり可能)。
+  if (!resolved.ok) {
+    options.stderr(`${formatDiagnosticsText(resolved.diagnostics).join("\n")}\n`);
+    return 1;
+  }
+
+  const scan = await findUnregisteredValSources(resolved.value, { includeProjectRoot: true });
+
+  // 走査の失敗(権限エラー等)を「候補なし」に畳まない。空プロジェクトに見せかけて誤誘導せず、
+  // errno 分類済みの診断を見せて失敗する(ENOENT=正常な不在は core 側で空扱い済み)。
+  if (!scan.ok) {
+    options.stderr(`${formatDiagnosticsText(scan.diagnostics).join("\n")}\n`);
+    return 1;
+  }
+
+  // 内容読みの降格 warning(残骸判定を省略したファイル)は見せた上で続行する。
+  if (scan.diagnostics.length > 0) {
+    options.stderr(`${formatDiagnosticsText(scan.diagnostics).join("\n")}\n`);
+  }
+
+  const sources = scan.value;
+
+  // 登録済み source と同一内容の残骸は候補にしない(check も「add でなく削除」を案内するもの。再 add
+  // しても role の二重登録で行き止まりになる)。黙って無視もせず、なぜ候補でないかを見せる。
+  for (const leftover of sources) {
+    if (leftover.duplicateOf !== undefined) {
+      options.stdout(
+        `Skipped ${leftover.relativePath}: same content as the already-registered ${leftover.duplicateOf}; delete it if it is a leftover.\n`
+      );
+    }
+  }
+
+  const candidates = sources.filter((source) => source.duplicateOf === undefined);
+  const first = candidates[0];
+
+  if (first === undefined) {
+    // 取り込めるものが何も無い。part も無いなら「まず .val を置く」を案内して失敗、part があるなら
+    // 「全部取り込み済み」の正常系(再実行が role 衝突エラーの藪に落ちないための出口)。
+    if (Object.keys(resolved.value.parts).length === 0) {
+      options.stderr(
+        "No .val file to add was found in this project.\n" +
+          "Put your Valentina .val in the project root or under parts/, or pass a path: loom add <file.val>\n"
+      );
+      return 1;
+    }
+
+    options.stdout("Every .val in this project is already registered as a part; nothing to add.\n");
+    return 0;
+  }
+
+  if (candidates.length === 1) {
+    // 何を選んだかは必ず見せる(引数を省いても、どのファイルに手を付けるかは黙らない)。
+    options.stdout(`Adding ${first.relativePath}.\n`);
+    return { valPath: first.path };
+  }
+
+  // 複数候補。どれを取り込むかは決められないので選ばせる。--yes は automation を止めない契約なので、
+  // 非対話(TTY でない CI / パイプ)では stdin を開かず、何も書かずに clean fail する(role 衝突時の
+  // 対話と同じ TTY 限定パターン)。
+  if (yes) {
+    const prompter =
+      options.prompter ?? (process.stdin.isTTY === true ? createReadlinePrompter() : undefined);
+
+    if (prompter === undefined) {
+      options.stderr(formatAmbiguousCandidates(candidates));
+      return 1;
+    }
+
+    const ownPrompter = prompter !== options.prompter;
+
+    try {
+      return { valPath: await selectValToAdd(prompter, candidates) };
+    } catch (error) {
+      if (error instanceof EndOfInputError) {
+        options.stderr(formatAmbiguousCandidates(candidates));
+        return 1;
+      }
+
+      throw error;
+    } finally {
+      // --yes では選択が済んだら閉じる(TTY なので先読み行の取りこぼしは無い)。後段の role 衝突の
+      // 対話は addAllPiecesWithDefaults が必要になったときだけ開き直す。
+      if (ownPrompter) {
+        prompter.close();
+      }
+    }
+  }
+
+  // wizard: 選択も本体の質問も1つの prompter で読む(パイプ入力の行を選択→wizard と跨いで消費するため)。
+  // 自分で開いた readline は結果に載せて wizard に引き継ぎ、close は wizard の finally に任せる。
+  const prompter = options.prompter ?? createReadlinePrompter();
+  const ownPrompter = prompter !== options.prompter;
+
+  try {
+    const valPath = await selectValToAdd(prompter, candidates);
+    return ownPrompter ? { valPath, prompter } : { valPath };
+  } catch (error) {
+    if (ownPrompter) {
+      prompter.close();
+    }
+
+    if (error instanceof EndOfInputError) {
+      options.stderr(formatAmbiguousCandidates(candidates));
+      return 1;
+    }
+
+    throw error;
+  }
+}
+
+// 複数候補から取り込む .val を1つ選ばせる。default は置かない: 空 Enter や EOF で先頭のファイルに黙って
+// 確定して取り込むのは事故なので、明示的に選ぶまで問い直す(EOF は EndOfInputError で呼び手が clean fail)。
+async function selectValToAdd(
+  prompter: Prompter,
+  candidates: readonly UnregisteredValSource[]
+): Promise<string> {
+  const chosen = await prompter.select(
+    "Add which .val?",
+    candidates.map((candidate) => candidate.relativePath)
+  );
+  const picked = candidates.find((candidate) => candidate.relativePath === chosen);
+
+  // select は choices の値だけ返すので必ず見つかる。型を絞るための保険。
+  if (picked === undefined) {
+    throw new Error(`internal: selected .val "${chosen}" is not among the candidates`);
+  }
+
+  return picked.path;
+}
+
+// 複数候補を非対話で1つに絞れなかったときの案内。候補を全部見せて、明示パスでの再実行に導く。
+function formatAmbiguousCandidates(candidates: readonly UnregisteredValSource[]): string {
+  return (
+    "Multiple unregistered .val files were found:\n" +
+    candidates.map((candidate) => `  ${candidate.relativePath}`).join("\n") +
+    "\nPass the one to add: loom add <file.val>\n"
   );
 }
 
@@ -397,7 +596,7 @@ async function addAllPiecesWithDefaults(
   // part を1つも書かない(部分適用しない)。
   const loaded = await loadProject(options.cwd);
   const caseInsensitive = loaded.ok
-    ? await isCaseInsensitiveFsAt(loaded.value.paths.projectFilePath)
+    ? await isCaseInsensitiveFileSystemAt(loaded.value.paths.projectFilePath)
     : true; // 読めないなら add 自体が失敗する。判定材料が無いので安全側(衝突を拾う)に倒す。
   const normalizeRoleKey = (role: string): string => (caseInsensitive ? role.toLowerCase() : role);
 
@@ -582,39 +781,6 @@ async function promptDistinctRole(
 
     return role;
   }
-}
-
-// 実ファイルシステムが大文字小文字を区別するかを、プロジェクト正本 loomit.yml を綴り違いの名前で引けるか
-// 試して判定する。プラットフォーム固定(macOS を一律 case-insensitive とする等)は case-sensitive な
-// APFS/HFS+ を誤判定し、--yes が Front/front を不要に弾く。実 FS を直接見ることでそれを避ける。判定材料が
-// 無いときは衝突を拾う側(insensitive)に倒す(部分適用を防ぐ方を優先)。
-async function isCaseInsensitiveFsAt(projectFilePath: string): Promise<boolean> {
-  const base = basename(projectFilePath);
-  const flipped = flipAlphaCase(base);
-
-  // 反転できる英字が無ければ判定材料が無い(loomit.yml では通常起きない)。安全側に倒す。
-  if (flipped === base) {
-    return true;
-  }
-
-  try {
-    await access(join(dirname(projectFilePath), flipped));
-    return true; // 綴り違いで引けた = 区別しない FS
-  } catch {
-    return false; // 引けない = 区別する FS(正本の存在は loadProject で確認済み)
-  }
-}
-
-// 英字だけ大文字↔小文字を反転する(FS の case 感度プローブ用)。
-function flipAlphaCase(value: string): string {
-  let flipped = "";
-
-  for (const ch of value) {
-    const lower = ch.toLowerCase();
-    flipped += ch === lower ? ch.toUpperCase() : lower;
-  }
-
-  return flipped;
 }
 
 // role に使う名前のうち、role として衝突する(= 同じ parts/ ディレクトリ / loomit.yml キーに解決される)
