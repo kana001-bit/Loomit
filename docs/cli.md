@@ -182,6 +182,41 @@ loom slnt check [path] [--slnt <path>] [--format text|json]
 - 測る seam が1つも無ければ Seamlint は呼ばず、`seamlint: skipped` を返す。
 - responsibility 分担は不変（Loomit=構造とグラフ＋request 発行、Seamlint=幾何測定）。Loomit は幾何を計算しない。
 
+### band seam を Truer に渡して直し方を提案させる
+
+band seam（1枚 対 複数枚）の不一致 `geometry.band_seam_sum_mismatch` は **project 全体を測る `loom slnt check` からしか出ない**（N-ary なので2パーツ指定の `loom match` は通らない）。pairwise の [`loom match --reference`](#--reference-part-truer-に直し方を提案させる) に相当する band 専用の `loom` 動詞は今のところ無い ── band は稀にしか鳴らず、Truer は report に混ざって届いた band 診断をそのまま消費できる（入口に依存しない）設計なので、薄い動詞を1本足すより**手動導線**に倒している（設計判断。将来 `loom` に passthrough を足す余地は残す）。
+
+手順（`slnt` / `tru` は用意済みの前提。実データ fixture は `loomitest3-band-mismatch`）:
+
+1. **project 全体を測って band-seam を含む report を JSON で出す。**
+
+   ```text
+   loom slnt check --format json --slnt <slnt> > check.json
+   ```
+
+   - `--slnt` は**単一の実行ファイル**を指す（PATH 上の `slnt`、または `slnt.cmd` / `.exe` のラッパー）。`loom slnt check` の `--slnt` は `"node path/to/slnt.js"` のような**空白区切りの multi-token を受け付けない**（Truer の `--slnt` は受け付ける ── 下記 3 の注記）。`slnt` を PATH に通せない環境ではラッパーを1枚用意する。
+
+2. **raw Seamlint report を取り出す。** `loom slnt check --format json` は Loomit のラッパー（`{ status, diagnostics, seamlint: { report } }`）で出力し、seam の測定はネストの `.seamlint.report` にある。`tru propose --diagnostic` が読むのは**トップレベルに平坦な `diagnostics` 配列を持つ raw Seamlint report** なので、`.seamlint.report` を抜き出す（ラッパー直渡しだと Truer はトップレベルの Loomit 診断を読み、band を1件も拾わず 0 提案になる）。
+
+   ```text
+   node -e "const fs=require('fs');const r=JSON.parse(fs.readFileSync('check.json','utf8'));fs.writeFileSync('report.json',JSON.stringify(r.seamlint.report))"
+   ```
+
+3. **Truer に advisory を作らせる。** band の BLOCK を含む DXF（＝band パーツの `files.geometry`）を pattern に渡す。
+
+   ```text
+   tru propose <band.dxf> --diagnostic report.json --reference <block...> --out output/match/band.proposal.json --slnt "node path/to/slnt.js"
+   ```
+
+   - `--reference` は**固定側の BLOCK 名**で、診断の blockName の**大小文字にそのまま合わせる**（band connector の `path_ref` が `files.piece` 由来なら小文字）。
+     - neighbour 群を渡す → **band を conform**（band 長を Σ隣接に合わせる目標 `targetBandLengthMm` が出る）。
+     - band を渡す → **band 固定**（neighbours を直す向きだけ示す。N-ary なので per-neighbour の配分は推測しない）。
+     - 両方 / どちらも渡さない → 両方向 preview-only。
+   - Truer の `--slnt` は preview の辺解決で内部から Seamlint を呼ぶために要る。**こちらは空白区切りで `"node <slnt.js>"` を受ける**（`loom` の `--slnt` と扱いが違う）。git-bash では Windows 形式（`C:/...`）で渡す（`/c/...` は `C:\c\...` に化ける）。
+   - proposal は **preview-only（advisory）**。`changes: []` で source DXF は書き換えない ── 人が Valentina で当てるための指示ログ。
+
+fuller な end-to-end 手順（request を手で組む版・ハマりどころ集）は Truer 側の `docs/task-specs/band-seam-consumption/e2e-runbook.md` と fixture `loomitest3-band-mismatch/README.md` にある。
+
 ## `loom match`
 
 名指しした2パーツの縫い目**だけ**を測り、長さが合っているかを pair 単位で報告する。project 全体を測る `loom slnt check` に対し、`loom match` は「front と back は合っているか」を局所的に問う導線。`front` を `back` に「合わせる」＝ `match`。
@@ -210,6 +245,7 @@ loom match <partA> <partB> [--reference <part>] [--slnt <path>] [--tru <path>] [
 - proposal の出力先は **`output/match/<partA>-<partB>.proposal.json`**（`outputs.dir` 配下・無ければ `./output`）。**advisory（preview-only）**で、人が Valentina で当てるための指示ログ。loom は幾何を書き換えない。
 - Truer 実行ファイルの解決は `--tru` > `LOOMIT_TRU` > PATH 上の `tru`。見つからなければ error。
 - `--reference` を付けなければ、従来どおり測定のみ（Truer は呼ばない）。
+- `loom match` は pairwise 専用。band seam（1枚 対 複数枚）の不一致 `geometry.band_seam_sum_mismatch` は N-ary でここを通らない ── band を Truer に渡す手順は [`loom slnt check` の band 節](#band-seam-を-truer-に渡して直し方を提案させる)を参照。
 
 ## `loom diff`
 
