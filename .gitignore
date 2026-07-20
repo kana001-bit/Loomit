@@ -10,6 +10,8 @@ coverage/
 # 作業メモ・設計ドラフト・タスク仕様は非公開。公開するのは docs/ 直下だけ。
 # うっかり `git add .` で private ノートを追跡しないよう明示的に無視する。
 docs/work/
+docs/task-specs/
+docs/branch/
 
 # TypeScript build output belongs in dist/, never tracked under src/
 packages/*/src/**/*.js
