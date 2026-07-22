@@ -164,6 +164,11 @@ export type {
   ConstraintPayloadPart,
   ConstraintPayloadResult
 } from "./truer/assembleConstraintPayload.js";
+export {
+  CONSTRAINT_PAYLOAD_SCHEMA_ID,
+  constraintPayloadJsonSchema,
+  constraintPayloadSchema
+} from "./schema/constraint-payload.schema.js";
 export { loadProfileFile } from "./profile/loadProfile.js";
 export { loadPrototypeNotesFile } from "./prototype-notes/loadPrototypeNotes.js";
 export { addPrototypeNote } from "./prototype-notes/addPrototypeNote.js";
