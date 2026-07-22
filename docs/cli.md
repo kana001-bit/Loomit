@@ -246,6 +246,7 @@ loom match <partA> <partB> [--reference <part>] [--slnt <path>] [--tru <path>] [
 - Truer 実行ファイルの解決は `--tru` > `LOOMIT_TRU` > PATH 上の `tru`。見つからなければ error。
 - `--reference` を付けなければ、従来どおり測定のみ（Truer は呼ばない）。
 - `loom match` は pairwise 専用。band seam（1枚 対 複数枚）の不一致 `geometry.band_seam_sum_mismatch` は N-ary でここを通らない ── band を Truer に渡す手順は [`loom slnt check` の band 節](#band-seam-を-truer-に渡して直し方を提案させる)を参照。
+- **`tru propose` の2系統を取り違えない。** ここ（`loom match --reference`）は **DXF を直す**系統（`tru propose <dxf> --diagnostic <report> --reference <BLOCK>`）で、入力は測定済み Seamlint report、対象は follower の DXF。これとは**別系統**として、`.val` ソースのどのパラメータを動かせば直るかを示す **provenance payload**（拘束グラフ・schema `loomit.constraint-payload.v0`）を出す `loom truer request` が計画されている（Slice 5・未実装）。入力（report ↔ payload）も目的（DXF パッチ ↔ ソース provenance）も別物。payload の契約正本は `packages/core/src/schema/constraint-payload.schema.ts`、共有 JSON Schema は `packages/core/schema/constraint-payload.v0.json`。
 
 ## `loom diff`
 

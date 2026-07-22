@@ -183,8 +183,8 @@ describe("assembleConstraintPayload", () => {
     expect(diagnostics.map((diagnostic) => diagnostic.code)).toContain(
       "PART_CONSTRAINT_INCREMENT_CONFLICT"
     );
-    // 潰しても最初を採るが、警告で衝突を surface する(黙って共有扱いにしない)。
-    expect(payload.params["#ease"]?.value).toBe("1");
+    // 潰しても最初を採るが、警告で衝突を surface する(黙って共有扱いにしない)。最初の宣言(value:"1")を採用。
+    expect(payload.params["#ease"]).toEqual({ declared: true, value: "1", usedBy: ["back", "front"] });
   });
 
   it("does not warn when only the description differs (value is the same)", () => {

@@ -1,5 +1,6 @@
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
+import { CONSTRAINT_PAYLOAD_SCHEMA_ID } from "../schema/constraint-payload.schema.js";
 import { collectEdgeOccurrencesFromValText } from "../parts/collectEdgeOccurrencesFromVal.js";
 import { readIncrementsFromValText } from "../parts/readIncrementsFromVal.js";
 import type { ValIncrement } from "../parts/readIncrementsFromVal.js";
@@ -29,13 +30,20 @@ export interface ConstraintPayloadPart {
 // 注意: これは「その seam の両辺に出るか」ではない。connector 単位で辺を絞れない([C6])ため、多 connector part では
 // seam ごとの両辺判定は与えられない(front.waist と back.inseam にしか出ない増分でも usedBy=[front,back] になりうる)。
 // Truer は dependsOn + linearity + Seamlint edge で seam を絞る。
-export interface ConstraintParam {
-  readonly declared: boolean;
-  // declared:true のときのみ。空文字 "" = 宣言はあるが formula 無し(既定0のツマミ)。未宣言は value を持たない。
-  readonly value?: string;
-  readonly usedBy: readonly string[];
-  readonly note?: string;
-}
+// declared で判別する union。schema(constraint-payload.schema.ts)と同じ不変条件をコンパイル時にも効かせる:
+// declared:true は value 必須、declared:false は value/note を持たない。
+export type ConstraintParam =
+  | {
+      readonly declared: true;
+      // 空文字 "" = 宣言はあるが formula 無し(既定0のツマミ)。
+      readonly value: string;
+      readonly usedBy: readonly string[];
+      readonly note?: string;
+    }
+  | {
+      readonly declared: false;
+      readonly usedBy: readonly string[];
+    };
 
 // connector は join 鍵のみ(dependsOn は持たない)。Seamlint 診断の (partId, connectorId) を引くために宣言を列挙する。
 // 依存(dependsOn)は connector 単位で絞れない([C6]: connector は BLOCK 全体を指し、実際に測る辺は Seamlint が発見する)
@@ -55,6 +63,9 @@ export interface ConstraintPart {
 }
 
 export interface ConstraintPayload {
+  // 版付き契約識別子(constraint-payload.schema.ts)。consumer(Truer)は未知版を弾ける。契約の正本は同 schema、
+  // 出力が schema を通ることは test で固定する。
+  readonly schema: typeof CONSTRAINT_PAYLOAD_SCHEMA_ID;
   readonly params: Readonly<Record<string, ConstraintParam>>;
   readonly parts: readonly ConstraintPart[];
   readonly connectors: readonly ConstraintConnectorRef[];
@@ -170,7 +181,7 @@ export function assembleConstraintPayload(
   }
 
   return {
-    payload: { params, parts: payloadParts, connectors },
+    payload: { schema: CONSTRAINT_PAYLOAD_SCHEMA_ID, params, parts: payloadParts, connectors },
     diagnostics
   };
 }
