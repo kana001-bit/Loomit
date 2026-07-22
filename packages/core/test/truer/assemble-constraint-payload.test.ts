@@ -62,13 +62,13 @@ describe("assembleConstraintPayload", () => {
 
     expect(diagnostics).toEqual([]);
     expect(payload.params["#shared_ease"]).toEqual({
-      kind: "increment",
+      declared: true,
       value: "2",
       usedBy: ["back", "front"]
     });
     expect(payload.params["#pocket_opening"]?.usedBy).toEqual(["back", "front"]);
     expect(payload.params["#front_only"]).toEqual({
-      kind: "increment",
+      declared: true,
       value: "1",
       usedBy: ["front"],
       note: "front だけの調整"
@@ -200,12 +200,16 @@ describe("assembleConstraintPayload", () => {
     );
   });
 
-  it("still lists a referenced increment that has no declaration, with an empty value", () => {
-    // 守る仕様: 宣言の無い #name が式で参照されても dependsOn.refs → params の解決先を欠かさない(value="")。
+  it("distinguishes a formula-less declared knob from an undeclared ref (both were value:'')", () => {
+    // 守る仕様: value:"" に潰れていた2ケースを区別する。
+    //   - 宣言はあるが formula 無し(#default_knob=既定0のツマミ): declared:true + value:""。
+    //   - 式で参照されたが未宣言(#never_declared): declared:false + value を持たない。
+    //     未宣言でも参照は params に残す(dependsOn.refs → params の解決先を欠かさない不変条件は維持)。
     const source = `<pattern>
+      <increments><increment name="#default_knob"/></increments>
       <draw name="d">
         <calculation>
-          <point id="15" length="waist_circ + #undeclared" type="endLine"/>
+          <point id="15" length="waist_circ + #default_knob + #never_declared" type="endLine"/>
           <point id="2" length="rise_length" type="endLine"/>
           <point id="146" length="1" spline="31" type="cutSpline"/>
           <spline id="31" length1="3" point1="15" point4="2" type="simpleInteractive"/>
@@ -221,9 +225,15 @@ describe("assembleConstraintPayload", () => {
       { role: "front", piece: "front", source, connectorIds: ["outseam"] }
     ]);
 
-    expect(payload.params["#undeclared"]).toEqual({
-      kind: "increment",
+    // 宣言済み・formula 無し: declared:true かつ value=""(既定0のツマミ)。
+    expect(payload.params["#default_knob"]).toEqual({
+      declared: true,
       value: "",
+      usedBy: ["front"]
+    });
+    // 未宣言: declared:false・value を持たないが、参照は params に残る。
+    expect(payload.params["#never_declared"]).toEqual({
+      declared: false,
       usedBy: ["front"]
     });
   });
