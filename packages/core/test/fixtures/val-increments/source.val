@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pattern>
+  <version>0.8.11</version>
+  <unit>cm</unit>
+  <increments>
+    <increment description="The original knickers (added_hips_ease = 0) are pretty fitted, this knob can be used to make them baggier." name="#added_hips_ease"/>
+    <increment formula="10" name="#knee_overlap"/>
+    <increment formula="5" name="#waistband_height"/>
+    <increment formula="4" name="#knee_band_height"/>
+    <increment formula="14" name="#fly_length"/>
+    <increment formula="4" name="#fly_facing_width"/>
+    <increment formula="10" name="#leg_fly_length"/>
+    <increment formula="2" name="#leg_fly_facing_width"/>
+    <increment description="depth of pocket from waist" formula="40" name="#pocket_depth"/>
+    <increment description="pocket width from hips" formula="15" name="#pocket_width"/>
+    <increment formula="5" name="#pocket_opening_from_waist"/>
+    <increment formula="15" name="#pocket_opening"/>
+  </increments>
+  <previewCalculations/>
+</pattern>
