@@ -16,15 +16,23 @@ export interface ConstraintPayloadPart {
   readonly connectorIds: readonly string[];
 }
 
-// 変数(増分)1件。kind は現状 increment のみ(インラインリテラル/measurement は occurrence.expr に載るので
-// params には出さない)。value=宣言式、note=作者コメント。
+// 変数(増分)1件。params のキーは常に増分参照 #name(インラインリテラル/measurement は occurrence.expr に載るので
+// params には出さない)。
+//   declared:true  → <increments> に宣言がある。value=宣言式(空文字 "" は「宣言はあるが formula 無し」= 既定0の
+//                    ツマミ。#added_hips_ease 等)、note=作者コメント。
+//   declared:false → 式で #name が参照されたが宣言が無い(value/note は持たない)。Truer は「動かせるツマミ」と
+//                    見なさない判断ができる。Loomit は事実だけ出す(未宣言に警告はしない)。
+// (旧 kind:"increment" は削除: params キーは常に増分参照で "literal" は params に出さない設計=サイズ1の
+//  discriminator で情報を持たなかった。value:"" が「未宣言」と「formula 無しのツマミ」を潰していたのを分けるのが
+//  本 refactor の目的。増分か否かの本当の軸は declared。)
 // usedBy = **part 単位 membership**: その増分をその part の「いずれかの追跡できた seam 辺」に持つ role の集合。
 // 注意: これは「その seam の両辺に出るか」ではない。connector 単位で辺を絞れない([C6])ため、多 connector part では
 // seam ごとの両辺判定は与えられない(front.waist と back.inseam にしか出ない増分でも usedBy=[front,back] になりうる)。
 // Truer は dependsOn + linearity + Seamlint edge で seam を絞る。
 export interface ConstraintParam {
-  readonly kind: "increment";
-  readonly value: string;
+  readonly declared: boolean;
+  // declared:true のときのみ。空文字 "" = 宣言はあるが formula 無し(既定0のツマミ)。未宣言は value を持たない。
+  readonly value?: string;
   readonly usedBy: readonly string[];
   readonly note?: string;
 }
@@ -143,12 +151,21 @@ export function assembleConstraintPayload(
   // 参照された ref は必ず params に解決先を持つ(Truer が dependsOn.refs → params で引ける不変条件)。
   const params: Record<string, ConstraintParam> = {};
   for (const [ref, roles] of usedByRoles) {
-    const declared = incrementByName.get(ref);
+    const declaration = incrementByName.get(ref);
+    const usedBy = [...roles].sort();
+
+    if (declaration === undefined) {
+      // 未宣言: 式で参照されたが <increments> に宣言が無い。value は持たせない(「宣言値が無い」事実を "" に潰さない)。
+      params[ref] = { declared: false, usedBy };
+      continue;
+    }
+
     params[ref] = {
-      kind: "increment",
-      value: declared?.value ?? "",
-      usedBy: [...roles].sort(),
-      ...(declared?.note === undefined ? {} : { note: declared.note })
+      declared: true,
+      // value="" は「宣言はあるが formula 無し(既定0のツマミ)」。未宣言(value 無し)と区別できる。
+      value: declaration.value,
+      usedBy,
+      ...(declaration.note === undefined ? {} : { note: declaration.note })
     };
   }
 
