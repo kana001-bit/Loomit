@@ -155,6 +155,15 @@ export type {
 } from "./parts/extractOccurrencesFromVal.js";
 export { collectEdgeOccurrencesFromValText } from "./parts/collectEdgeOccurrencesFromVal.js";
 export type { EdgeOccurrenceResult } from "./parts/collectEdgeOccurrencesFromVal.js";
+export { assembleConstraintPayload } from "./truer/assembleConstraintPayload.js";
+export type {
+  ConstraintParam,
+  ConstraintConnectorRef,
+  ConstraintPart,
+  ConstraintPayload,
+  ConstraintPayloadPart,
+  ConstraintPayloadResult
+} from "./truer/assembleConstraintPayload.js";
 export { loadProfileFile } from "./profile/loadProfile.js";
 export { loadPrototypeNotesFile } from "./prototype-notes/loadPrototypeNotes.js";
 export { addPrototypeNote } from "./prototype-notes/addPrototypeNote.js";
