@@ -141,6 +141,29 @@ export {
   projectNotchesFromValText,
   projectPartNotchesFromSource
 } from "./parts/projectNotchesFromVal.js";
+export {
+  readIncrementsFromValFile,
+  readIncrementsFromValText
+} from "./parts/readIncrementsFromVal.js";
+export type { ValIncrement, ValIncrementsReadResult } from "./parts/readIncrementsFromVal.js";
+export { extractOccurrencesFromValText } from "./parts/extractOccurrencesFromVal.js";
+export type {
+  OccurrenceLinearity,
+  SplineHandle,
+  ValDrawOccurrences,
+  ValOccurrence
+} from "./parts/extractOccurrencesFromVal.js";
+export { collectEdgeOccurrencesFromValText } from "./parts/collectEdgeOccurrencesFromVal.js";
+export type { EdgeOccurrenceResult } from "./parts/collectEdgeOccurrencesFromVal.js";
+export { assembleConstraintPayload } from "./truer/assembleConstraintPayload.js";
+export type {
+  ConstraintParam,
+  ConstraintConnectorRef,
+  ConstraintPart,
+  ConstraintPayload,
+  ConstraintPayloadPart,
+  ConstraintPayloadResult
+} from "./truer/assembleConstraintPayload.js";
 export { loadProfileFile } from "./profile/loadProfile.js";
 export { loadPrototypeNotesFile } from "./prototype-notes/loadPrototypeNotes.js";
 export { addPrototypeNote } from "./prototype-notes/addPrototypeNote.js";
