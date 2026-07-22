@@ -124,6 +124,64 @@ describe("collectEdgeOccurrencesFromValText", () => {
     expect(pointIds).not.toContain("999");
   });
 
+  it("warns on a duplicate detail name instead of silently first-matching", () => {
+    // 守る仕様: 同名 detail は契約違反(piece 名 = DXF BLOCK identity は一意)。最初の detail を採りつつ、payload 側でも
+    // projectNotchesFromVal と同様に PART_SOURCE_VAL_DUPLICATE_PIECE を出す(黙って first-match しない)。
+    const duplicatePiece = `<pattern><draw name="knickers">
+      <calculation>
+        <point id="15" length="waist_circ / 4 + 5" type="alongLine"/>
+        <point id="2" length="rise_length_side_sitting" type="endLine"/>
+        <point id="146" length="#pocket_opening_from_waist" spline="31" type="cutSpline"/>
+        <spline angle1="-45" angle2="90" id="31" length1="3" length2="15" point1="15" point4="2" type="simpleInteractive"/>
+      </calculation>
+      <modeling><point id="169" idObject="146" type="modeling"/></modeling>
+      <details>
+        <detail name="front"><nodes>
+          <node idObject="169" passmark="true" type="NodePoint"/>
+        </nodes></detail>
+        <detail name="front"><nodes/></detail>
+      </details>
+    </draw></pattern>`;
+
+    const result = collectEdgeOccurrencesFromValText(duplicatePiece, { piece: "front" });
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toContain(
+      "PART_SOURCE_VAL_DUPLICATE_PIECE"
+    );
+    // 最初の detail の occurrence は返る(first-wins は維持)。
+    expect(result.occurrences.length).toBeGreaterThan(0);
+  });
+
+  it("surfaces the duplicate even when the first matching detail's draw has no calculation", () => {
+    // 守る仕様: 同名 detail の先頭が <calculation> 欠落でも、重複違反(DUPLICATE_PIECE)を握りつぶさない。
+    // 重複警告と calculation-missing を併記し、重複の事実(後続に有効 detail がある可能性)を消さない。
+    const dupFirstNoCalc = `<pattern>
+      <draw name="broken">
+        <details><detail name="front"><nodes>
+          <node idObject="169" passmark="true" type="NodePoint"/>
+        </nodes></detail></details>
+      </draw>
+      <draw name="knickers">
+        <calculation>
+          <point id="15" length="waist_circ / 4 + 5" type="alongLine"/>
+          <point id="2" length="rise_length_side_sitting" type="endLine"/>
+          <point id="146" length="#pocket_opening_from_waist" spline="31" type="cutSpline"/>
+          <spline id="31" length1="3" point1="15" point4="2" type="simpleInteractive"/>
+        </calculation>
+        <modeling><point id="169" idObject="146" type="modeling"/></modeling>
+        <details><detail name="front"><nodes>
+          <node idObject="169" passmark="true" type="NodePoint"/>
+        </nodes></detail></details>
+      </draw>
+    </pattern>`;
+
+    const result = collectEdgeOccurrencesFromValText(dupFirstNoCalc, { piece: "front" });
+    const codes = result.diagnostics.map((diagnostic) => diagnostic.code);
+
+    expect(codes).toContain("PART_SOURCE_VAL_DUPLICATE_PIECE");
+    expect(codes).toContain("PART_SOURCE_VAL_CALCULATION_MISSING");
+  });
+
   it("reports a diagnostic when the piece is not in the .val", () => {
     // 守る仕様: 指定 piece が .val に無いときは黙って空にせず explainable diagnostic を出す。
     const result = collectEdgeOccurrencesFromValText(FRONT_OUTSEAM, { piece: "sleeve" });

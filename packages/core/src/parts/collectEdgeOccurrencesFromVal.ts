@@ -43,23 +43,42 @@ export function collectEdgeOccurrencesFromValText(
     };
   }
 
-  // piece は在るが draw に <calculation> が無い = .val が不完全。piece 名は正しいので「見つからない」とは別の案内にする。
+  const diagnostics: Diagnostic[] = [];
+
+  // 同名 detail は契約違反(piece 名 = DXF BLOCK identity は一意)。calc の有無や採否に関係なく、違反そのものを先に surface する
+  // (先頭一致が calc 欠落でも重複違反を隠さない・後続に有効な detail がある事実を握りつぶさない)。採用は first-wins。
+  if (lookup.duplicate) {
+    diagnostics.push(
+      createDiagnostic({
+        severity: "warning",
+        code: "PART_SOURCE_VAL_DUPLICATE_PIECE",
+        message:
+          "同じ名前の detail(型紙ピース)が複数あります。piece 名は DXF BLOCK の identity として一意である必要があるため、最初の detail の occurrence だけを採用しました。 / Found more than one detail with the same name; piece names must be unique because they identify DXF blocks, so only the first detail's occurrences were kept.",
+        target: options.piece,
+        suggestion: [
+          "各型紙ピースの detail 名を .val 全体で一意にしてください。 / Give every pattern piece a detail name that is unique across the .val."
+        ]
+      })
+    );
+  }
+
+  // piece は在るが採用した(先頭の)detail の draw に <calculation> が無い = .val が不完全。piece 名は正しいので
+  // 「見つからない」とは別の案内にする。重複警告があれば併記される(重複が根因、calc 欠落はその症状のこともある)。
   if (lookup.status === "no-calculation") {
-    return {
-      occurrences: [],
-      diagnostics: [
-        createDiagnostic({
-          severity: "warning",
-          code: "PART_SOURCE_VAL_CALCULATION_MISSING",
-          message:
-            "piece(detail)は見つかりましたが、その draw に <calculation> が無いため辺の occurrence を集められませんでした。 / Found the piece (detail) but its draw has no <calculation>, so no edge occurrences were collected.",
-          target: options.piece,
-          suggestion: [
-            "完全な Valentina .val(製図の <calculation> を含む)を書き出しているか確認してください。 / Check that a complete Valentina .val (including the drafting <calculation>) was exported."
-          ]
-        })
-      ]
-    };
+    diagnostics.push(
+      createDiagnostic({
+        severity: "warning",
+        code: "PART_SOURCE_VAL_CALCULATION_MISSING",
+        message:
+          "piece(detail)は見つかりましたが、その draw に <calculation> が無いため辺の occurrence を集められませんでした。 / Found the piece (detail) but its draw has no <calculation>, so no edge occurrences were collected.",
+        target: options.piece,
+        suggestion: [
+          "完全な Valentina .val(製図の <calculation> を含む)を書き出しているか確認してください。 / Check that a complete Valentina .val (including the drafting <calculation>) was exported."
+        ]
+      })
+    );
+
+    return { occurrences: [], diagnostics };
   }
 
   const draw = lookup.draw;
@@ -130,7 +149,7 @@ export function collectEdgeOccurrencesFromValText(
     }
   }
 
-  return { occurrences: selected, diagnostics: [] };
+  return { occurrences: selected, diagnostics };
 }
 
 interface DrawWithDetail {
@@ -142,14 +161,19 @@ interface DrawWithDetail {
 
 // piece 探索の結果。「見つからない」と「見つかったが calculation が無い(=不完全な .val)」を分けて、
 // 呼び出し側が別の diagnostic を出せるようにする(前者は piece 名を疑え、後者は piece 名は正しい)。
+// found の duplicate は「同名 detail が2つ以上あった」= 契約違反(piece 名は一意)を呼び出し側に伝えるフラグ。
 type DrawLookup =
-  | { readonly status: "found"; readonly draw: DrawWithDetail }
-  | { readonly status: "no-calculation" }
+  | { readonly status: "found"; readonly draw: DrawWithDetail; readonly duplicate: boolean }
+  | { readonly status: "no-calculation"; readonly duplicate: boolean }
   | { readonly status: "not-found" };
 
-// piece(detail 名)を case-insensitive で持つ最初の draw を探す。detail 名照合は Seamlint の BLOCK 照合
-// (大小無視)と揃える(projectNotchesFromVal と同じ約束)。
+// piece(detail 名)を case-insensitive で持つ draw を探す。detail 名照合は Seamlint の BLOCK 照合(大小無視)と
+// 揃える(projectNotchesFromVal と同じ約束)。契約上 detail 名は一意だが、違反(同名複数)を検出できるよう全 detail を
+// 走査して一致数も数える。採用は最初の一致(projectNotchesFromVal と同じ first-wins)。
 function findDrawWithDetail(source: string, pieceKey: string): DrawLookup {
+  let firstMatch: { readonly draw?: DrawWithDetail; readonly noCalculation: boolean } | undefined;
+  let matchCount = 0;
+
   for (const drawBlock of collectBlocks(source, "draw")) {
     const detailsBlock = collectFirstBlock(drawBlock.content, "details");
 
@@ -162,25 +186,35 @@ function findDrawWithDetail(source: string, pieceKey: string): DrawLookup {
         continue;
       }
 
-      // detail 名は .val 全体で一意(projectNotchesFromVal の契約)なので、最初の一致がその piece。
-      const calculation = collectFirstBlock(drawBlock.content, "calculation");
+      matchCount += 1;
 
-      if (calculation === undefined) {
-        return { status: "no-calculation" };
+      if (firstMatch === undefined) {
+        const calculation = collectFirstBlock(drawBlock.content, "calculation");
+        firstMatch =
+          calculation === undefined
+            ? { noCalculation: true }
+            : {
+                noCalculation: false,
+                draw: {
+                  calculationOwnerContent: drawBlock.content,
+                  calculationContent: calculation.content,
+                  detailContent: detail.content
+                }
+              };
       }
-
-      return {
-        status: "found",
-        draw: {
-          calculationOwnerContent: drawBlock.content,
-          calculationContent: calculation.content,
-          detailContent: detail.content
-        }
-      };
     }
   }
 
-  return { status: "not-found" };
+  if (firstMatch === undefined) {
+    return { status: "not-found" };
+  }
+
+  // matchCount は全 detail を走査した総一致数なので、先頭が calc 欠落でも重複(>1)を正しく検出できる。
+  if (firstMatch.draw === undefined) {
+    return { status: "no-calculation", duplicate: matchCount > 1 };
+  }
+
+  return { status: "found", draw: firstMatch.draw, duplicate: matchCount > 1 };
 }
 
 // <modeling> の点 id → その idObject(= calculation 点 id)。detail node の idObject は modeling 点 id を指すため、
