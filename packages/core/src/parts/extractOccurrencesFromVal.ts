@@ -32,78 +32,86 @@ export interface ValDrawOccurrences {
 const SPLINE_HANDLES: readonly SplineHandle[] = ["length1", "length2", "angle1", "angle2"];
 
 // draw ごとの <calculation> から occurrence を抽出する。read-only・値は評価しない純関数。
-// point は length を持つものだけ(導出点=pointOfIntersection 等は長さパラメータを持たないので対象外)。
-// spline は制御ハンドル(length1/2・angle1/2)を1本ずつ occurrence にする。
-// スコープ外(現状 defer): 点の angle 属性 / <arc>(radius・angles) / <operation type="moving">。outseam が通らないため後段送り。
 export function extractOccurrencesFromValText(source: string): readonly ValDrawOccurrences[] {
   return collectBlocks(source, "draw").map((drawBlock) => {
     const drawName = drawBlock.attrs.name ?? "draw";
     const calculation = collectFirstBlock(drawBlock.content, "calculation");
 
-    if (calculation === undefined) {
-      return { drawName, occurrences: [] };
+    return {
+      drawName,
+      occurrences:
+        calculation === undefined ? [] : extractOccurrencesFromCalculationContent(calculation.content)
+    };
+  });
+}
+
+// 1つの <calculation> の中身から occurrence を抽出する。特定の draw を名前でなく中身で指せるよう分離してある
+// (同名 draw があっても取り違えない)。
+// point は length を持つものだけ(導出点=pointOfIntersection 等は長さパラメータを持たないので対象外)。
+// spline は制御ハンドル(length1/2・angle1/2)を1本ずつ occurrence にする。
+// スコープ外(現状 defer): 点の angle 属性 / <arc>(radius・angles) / <operation type="moving">。outseam が通らないため後段送り。
+export function extractOccurrencesFromCalculationContent(
+  calculationContent: string
+): readonly ValOccurrence[] {
+  const occurrences: ValOccurrence[] = [];
+
+  for (const point of collectSelfClosingTags(calculationContent, "point")) {
+    const pointId = point.attrs.id;
+    const rawLength = point.attrs.length;
+
+    // length を持たない点(導出点・基点)は長さの操作対象にならないので occurrence にしない。
+    if (pointId === undefined || rawLength === undefined) {
+      continue;
     }
 
-    const occurrences: ValOccurrence[] = [];
+    const expr = rawLength.trim();
 
-    for (const point of collectSelfClosingTags(calculation.content, "point")) {
-      const pointId = point.attrs.id;
-      const rawLength = point.attrs.length;
+    if (expr.length === 0) {
+      continue;
+    }
 
-      // length を持たない点(導出点・基点)は長さの操作対象にならないので occurrence にしない。
-      if (pointId === undefined || rawLength === undefined) {
+    const type = point.attrs.type ?? "";
+    occurrences.push({
+      pointId,
+      type,
+      linearity: classifyPointLinearity(type),
+      expr,
+      refs: extractIncrementRefs(expr)
+    });
+  }
+
+  for (const spline of collectSelfClosingTags(calculationContent, "spline")) {
+    const splineId = spline.attrs.id;
+
+    if (splineId === undefined) {
+      continue;
+    }
+
+    for (const handle of SPLINE_HANDLES) {
+      const rawValue = spline.attrs[handle];
+
+      if (rawValue === undefined) {
         continue;
       }
 
-      const expr = rawLength.trim();
+      const expr = rawValue.trim();
 
       if (expr.length === 0) {
         continue;
       }
 
-      const type = point.attrs.type ?? "";
+      // 制御ハンドルは曲線形状=非線形の長さ寄与(数値提案には昇格させない)。
       occurrences.push({
-        pointId,
-        type,
-        linearity: classifyPointLinearity(type),
+        splineId,
+        handle,
+        linearity: "nonlinear",
         expr,
         refs: extractIncrementRefs(expr)
       });
     }
+  }
 
-    for (const spline of collectSelfClosingTags(calculation.content, "spline")) {
-      const splineId = spline.attrs.id;
-
-      if (splineId === undefined) {
-        continue;
-      }
-
-      for (const handle of SPLINE_HANDLES) {
-        const rawValue = spline.attrs[handle];
-
-        if (rawValue === undefined) {
-          continue;
-        }
-
-        const expr = rawValue.trim();
-
-        if (expr.length === 0) {
-          continue;
-        }
-
-        // 制御ハンドルは曲線形状=非線形の長さ寄与(数値提案には昇格させない)。
-        occurrences.push({
-          splineId,
-          handle,
-          linearity: "nonlinear",
-          expr,
-          refs: extractIncrementRefs(expr)
-        });
-      }
-    }
-
-    return { drawName, occurrences };
-  });
+  return occurrences;
 }
 
 // 辺長への効きを occurrence type=幾何的役割から決める(評価不要・構造だけ)。
