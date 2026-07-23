@@ -59,7 +59,7 @@ describe("createSeamlintGeometryRequest", () => {
             connectorId: "armhole"
           },
           tolerance: {
-            length_mm: 3
+            lengthMm: 3
           }
         }
       ]
@@ -180,7 +180,7 @@ describe("createSeamlintGeometryRequest", () => {
         kind: "seam-edge",
         from: { partId: "body", pathRef: "armhole", connectorId: "armhole" },
         to: { partId: "sleeve", pathRef: "armhole", connectorId: "armhole" },
-        tolerance: { length_mm: 3 }
+        tolerance: { lengthMm: 3 }
       }
     ]);
   });
@@ -524,7 +524,7 @@ describe("createSeamlintGeometryRequest", () => {
 
   it("emits an eased-seam check for a whole-seam ease range with a matching ease band", async () => {
     // 守る仕様: seam 全体を覆う ease range が両側で1本ずつあり、ease_ratio 帯が一致するとき、
-    // eased-seam check を Seamlint の tolerance.ease_ratio 付きで自動生成する(sewn-seam と同じ両側 commit)。
+    // eased-seam check を Seamlint の tolerance.easeRatio 付きで自動生成する(sewn-seam と同じ両側 commit)。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const withWholeSeamEase = withArmholeRanges(resolvedProject, {
       from: [{ id: "ease", from: 0, to: 1, behavior: "ease", ease_ratio_min: 0, ease_ratio_max: 0.05 }],
@@ -558,7 +558,7 @@ describe("createSeamlintGeometryRequest", () => {
         kind: "eased-seam",
         from: { partId: "body", pathRef: "armhole", connectorId: "armhole" },
         to: { partId: "sleeve", pathRef: "armhole", connectorId: "armhole" },
-        tolerance: { ease_ratio: [0, 0.05] }
+        tolerance: { easeRatio: [0, 0.05] }
       }
     ]);
   });
@@ -578,7 +578,7 @@ describe("createSeamlintGeometryRequest", () => {
       expect.objectContaining({
         id: "eased-seam:body.armhole/sleeve.armhole",
         kind: "eased-seam",
-        tolerance: { ease_ratio: [0.01, 0.04] }
+        tolerance: { easeRatio: [0.01, 0.04] }
       })
     ]);
   });
@@ -1239,7 +1239,7 @@ describe("createSeamlintGeometryRequest", () => {
     expect(result.request.checks).toEqual([
       expect.objectContaining({
         id: "sewn-seam:body.armhole/sleeve.armhole",
-        tolerance: { length_mm: 0 }
+        tolerance: { lengthMm: 0 }
       })
     ]);
   });

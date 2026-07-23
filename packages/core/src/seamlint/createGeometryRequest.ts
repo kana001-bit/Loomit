@@ -389,7 +389,7 @@ export function createSeamlintGeometryRequest(
         ? {}
         : {
             tolerance: {
-              length_mm: toleranceMm
+              lengthMm: toleranceMm
             }
           }),
       ...(notchCount === undefined ? {} : { edgeSignature: { notchCount } })
@@ -986,7 +986,7 @@ function planWholeSeamEase(input: {
       connectorId: joinId
     },
     tolerance: {
-      ease_ratio: [fromMin, fromMax]
+      easeRatio: [fromMin, fromMax]
     }
   };
 }
