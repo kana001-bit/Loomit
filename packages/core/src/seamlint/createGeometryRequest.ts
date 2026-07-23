@@ -39,22 +39,17 @@ export interface SeamlintGeometryTarget {
   readonly connectorId?: string;
 }
 
+// Seamlint request の tolerance(camelCase)。以前は Loomit の snake(length_mm 等)も宣言し Seamlint が両受けしていたが、
+// emit を camel に統一(#47)し Seamlint も snake 受けを外した(camel-only)ため、snake 別名を削除した(2026-07-24, ③)。
 export interface SeamlintGeometryTolerance {
   readonly lengthMm?: number;
-  readonly length_mm?: number;
   readonly endpointMm?: number;
-  readonly endpoint_mm?: number;
   readonly tangentDeg?: number;
-  readonly tangent_deg?: number;
   readonly angleDeg?: number;
-  readonly angle_deg?: number;
   readonly easeRatio?: readonly [number, number];
-  readonly ease_ratio?: readonly [number, number];
   readonly gatherRatio?: readonly [number, number];
-  readonly gather_ratio?: readonly [number, number];
   // band-seam の閉じ代/ease 許容比(band 総周長と neighbours 合計の相対差の上限)。省略時は Seamlint 既定(6%)。
   readonly closureRatio?: number;
-  readonly closure_ratio?: number;
 }
 
 export interface SeamlintGeometryMarkerRef {
@@ -62,11 +57,10 @@ export interface SeamlintGeometryMarkerRef {
   readonly position: number;
 }
 
+// contiguous seam の marker 範囲(camelCase)。snake 別名(start_marker 等)は camel 統一で削除(2026-07-24, ③)。
 export interface SeamlintGeometryMarkerRange {
   readonly startMarker?: string;
   readonly endMarker?: string;
-  readonly start_marker?: string;
-  readonly end_marker?: string;
 }
 
 export interface SeamlintGeometryCheckRange {
