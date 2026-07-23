@@ -155,6 +155,8 @@ export type {
 } from "./parts/extractOccurrencesFromVal.js";
 export { collectEdgeOccurrencesFromValText } from "./parts/collectEdgeOccurrencesFromVal.js";
 export type { EdgeOccurrenceResult } from "./parts/collectEdgeOccurrencesFromVal.js";
+export { readValSource } from "./parts/readValSource.js";
+export type { ValSourceReadResult } from "./parts/readValSource.js";
 export { assembleConstraintPayload } from "./truer/assembleConstraintPayload.js";
 export type {
   ConstraintParam,
