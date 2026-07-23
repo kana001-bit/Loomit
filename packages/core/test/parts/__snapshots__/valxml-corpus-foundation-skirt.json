@@ -1,0 +1,376 @@
+{
+  "increments": [
+    {
+      "name": "#placket_depth",
+      "value": "2.5"
+    },
+    {
+      "name": "#pocket_depth_from_waist",
+      "value": "45"
+    },
+    {
+      "name": "#pocket_width",
+      "value": "14"
+    }
+  ],
+  "details": {
+    "draws": [
+      {
+        "drawName": "pattern",
+        "details": [
+          "front_and_side",
+          "back",
+          "facing",
+          "pocket"
+        ]
+      }
+    ],
+    "totalDetails": 4
+  },
+  "occurrences": [
+    {
+      "drawName": "pattern",
+      "occurrences": [
+        {
+          "pointId": "2",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "height_waist_side",
+          "refs": []
+        },
+        {
+          "pointId": "3",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "hip_circ / 2",
+          "refs": []
+        },
+        {
+          "pointId": "4",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "18",
+          "refs": []
+        },
+        {
+          "pointId": "6",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "2.5",
+          "refs": []
+        },
+        {
+          "pointId": "7",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "height_waist_side - height_waist_front",
+          "refs": []
+        },
+        {
+          "pointId": "10",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "2.5",
+          "refs": []
+        },
+        {
+          "pointId": "12",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "3.8",
+          "refs": []
+        },
+        {
+          "pointId": "13",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "(waist_circ / 2 - 4 - Line_Ah_A4) / 3",
+          "refs": []
+        },
+        {
+          "pointId": "14",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "(CurrentLength - Line_A19_A16h * 2) / 2",
+          "refs": []
+        },
+        {
+          "pointId": "15",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "Line_A19_A16h",
+          "refs": []
+        },
+        {
+          "pointId": "16",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "Line_A16h_A13h",
+          "refs": []
+        },
+        {
+          "pointId": "17",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "18",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "19",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "24",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "33",
+          "refs": []
+        },
+        {
+          "pointId": "27",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "height_waist_back - height_waist_side",
+          "refs": []
+        },
+        {
+          "pointId": "30",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "25",
+          "refs": []
+        },
+        {
+          "pointId": "31",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "13",
+          "refs": []
+        },
+        {
+          "pointId": "32",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "14",
+          "refs": []
+        },
+        {
+          "pointId": "33",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "#placket_depth",
+          "refs": [
+            "#placket_depth"
+          ]
+        },
+        {
+          "pointId": "34",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "1.25",
+          "refs": []
+        },
+        {
+          "pointId": "83",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "#pocket_depth_from_waist",
+          "refs": [
+            "#pocket_depth_from_waist"
+          ]
+        },
+        {
+          "pointId": "99",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "#pocket_width",
+          "refs": [
+            "#pocket_width"
+          ]
+        },
+        {
+          "pointId": "100",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "18",
+          "refs": []
+        },
+        {
+          "pointId": "106",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "height_waist_front",
+          "refs": []
+        },
+        {
+          "pointId": "107",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "height_waist_side",
+          "refs": []
+        },
+        {
+          "splineId": "28",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "10",
+          "refs": []
+        },
+        {
+          "splineId": "28",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "28",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "0",
+          "refs": []
+        },
+        {
+          "splineId": "28",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "160",
+          "refs": []
+        },
+        {
+          "splineId": "29",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "3",
+          "refs": []
+        },
+        {
+          "splineId": "29",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "29",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "-10",
+          "refs": []
+        },
+        {
+          "splineId": "29",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "180",
+          "refs": []
+        },
+        {
+          "splineId": "35",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "1",
+          "refs": []
+        },
+        {
+          "splineId": "35",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "1",
+          "refs": []
+        },
+        {
+          "splineId": "35",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "180",
+          "refs": []
+        },
+        {
+          "splineId": "35",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "270",
+          "refs": []
+        },
+        {
+          "splineId": "101",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "101",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "8",
+          "refs": []
+        },
+        {
+          "splineId": "101",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "-30",
+          "refs": []
+        },
+        {
+          "splineId": "101",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "90",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "notches": {
+    "notches": {
+      "val:front_and_side:notch:52": {
+        "piece": "front_and_side",
+        "order": 0,
+        "type": "vMark",
+        "angle": "straightforward"
+      },
+      "val:front_and_side:notch:53": {
+        "piece": "front_and_side",
+        "order": 1,
+        "type": "one",
+        "angle": "straightforward"
+      },
+      "val:front_and_side:notch:54": {
+        "piece": "front_and_side",
+        "order": 2,
+        "type": "vMark",
+        "angle": "straightforward"
+      },
+      "val:pocket:notch:89": {
+        "piece": "pocket",
+        "order": 0,
+        "type": "vMark",
+        "angle": "straightforward"
+      },
+      "val:pocket:notch:95": {
+        "piece": "pocket",
+        "order": 1,
+        "type": "vMark",
+        "angle": "straightforward"
+      }
+    },
+    "diagnostics": []
+  },
+  "darts": {
+    "darts": {},
+    "diagnostics": []
+  }
+}

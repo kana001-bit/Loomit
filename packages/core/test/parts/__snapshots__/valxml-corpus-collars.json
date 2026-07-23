@@ -1,0 +1,184 @@
+{
+  "increments": [
+    {
+      "name": "#collar_circumference",
+      "value": "39",
+      "note": "measured on the garment, will be about neck circumference + 1 cm"
+    },
+    {
+      "name": "#button_stand",
+      "value": "2",
+      "note": "as on the garment"
+    },
+    {
+      "name": "#stand_collar_height",
+      "value": "5"
+    },
+    {
+      "name": "#sewing_allowance",
+      "value": "1"
+    }
+  ],
+  "details": {
+    "draws": [
+      {
+        "drawName": "collars",
+        "details": [
+          "back_closing_collar"
+        ]
+      }
+    ],
+    "totalDetails": 1
+  },
+  "occurrences": [
+    {
+      "drawName": "collars",
+      "occurrences": [
+        {
+          "pointId": "2",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "#collar_circumference / 2",
+          "refs": [
+            "#collar_circumference"
+          ]
+        },
+        {
+          "pointId": "21",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "1.5",
+          "refs": []
+        },
+        {
+          "pointId": "23",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "#button_stand",
+          "refs": [
+            "#button_stand"
+          ]
+        },
+        {
+          "pointId": "24",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "#stand_collar_height",
+          "refs": [
+            "#stand_collar_height"
+          ]
+        },
+        {
+          "pointId": "25",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "#stand_collar_height",
+          "refs": [
+            "#stand_collar_height"
+          ]
+        },
+        {
+          "pointId": "27",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "#button_stand",
+          "refs": [
+            "#button_stand"
+          ]
+        },
+        {
+          "splineId": "28",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "28",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "28",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "AngleLine_A_A2 + 180",
+          "refs": []
+        },
+        {
+          "splineId": "28",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "0",
+          "refs": []
+        },
+        {
+          "splineId": "29",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "29",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "29",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "0",
+          "refs": []
+        },
+        {
+          "splineId": "29",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "AngleLine_A_A2 + 180",
+          "refs": []
+        },
+        {
+          "splineId": "30",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "1",
+          "refs": []
+        },
+        {
+          "splineId": "30",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "1",
+          "refs": []
+        },
+        {
+          "splineId": "30",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "90",
+          "refs": []
+        },
+        {
+          "splineId": "30",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "180",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "notches": {
+    "notches": {},
+    "diagnostics": []
+  },
+  "darts": {
+    "darts": {},
+    "diagnostics": []
+  }
+}

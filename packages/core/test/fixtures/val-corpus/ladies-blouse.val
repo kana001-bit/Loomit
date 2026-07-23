@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pattern labelPrefix="en">
+    <!--Pattern created with Valentina v0.7.51.0 (https://smart-pattern.com.ua/).-->
+    <version>0.9.0</version>
+    <unit>cm</unit>
+    <description/>
+    <notes/>
+    <measurements>measurements.vit</measurements>
+    <increments>
+        <increment description="full length of the garment" formula="neck_back_to_waist_b + 15" name="#full_length"/>
+        <increment description="distance between the back of the neck and the bottom of the shoulder" formula="neck_back_to_waist_b / 6" name="#shoulder_line"/>
+        <increment formula="2" name="#ease"/>
+    </increments>
+    <previewCalculations/>
+    <draw name="blouse">
+        <calculation>
+            <point id="1" mx="0.264583" my="0.396875" name="A" showLabel="true" type="single" x="0.79375" y="1.05833"/>
+            <point angle="270" basePoint="1" id="2" length="neck_back_to_highbust_b" lineColor="black" mx="-3.04941" my="-0.736858" name="A8q" showLabel="true" type="endLine" typeLine="hair"/>
+            <point firstPoint="1" id="3" length="neck_back_to_waist_b" lineColor="black" mx="-1.82846" my="0.571296" name="A15h" secondPoint="2" showLabel="true" type="alongLine" typeLine="none"/>
+            <point firstPoint="1" id="4" length="#full_length" lineColor="black" mx="0.264583" my="0.396875" name="A21h" secondPoint="2" showLabel="true" type="alongLine" typeLine="none"/>
+            <point angle="0" basePoint="3" id="5" length="2.5" lineColor="black" mx="0.264583" my="0.396875" name="A1" showLabel="true" type="endLine" typeLine="hair"/>
+            <point angle="0" basePoint="1" id="6" length="neck_circ / 6" lineColor="black" mx="-1.13078" my="0.832926" name="A2h" showLabel="true" type="endLine" typeLine="hair"/>
+            <point angle="90" basePoint="6" id="7" length="2" lineColor="black" mx="0.264583" my="0.396875" name="Aqqq" showLabel="true" type="endLine" typeLine="hair"/>
+            <point firstPoint="1" id="8" length="#shoulder_line" lineColor="black" mx="-2.61336" my="-0.736858" name="A2" secondPoint="2" showLabel="true" type="alongLine" typeLine="none"/>
+            <point angle="0" basePoint="8" id="9" length="across_back_b / 2 " lineColor="black" mx="0.264583" my="0.396875" name="A6" showLabel="true" type="endLine" typeLine="hair"/>
+            <point angle="0" basePoint="2" id="10" lineColor="black" mx="0.264583" my="0.396875" name="Ah" p1Line="1" p2Line="5" showLabel="true" type="lineIntersectAxis" typeLine="hair"/>
+            <point angle="0" basePoint="10" id="11" length="bust_circ / 2 + #ease" lineColor="black" mx="0.264583" my="0.396875" name="A20" showLabel="true" type="endLine" typeLine="hair"/>
+            <point firstPoint="11" id="12" length="(across_chest_f + armfold_to_armfold_bust) / 4" lineColor="black" mx="0.264583" my="0.396875" name="A12" secondPoint="10" showLabel="true" type="alongLine" typeLine="none"/>
+            <line firstPoint="7" id="13" lineColor="black" secondPoint="9" typeLine="hair"/>
+            <spline aScale="0" angle1="0" angle2="AngleLine_Aqqq_A6 - 90" color="black" id="14" length1="2" length2="2" penStyle="hair" point1="1" point4="7" type="simpleInteractive"/>
+            <arc aScale="0" angle1="45" angle2="90" center="12" color="cornflowerblue" id="15" penStyle="hair" radius="neck_back_to_armfold_front - Spl_A_Aqqq" type="simple"/>
+            <arc aScale="0" angle1="100" angle2="135" center="11" color="cornflowerblue" id="16" penStyle="hair" radius="neck_back_to_armfold_front - Spl_A_Aqqq + 2" type="simple"/>
+            <point crossPoint="1" firstArc="15" id="17" mx="-0.69473" my="-2.56827" name="AF" secondArc="16" showLabel="true" type="pointOfIntersectionArcs"/>
+            <point angle="AngleLine_Aqqq_A6 + 90" basePoint="10" id="18" lineColor="black" mx="-0.433099" my="-2.48106" name="AW" p1Line="7" p2Line="9" showLabel="true" type="lineIntersectAxis" typeLine="hair"/>
+            <arc aScale="0" angle1="90" angle2="100" center="12" color="cornflowerblue" id="19" penStyle="hair" radius="highbust_back_over_shoulder_to_armfold_front - Line_Ah_AW" type="simple"/>
+            <arc aScale="0" angle1="160" angle2="200" center="17" color="cornflowerblue" id="20" penStyle="hair" radius="Line_Aqqq_A6 - 0.6" type="simple"/>
+            <point crossPoint="1" firstArc="19" id="21" mx="-3.04941" my="-1.78338" name="AD" secondArc="20" showLabel="true" type="pointOfIntersectionArcs"/>
+            <point angle="0" basePoint="17" id="22" length="neck_circ / 6" lineColor="black" mx="0.264583" my="0.396875" name="AV" showLabel="true" type="endLine" typeLine="hair"/>
+            <point angle="0" basePoint="5" id="23" lineColor="black" mx="1.13669" my="-0.998489" name="A21hw" p1Line="22" p2Line="11" showLabel="true" type="lineIntersectAxis" typeLine="hair"/>
+            <point angle="0" basePoint="4" id="24" lineColor="black" mx="0.264583" my="0.396875" name="A3" p1Line="22" p2Line="11" showLabel="true" type="lineIntersectAxis" typeLine="hair"/>
+            <point firstPoint="10" id="25" length="CurrentLength/2" lineColor="black" mx="-0.956361" my="1.09456" name="A4" secondPoint="11" showLabel="true" type="alongLine" typeLine="none"/>
+            <spline aScale="0" angle1="AngleLine_Aqqq_A6 - 90" angle2="180" color="black" id="26" length1="2" length2="10" penStyle="hair" point1="9" point4="25" type="simpleInteractive"/>
+            <line firstPoint="21" id="27" lineColor="black" secondPoint="17" typeLine="hair"/>
+            <spline aScale="0" angle1="0" angle2="AngleLine_AD_AF - 90" color="black" id="28" length1="10" length2="3" penStyle="hair" point1="25" point4="21" type="simpleInteractive"/>
+        </calculation>
+        <modeling/>
+        <details/>
+        <groups/>
+    </draw>
+</pattern>

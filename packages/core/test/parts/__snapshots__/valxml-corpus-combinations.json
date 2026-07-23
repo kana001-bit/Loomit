@@ -1,0 +1,693 @@
+{
+  "increments": [
+    {
+      "name": "#length_drawers_leg",
+      "value": "35"
+    },
+    {
+      "name": "#width__of_leg",
+      "value": "22"
+    },
+    {
+      "name": "#breast_ease_front",
+      "value": "6",
+      "note": "E-G should be breast_circ / 4 plus this amount, between 5 and 6.5 cm"
+    },
+    {
+      "name": "#button_stand_width",
+      "value": "2.5"
+    },
+    {
+      "name": "#back_overlap",
+      "value": "2.5"
+    },
+    {
+      "name": "#back_ease",
+      "value": "15"
+    },
+    {
+      "name": "#sleeve_length",
+      "value": "10"
+    },
+    {
+      "name": "#sleeve_difference",
+      "value": "3"
+    }
+  ],
+  "details": {
+    "draws": [
+      {
+        "drawName": "pattern",
+        "details": [
+          "back",
+          "front",
+          "leg_back",
+          "front_with_back_leg",
+          "front_with_wider_back_leg",
+          "sleeve",
+          "drawers",
+          "drawers_wider"
+        ]
+      }
+    ],
+    "totalDetails": 8
+  },
+  "occurrences": [
+    {
+      "drawName": "pattern",
+      "occurrences": [
+        {
+          "pointId": "2",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "neck_back_to_waist_b + 1.25",
+          "refs": []
+        },
+        {
+          "pointId": "3",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "neck_back_to_waist_b / 8",
+          "refs": []
+        },
+        {
+          "pointId": "4",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "bust_circ / 4",
+          "refs": []
+        },
+        {
+          "pointId": "5",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "hip_circ / 4 + 2.5",
+          "refs": []
+        },
+        {
+          "pointId": "6",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "#length_drawers_leg",
+          "refs": [
+            "#length_drawers_leg"
+          ]
+        },
+        {
+          "pointId": "7",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "neck_circ / 6",
+          "refs": []
+        },
+        {
+          "pointId": "8",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "bust_circ / 4",
+          "refs": []
+        },
+        {
+          "pointId": "9",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "bust_circ / 4 - 2.5",
+          "refs": []
+        },
+        {
+          "pointId": "10",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "bust_circ / 4 + #breast_ease_front",
+          "refs": [
+            "#breast_ease_front"
+          ]
+        },
+        {
+          "pointId": "12",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "hip_circ / 4",
+          "refs": []
+        },
+        {
+          "pointId": "14",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "#width__of_leg",
+          "refs": [
+            "#width__of_leg"
+          ]
+        },
+        {
+          "pointId": "15",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "- CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "16",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "17",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "18",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "Line_C_D - (waist_circ / 4) - 0.5",
+          "refs": []
+        },
+        {
+          "pointId": "19",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "20",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "Line_E_H * 2 / 3",
+          "refs": []
+        },
+        {
+          "pointId": "21",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "Line_H_J / 2",
+          "refs": []
+        },
+        {
+          "pointId": "22",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "#button_stand_width",
+          "refs": [
+            "#button_stand_width"
+          ]
+        },
+        {
+          "pointId": "26",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "(Line_A_E - Line_A_C) / 3",
+          "refs": []
+        },
+        {
+          "pointId": "32",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "Line_C_bs1",
+          "refs": []
+        },
+        {
+          "pointId": "34",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "2.5",
+          "refs": []
+        },
+        {
+          "pointId": "35",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "2.5",
+          "refs": []
+        },
+        {
+          "pointId": "36",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "2",
+          "refs": []
+        },
+        {
+          "pointId": "37",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "- #back_overlap",
+          "refs": [
+            "#back_overlap"
+          ]
+        },
+        {
+          "pointId": "38",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "#back_overlap",
+          "refs": [
+            "#back_overlap"
+          ]
+        },
+        {
+          "pointId": "57",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "7.5",
+          "refs": []
+        },
+        {
+          "pointId": "90",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "rise_length_side_sitting + #back_ease",
+          "refs": [
+            "#back_ease"
+          ]
+        },
+        {
+          "pointId": "225",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "10",
+          "refs": []
+        },
+        {
+          "pointId": "226",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "pointId": "227",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "#sleeve_length",
+          "refs": [
+            "#sleeve_length"
+          ]
+        },
+        {
+          "pointId": "228",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "(Spl_G_F1 + Spl_F1_D + Spl_G_S + Spl_S_D) / 2",
+          "refs": []
+        },
+        {
+          "pointId": "229",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "(Spl_G_F1 + Spl_F1_D + Spl_G_S + Spl_S_D) / 2 - #sleeve_difference",
+          "refs": [
+            "#sleeve_difference"
+          ]
+        },
+        {
+          "splineId": "23",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "3",
+          "refs": []
+        },
+        {
+          "splineId": "23",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "3",
+          "refs": []
+        },
+        {
+          "splineId": "23",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "270",
+          "refs": []
+        },
+        {
+          "splineId": "23",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "180",
+          "refs": []
+        },
+        {
+          "splineId": "24",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "10",
+          "refs": []
+        },
+        {
+          "splineId": "24",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "10",
+          "refs": []
+        },
+        {
+          "splineId": "24",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "270",
+          "refs": []
+        },
+        {
+          "splineId": "24",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "135",
+          "refs": []
+        },
+        {
+          "splineId": "25",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "10",
+          "refs": []
+        },
+        {
+          "splineId": "25",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "10",
+          "refs": []
+        },
+        {
+          "splineId": "25",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "225",
+          "refs": []
+        },
+        {
+          "splineId": "25",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "90",
+          "refs": []
+        },
+        {
+          "splineId": "27",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "27",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "2",
+          "refs": []
+        },
+        {
+          "splineId": "27",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "0",
+          "refs": []
+        },
+        {
+          "splineId": "27",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "270",
+          "refs": []
+        },
+        {
+          "splineId": "28",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "3",
+          "refs": []
+        },
+        {
+          "splineId": "28",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "28",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "90",
+          "refs": []
+        },
+        {
+          "splineId": "28",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "315",
+          "refs": []
+        },
+        {
+          "splineId": "33",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "1.5",
+          "refs": []
+        },
+        {
+          "splineId": "33",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "1.5",
+          "refs": []
+        },
+        {
+          "splineId": "33",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "0",
+          "refs": []
+        },
+        {
+          "splineId": "33",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "90",
+          "refs": []
+        },
+        {
+          "splineId": "39",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "39",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "2",
+          "refs": []
+        },
+        {
+          "splineId": "39",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "0",
+          "refs": []
+        },
+        {
+          "splineId": "39",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "265",
+          "refs": []
+        },
+        {
+          "splineId": "40",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "3",
+          "refs": []
+        },
+        {
+          "splineId": "40",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "40",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "85",
+          "refs": []
+        },
+        {
+          "splineId": "40",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "280",
+          "refs": []
+        },
+        {
+          "splineId": "41",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "1",
+          "refs": []
+        },
+        {
+          "splineId": "41",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "3",
+          "refs": []
+        },
+        {
+          "splineId": "41",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "270",
+          "refs": []
+        },
+        {
+          "splineId": "41",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "180",
+          "refs": []
+        },
+        {
+          "splineId": "80",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "80",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "80",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "95",
+          "refs": []
+        },
+        {
+          "splineId": "80",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "265",
+          "refs": []
+        },
+        {
+          "splineId": "81",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "15",
+          "refs": []
+        },
+        {
+          "splineId": "81",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "2",
+          "refs": []
+        },
+        {
+          "splineId": "81",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "85",
+          "refs": []
+        },
+        {
+          "splineId": "81",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "270",
+          "refs": []
+        },
+        {
+          "splineId": "93",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "10",
+          "refs": []
+        },
+        {
+          "splineId": "93",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "93",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "AngleLine_V_U",
+          "refs": []
+        },
+        {
+          "splineId": "93",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "135",
+          "refs": []
+        },
+        {
+          "splineId": "230",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "3",
+          "refs": []
+        },
+        {
+          "splineId": "230",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "2",
+          "refs": []
+        },
+        {
+          "splineId": "230",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "0",
+          "refs": []
+        },
+        {
+          "splineId": "230",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "150",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "notches": {
+    "notches": {},
+    "diagnostics": []
+  },
+  "darts": {
+    "darts": {
+      "val:pattern:dart:157": {
+        "apex_ref": "val:point#pattern/A4",
+        "width_formula": "CurrentLength",
+        "intake_length_formula": "Line_H_J / 2",
+        "legs": {
+          "left_ref": "val:point#pattern/d2",
+          "right_ref": "val:point#pattern/d1"
+        }
+      }
+    },
+    "diagnostics": []
+  }
+}
