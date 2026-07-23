@@ -12,6 +12,8 @@ const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../../core/t
 describe("runSeamlintRequestCommand", () => {
   it("builds a JSON Seamlint request for a healthy project", async () => {
     // 守る仕様: 健全な project では ok の JSON request を組み、parts と sewn-seam check を含める。
+    // tolerance のキーは camelCase(lengthMm)で emit する ── これは Seamlint へ渡る public JSON 契約なので、CLI 出力(生 passthrough)の
+    // 綴りをここで pin する(core だけでなく境界でも回帰を止める)。
     const stdout: string[] = [];
     const stderr: string[] = [];
 
@@ -44,7 +46,8 @@ describe("runSeamlintRequestCommand", () => {
     expect(report.request.checks).toEqual([
       expect.objectContaining({
         kind: "sewn-seam",
-        id: "sewn-seam:body.armhole/sleeve.armhole"
+        id: "sewn-seam:body.armhole/sleeve.armhole",
+        tolerance: { lengthMm: 3 }
       })
     ]);
     expect(stderr).toEqual([]);
