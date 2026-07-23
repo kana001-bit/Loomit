@@ -1,0 +1,1693 @@
+{
+  "increments": [
+    {
+      "name": "#neck_point_from_origin",
+      "value": "6.35 + (neck_mid_circ - 30) / 4",
+      "note": "Distance between center front and neck. Formula is valid for neck circ between 25 and 37 cm."
+    },
+    {
+      "name": "#dart_distance",
+      "value": "6",
+      "note": "distance between the dart at their apices"
+    },
+    {
+      "name": "#front_dart_width",
+      "value": "3.8",
+      "note": "width of the first dart on the waistline"
+    },
+    {
+      "name": "#back_dart_width",
+      "value": "(bust_circ - waist_circ) / 4",
+      "note": "width of the second dart on the waistline"
+    },
+    {
+      "name": "#dart_distance_waist",
+      "value": "1.8",
+      "note": "distance between darts on waistline"
+    },
+    {
+      "name": "#center_back_width",
+      "value": "3.8",
+      "note": "width of the center back at the waistline"
+    },
+    {
+      "name": "#cuff_height",
+      "value": "8"
+    },
+    {
+      "name": "#default_allowance",
+      "value": "1.5"
+    }
+  ],
+  "details": {
+    "draws": [
+      {
+        "drawName": "block",
+        "details": [
+          "front",
+          "center_back",
+          "first_side",
+          "second_side",
+          "upper_sleeve",
+          "lower_sleeve",
+          "shirtwaist_sleeve"
+        ]
+      }
+    ],
+    "totalDetails": 7
+  },
+  "occurrences": [
+    {
+      "drawName": "block",
+      "occurrences": [
+        {
+          "pointId": "2",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "pointId": "3",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "neck_mid_circ / 4",
+          "refs": []
+        },
+        {
+          "pointId": "4",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "#neck_point_from_origin",
+          "refs": [
+            "#neck_point_from_origin"
+          ]
+        },
+        {
+          "pointId": "5",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "shoulder_length",
+          "refs": []
+        },
+        {
+          "pointId": "6",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "shoulder_slope_neck_side_length",
+          "refs": []
+        },
+        {
+          "pointId": "7",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "armscye_circ / 2",
+          "refs": []
+        },
+        {
+          "pointId": "8",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "bust_circ / 4",
+          "refs": []
+        },
+        {
+          "pointId": "9",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "-2.5",
+          "refs": []
+        },
+        {
+          "pointId": "10",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "armpit_to_waist_side",
+          "refs": []
+        },
+        {
+          "pointId": "11",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "6",
+          "refs": []
+        },
+        {
+          "pointId": "12",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "2.4",
+          "refs": []
+        },
+        {
+          "pointId": "13",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "10.5",
+          "refs": []
+        },
+        {
+          "pointId": "14",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "5.5",
+          "refs": []
+        },
+        {
+          "pointId": "15",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "neck_back_to_armfold_front_to_waist_side - neck_arc_half_b",
+          "refs": []
+        },
+        {
+          "pointId": "18",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "#dart_distance",
+          "refs": [
+            "#dart_distance"
+          ]
+        },
+        {
+          "pointId": "19",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "#front_dart_width / 2",
+          "refs": [
+            "#front_dart_width"
+          ]
+        },
+        {
+          "pointId": "20",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "Line_A4_A7",
+          "refs": []
+        },
+        {
+          "pointId": "21",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "#dart_distance_waist",
+          "refs": [
+            "#dart_distance_waist"
+          ]
+        },
+        {
+          "pointId": "22",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "#back_dart_width",
+          "refs": [
+            "#back_dart_width"
+          ]
+        },
+        {
+          "pointId": "23",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "24",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "-Line_A6_A4",
+          "refs": []
+        },
+        {
+          "pointId": "26",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "- Line_A11_Ah",
+          "refs": []
+        },
+        {
+          "pointId": "36",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "37",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "across_chest_f / 2",
+          "refs": []
+        },
+        {
+          "pointId": "38",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "0.6",
+          "refs": []
+        },
+        {
+          "pointId": "41",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "50",
+          "refs": []
+        },
+        {
+          "pointId": "42",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "neck_back_to_waist_b + 0.6",
+          "refs": []
+        },
+        {
+          "pointId": "43",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "bust_circ / 4 - Line_Ac_Ad",
+          "refs": []
+        },
+        {
+          "pointId": "44",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "0.6",
+          "refs": []
+        },
+        {
+          "pointId": "45",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "shoulder_slope_neck_side_length",
+          "refs": []
+        },
+        {
+          "pointId": "46",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "pointId": "56",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "armpit_to_waist_side + 0.6",
+          "refs": []
+        },
+        {
+          "pointId": "57",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "Line_B_B2",
+          "refs": []
+        },
+        {
+          "pointId": "58",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "Line_B1_Bt",
+          "refs": []
+        },
+        {
+          "pointId": "59",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "60",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "across_back_b / 2",
+          "refs": []
+        },
+        {
+          "pointId": "66",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "(Line_B1_B3 - (waist_circ / 2 - Line_A5_A7 - Line_A8_A9 - Line_A10_Ae)) / 2",
+          "refs": []
+        },
+        {
+          "pointId": "67",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "Line_B1_Bw",
+          "refs": []
+        },
+        {
+          "pointId": "68",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "#center_back_width",
+          "refs": [
+            "#center_back_width"
+          ]
+        },
+        {
+          "pointId": "69",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "70",
+          "type": "cutSplinePath",
+          "linearity": "none",
+          "expr": "SplPath_Bp_Br / 3",
+          "refs": []
+        },
+        {
+          "pointId": "71",
+          "type": "cutSplinePath",
+          "linearity": "none",
+          "expr": "SplPath_Bp_Br * 2 / 3",
+          "refs": []
+        },
+        {
+          "pointId": "73",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "74",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "75",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "76",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "Line_By_Bz / 2",
+          "refs": []
+        },
+        {
+          "pointId": "77",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "Line_Bs_Ba",
+          "refs": []
+        },
+        {
+          "pointId": "78",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "79",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "Line_By_Bz",
+          "refs": []
+        },
+        {
+          "pointId": "86",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "pointId": "87",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "pointId": "88",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "pointId": "89",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "1.2",
+          "refs": []
+        },
+        {
+          "pointId": "90",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "1.2",
+          "refs": []
+        },
+        {
+          "pointId": "91",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "1.2",
+          "refs": []
+        },
+        {
+          "pointId": "92",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "pointId": "93",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "1.2",
+          "refs": []
+        },
+        {
+          "pointId": "176",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "177",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "178",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "182",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "80",
+          "refs": []
+        },
+        {
+          "pointId": "183",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "arm_armscye_back_center_to_wrist_bent",
+          "refs": []
+        },
+        {
+          "pointId": "184",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "arm_armscye_back_center_to_wrist_bent - arm_elbow_to_wrist_bent",
+          "refs": []
+        },
+        {
+          "pointId": "185",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "hand_circ / 2",
+          "refs": []
+        },
+        {
+          "pointId": "186",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "3.8",
+          "refs": []
+        },
+        {
+          "pointId": "187",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "1.3",
+          "refs": []
+        },
+        {
+          "pointId": "188",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "- Line_Ce_C1",
+          "refs": []
+        },
+        {
+          "pointId": "189",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "arm_armpit_to_wrist",
+          "refs": []
+        },
+        {
+          "pointId": "190",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "191",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "pointId": "192",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "arm_elbow_circ / 2",
+          "refs": []
+        },
+        {
+          "pointId": "193",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "2",
+          "refs": []
+        },
+        {
+          "pointId": "194",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "- Line_Ch_Ci",
+          "refs": []
+        },
+        {
+          "pointId": "195",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "armscye_circ * 2 / 3",
+          "refs": []
+        },
+        {
+          "pointId": "196",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "197",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "armscye_circ / 3",
+          "refs": []
+        },
+        {
+          "pointId": "202",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "Line_Ce_C1",
+          "refs": []
+        },
+        {
+          "pointId": "203",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "- Line_Ce_C1",
+          "refs": []
+        },
+        {
+          "pointId": "237",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "Line_C_Ca + 5",
+          "refs": []
+        },
+        {
+          "pointId": "248",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "50",
+          "refs": []
+        },
+        {
+          "pointId": "249",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "arm_armscye_back_center_to_wrist_bent",
+          "refs": []
+        },
+        {
+          "pointId": "250",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "hand_circ / 2 + 2",
+          "refs": []
+        },
+        {
+          "pointId": "251",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "Line_Dd_De",
+          "refs": []
+        },
+        {
+          "pointId": "252",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "arm_armscye_back_center_to_wrist_bent - arm_elbow_to_wrist_bent",
+          "refs": []
+        },
+        {
+          "pointId": "253",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "arm_armpit_to_wrist",
+          "refs": []
+        },
+        {
+          "pointId": "254",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "armscye_circ * 2 / 3",
+          "refs": []
+        },
+        {
+          "pointId": "255",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "Line_Db_Dk",
+          "refs": []
+        },
+        {
+          "pointId": "256",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "armscye_circ / 2 - 5",
+          "refs": []
+        },
+        {
+          "pointId": "257",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "Line_D_Dm + 1.3",
+          "refs": []
+        },
+        {
+          "pointId": "258",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "259",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "1.25",
+          "refs": []
+        },
+        {
+          "pointId": "263",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "CurrentLength/2",
+          "refs": []
+        },
+        {
+          "pointId": "264",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "2",
+          "refs": []
+        },
+        {
+          "pointId": "271",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "#cuff_height - 1",
+          "refs": [
+            "#cuff_height"
+          ]
+        },
+        {
+          "pointId": "272",
+          "type": "alongLine",
+          "linearity": "linear",
+          "expr": "3.8",
+          "refs": []
+        },
+        {
+          "pointId": "273",
+          "type": "endLine",
+          "linearity": "linear",
+          "expr": "#cuff_height * 2",
+          "refs": [
+            "#cuff_height"
+          ]
+        },
+        {
+          "splineId": "27",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "27",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "27",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "0",
+          "refs": []
+        },
+        {
+          "splineId": "27",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "270",
+          "refs": []
+        },
+        {
+          "splineId": "28",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "28",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "8",
+          "refs": []
+        },
+        {
+          "splineId": "28",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "90",
+          "refs": []
+        },
+        {
+          "splineId": "28",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "260",
+          "refs": []
+        },
+        {
+          "splineId": "29",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "8",
+          "refs": []
+        },
+        {
+          "splineId": "29",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "29",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "280",
+          "refs": []
+        },
+        {
+          "splineId": "29",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "90",
+          "refs": []
+        },
+        {
+          "splineId": "30",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "30",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "8",
+          "refs": []
+        },
+        {
+          "splineId": "30",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "270",
+          "refs": []
+        },
+        {
+          "splineId": "30",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "80",
+          "refs": []
+        },
+        {
+          "splineId": "31",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "31",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "8",
+          "refs": []
+        },
+        {
+          "splineId": "31",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "100",
+          "refs": []
+        },
+        {
+          "splineId": "31",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "270",
+          "refs": []
+        },
+        {
+          "splineId": "32",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "32",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "8",
+          "refs": []
+        },
+        {
+          "splineId": "32",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "AngleLine_A11_Ah",
+          "refs": []
+        },
+        {
+          "splineId": "32",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "AngleLine_A11_Ah + 180 - 15",
+          "refs": []
+        },
+        {
+          "splineId": "33",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "8",
+          "refs": []
+        },
+        {
+          "splineId": "33",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "33",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "AngleLine_A11_Ah + 180 + 15",
+          "refs": []
+        },
+        {
+          "splineId": "33",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "AngleLine_A11_Ah",
+          "refs": []
+        },
+        {
+          "splineId": "34",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "8",
+          "refs": []
+        },
+        {
+          "splineId": "34",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "34",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "AngleLine_A11_Ah + 180",
+          "refs": []
+        },
+        {
+          "splineId": "34",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "AngleLine_A11_Ah - 15",
+          "refs": []
+        },
+        {
+          "splineId": "35",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "35",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "8",
+          "refs": []
+        },
+        {
+          "splineId": "35",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "AngleLine_A11_Ah + 15",
+          "refs": []
+        },
+        {
+          "splineId": "35",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "AngleLine_A11_Ah + 180",
+          "refs": []
+        },
+        {
+          "splineId": "40",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "10",
+          "refs": []
+        },
+        {
+          "splineId": "40",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "15",
+          "refs": []
+        },
+        {
+          "splineId": "40",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "250",
+          "refs": []
+        },
+        {
+          "splineId": "40",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "100",
+          "refs": []
+        },
+        {
+          "splineId": "47",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "2",
+          "refs": []
+        },
+        {
+          "splineId": "47",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "1",
+          "refs": []
+        },
+        {
+          "splineId": "47",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "0",
+          "refs": []
+        },
+        {
+          "splineId": "47",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "200",
+          "refs": []
+        },
+        {
+          "splineId": "82",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "82",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "82",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "AngleLine_By_Ba",
+          "refs": []
+        },
+        {
+          "splineId": "82",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "250",
+          "refs": []
+        },
+        {
+          "splineId": "83",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "83",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "3",
+          "refs": []
+        },
+        {
+          "splineId": "83",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "250 - 180",
+          "refs": []
+        },
+        {
+          "splineId": "83",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "220",
+          "refs": []
+        },
+        {
+          "splineId": "84",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "84",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "84",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "AngleLine_Bz_Bb",
+          "refs": []
+        },
+        {
+          "splineId": "84",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "250",
+          "refs": []
+        },
+        {
+          "splineId": "85",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "85",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "0",
+          "refs": []
+        },
+        {
+          "splineId": "85",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "250 - 180",
+          "refs": []
+        },
+        {
+          "splineId": "85",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "0",
+          "refs": []
+        },
+        {
+          "splineId": "198",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "198",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "6",
+          "refs": []
+        },
+        {
+          "splineId": "198",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "45",
+          "refs": []
+        },
+        {
+          "splineId": "198",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "180",
+          "refs": []
+        },
+        {
+          "splineId": "199",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "6",
+          "refs": []
+        },
+        {
+          "splineId": "199",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "3",
+          "refs": []
+        },
+        {
+          "splineId": "199",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "0",
+          "refs": []
+        },
+        {
+          "splineId": "199",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "135",
+          "refs": []
+        },
+        {
+          "splineId": "201",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "201",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "201",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "-45",
+          "refs": []
+        },
+        {
+          "splineId": "201",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "90",
+          "refs": []
+        },
+        {
+          "splineId": "204",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "204",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "204",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "270",
+          "refs": []
+        },
+        {
+          "splineId": "204",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "AngleLine_Cf_Ce - 270",
+          "refs": []
+        },
+        {
+          "splineId": "205",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "205",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "205",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "270",
+          "refs": []
+        },
+        {
+          "splineId": "205",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "AngleLine_Cf_Ce - 270",
+          "refs": []
+        },
+        {
+          "splineId": "206",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "206",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "8",
+          "refs": []
+        },
+        {
+          "splineId": "206",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "-60",
+          "refs": []
+        },
+        {
+          "splineId": "206",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "90",
+          "refs": []
+        },
+        {
+          "splineId": "207",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "207",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "6",
+          "refs": []
+        },
+        {
+          "splineId": "207",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "270",
+          "refs": []
+        },
+        {
+          "splineId": "207",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "AngleLine_Cf_Ce - 270",
+          "refs": []
+        },
+        {
+          "splineId": "208",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "208",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "8",
+          "refs": []
+        },
+        {
+          "splineId": "208",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "-100",
+          "refs": []
+        },
+        {
+          "splineId": "208",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "90",
+          "refs": []
+        },
+        {
+          "splineId": "209",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "5",
+          "refs": []
+        },
+        {
+          "splineId": "209",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "6",
+          "refs": []
+        },
+        {
+          "splineId": "209",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "270",
+          "refs": []
+        },
+        {
+          "splineId": "209",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "AngleLine_Cf_Ce - 270",
+          "refs": []
+        },
+        {
+          "splineId": "210",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "3",
+          "refs": []
+        },
+        {
+          "splineId": "210",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "2",
+          "refs": []
+        },
+        {
+          "splineId": "210",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "0",
+          "refs": []
+        },
+        {
+          "splineId": "210",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "235",
+          "refs": []
+        },
+        {
+          "splineId": "260",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "2",
+          "refs": []
+        },
+        {
+          "splineId": "260",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "2",
+          "refs": []
+        },
+        {
+          "splineId": "260",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "30",
+          "refs": []
+        },
+        {
+          "splineId": "260",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "180",
+          "refs": []
+        },
+        {
+          "splineId": "261",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "2",
+          "refs": []
+        },
+        {
+          "splineId": "261",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "2",
+          "refs": []
+        },
+        {
+          "splineId": "261",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "0",
+          "refs": []
+        },
+        {
+          "splineId": "261",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "150",
+          "refs": []
+        },
+        {
+          "splineId": "262",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "2",
+          "refs": []
+        },
+        {
+          "splineId": "262",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "6",
+          "refs": []
+        },
+        {
+          "splineId": "262",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "-30",
+          "refs": []
+        },
+        {
+          "splineId": "262",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "90",
+          "refs": []
+        },
+        {
+          "splineId": "266",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "2",
+          "refs": []
+        },
+        {
+          "splineId": "266",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "1",
+          "refs": []
+        },
+        {
+          "splineId": "266",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "0",
+          "refs": []
+        },
+        {
+          "splineId": "266",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "270",
+          "refs": []
+        },
+        {
+          "splineId": "267",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "267",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "4",
+          "refs": []
+        },
+        {
+          "splineId": "267",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "90",
+          "refs": []
+        },
+        {
+          "splineId": "267",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "210",
+          "refs": []
+        },
+        {
+          "splineId": "269",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "10",
+          "refs": []
+        },
+        {
+          "splineId": "269",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "10",
+          "refs": []
+        },
+        {
+          "splineId": "269",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "AngleLine_Dk_De - 5",
+          "refs": []
+        },
+        {
+          "splineId": "269",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "AngleLine_Dk_De - 180 + 5",
+          "refs": []
+        },
+        {
+          "splineId": "270",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "10",
+          "refs": []
+        },
+        {
+          "splineId": "270",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "10",
+          "refs": []
+        },
+        {
+          "splineId": "270",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "- AngleLine_Dk_De - 5",
+          "refs": []
+        },
+        {
+          "splineId": "270",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "- AngleLine_Dk_De + 180 + 5",
+          "refs": []
+        },
+        {
+          "splineId": "305",
+          "handle": "length1",
+          "linearity": "nonlinear",
+          "expr": "1",
+          "refs": []
+        },
+        {
+          "splineId": "305",
+          "handle": "length2",
+          "linearity": "nonlinear",
+          "expr": "2",
+          "refs": []
+        },
+        {
+          "splineId": "305",
+          "handle": "angle1",
+          "linearity": "nonlinear",
+          "expr": "- AngleLine_Dk_De + 180 + 5",
+          "refs": []
+        },
+        {
+          "splineId": "305",
+          "handle": "angle2",
+          "linearity": "nonlinear",
+          "expr": "180",
+          "refs": []
+        }
+      ]
+    }
+  ],
+  "notches": {
+    "notches": {
+      "val:shirtwaist_sleeve:notch:282": {
+        "piece": "shirtwaist_sleeve",
+        "order": 0,
+        "type": "tMark",
+        "angle": "straightforward"
+      }
+    },
+    "diagnostics": []
+  },
+  "darts": {
+    "darts": {},
+    "diagnostics": []
+  }
+}

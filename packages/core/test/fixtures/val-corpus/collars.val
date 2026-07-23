@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pattern labelPrefix="en">
+    <!--Pattern created with Valentina v0.7.51.0 (https://smart-pattern.com.ua/).-->
+    <version>0.9.0</version>
+    <unit>cm</unit>
+    <description/>
+    <notes/>
+    <patternName>Collars</patternName>
+    <patternNumber></patternNumber>
+    <company>EoV</company>
+    <customer></customer>
+    <birthDate>2000-01-01</birthDate>
+    <email></email>
+    <patternLabel dateFormat="yyyy-MM-dd" timeFormat="hh:mm:ss">
+        <line alignment="0" bold="true" italic="false" sfIncrement="4" text="%author%"/>
+        <line alignment="0" bold="false" italic="false" sfIncrement="2" text="%patternName%"/>
+        <line alignment="0" bold="false" italic="false" sfIncrement="0" text="%patternNumber%"/>
+        <line alignment="0" bold="false" italic="true" sfIncrement="0" text="%customer%"/>
+        <line alignment="0" bold="false" italic="false" sfIncrement="0" text="%mFileName%"/>
+        <line alignment="0" bold="false" italic="true" sfIncrement="0" text="%date%"/>
+    </patternLabel>
+    <measurements/>
+    <increments>
+        <increment description="measured on the garment, will be about neck circumference + 1 cm" formula="39" name="#collar_circumference"/>
+        <increment description="as on the garment" formula="2" name="#button_stand"/>
+        <increment formula="5" name="#stand_collar_height"/>
+        <increment formula="1" name="#sewing_allowance"/>
+    </increments>
+    <previewCalculations/>
+    <draw name="collars">
+        <calculation>
+            <point id="1" mx="0.264583" my="0.396875" name="A" showLabel="true" type="single" x="0.79375" y="1.05833"/>
+            <point angle="0" basePoint="1" id="2" length="#collar_circumference / 2" lineColor="black" mx="0.264583" my="0.396875" name="A1" showLabel="true" type="endLine" typeLine="hair"/>
+            <point angle="90" basePoint="2" id="21" length="1.5" lineColor="black" mx="0.818148" my="-0.454763" name="A2" showLabel="true" type="endLine" typeLine="hair"/>
+            <line firstPoint="1" id="22" lineColor="black" secondPoint="21" typeLine="hair"/>
+            <point angle="180" basePoint="1" id="23" length="#button_stand" lineColor="black" mx="0.264583" my="0.396875" name="A3" showLabel="true" type="endLine" typeLine="hair"/>
+            <point angle="AngleLine_A_A2 + 90" basePoint="21" id="24" length="#stand_collar_height" lineColor="black" mx="0.264583" my="0.396875" name="A4" showLabel="true" type="endLine" typeLine="hair"/>
+            <point angle="90" basePoint="1" id="25" length="#stand_collar_height" lineColor="black" mx="0.264583" my="0.396875" name="A5" showLabel="true" type="endLine" typeLine="hair"/>
+            <point firstPoint="23" id="26" mx="0.264583" my="0.396875" name="A6" secondPoint="25" showLabel="true" type="pointOfIntersection"/>
+            <point firstPoint="26" id="27" length="#button_stand" lineColor="black" mx="0.264583" my="0.396875" name="A7" secondPoint="23" showLabel="true" type="alongLine" typeLine="none"/>
+            <spline aScale="0" angle1="AngleLine_A_A2 + 180" angle2="0" color="black" id="28" length1="5" length2="5" penStyle="hair" point1="21" point4="1" type="simpleInteractive"/>
+            <spline aScale="0" angle1="0" angle2="AngleLine_A_A2 + 180" color="black" id="29" length1="5" length2="5" penStyle="hair" point1="25" point4="24" type="simpleInteractive"/>
+            <spline aScale="0" angle1="90" angle2="180" color="black" id="30" length1="1" length2="1" penStyle="hair" point1="27" point4="25" type="simpleInteractive"/>
+        </calculation>
+        <modeling>
+            <point id="31" idObject="25" inUse="true" mx="0.264583" my="0.396875" showLabel="true" type="modeling"/>
+            <spline id="32" idObject="29" inUse="true" type="modelingSpline"/>
+            <point id="33" idObject="24" inUse="true" mx="0.264583" my="0.396875" showLabel="true" type="modeling"/>
+            <point id="34" idObject="21" inUse="true" mx="0.775566" my="-0.454763" showLabel="true" type="modeling"/>
+            <spline id="35" idObject="28" inUse="true" type="modelingSpline"/>
+            <point id="36" idObject="1" inUse="true" mx="0.264583" my="0.396875" showLabel="true" type="modeling"/>
+            <point id="37" idObject="23" inUse="true" mx="0.264583" my="0.396875" showLabel="true" type="modeling"/>
+            <point id="38" idObject="27" inUse="true" mx="0.264583" my="0.396875" showLabel="true" type="modeling"/>
+            <spline id="39" idObject="30" inUse="true" type="modelingSpline"/>
+            <point id="41" idObject="24" inUse="true" type="pin"/>
+            <point id="42" idObject="21" inUse="true" type="pin"/>
+        </modeling>
+        <details>
+            <detail forbidFlipping="false" forceFlipping="false" hideMainPath="false" id="40" mx="0" my="0" name="back_closing_collar" seamAllowance="true" uuid="{b985f288-886b-4062-bf19-b9c69be049c9}" version="2" width="#sewing_allowance">
+                <data annotation="" foldPosition="" fontSize="0" height="4" letter="A" mx="96.6759" my="-141.692" onFold="true" orientation="" quantity="2" rotation="AngleLine_A_A2" rotationWay="" tilt="" visible="true" width="8">
+                    <line alignment="4" bold="true" italic="false" sfIncrement="6" text="%pLetter%"/>
+                    <line alignment="4" bold="true" italic="false" sfIncrement="2" text="%pName%"/>
+                    <line alignment="4" bold="false" italic="false" sfIncrement="0" text="%mFabric%, %wCut% %pQuantity% %wOnFold%"/>
+                </data>
+                <patternInfo fontSize="0" height="4" mx="438.578" my="-160.556" rotation="AngleLine_A_A2" visible="true" width="8"/>
+                <grainline arrows="0" bottomPin="42" length="10" mx="0" my="0" rotation="90" topPin="41" visible="true"/>
+                <nodes>
+                    <node idObject="31" type="NodePoint"/>
+                    <node idObject="32" reverse="0" type="NodeSpline"/>
+                    <node after="0" idObject="33" type="NodePoint"/>
+                    <node before="0" idObject="34" type="NodePoint"/>
+                    <node idObject="35" reverse="0" type="NodeSpline"/>
+                    <node idObject="36" type="NodePoint"/>
+                    <node idObject="37" type="NodePoint"/>
+                    <node idObject="38" type="NodePoint"/>
+                    <node idObject="39" reverse="0" type="NodeSpline"/>
+                </nodes>
+                <pins>
+                    <record>41</record>
+                    <record>42</record>
+                </pins>
+            </detail>
+        </details>
+        <groups/>
+    </draw>
+</pattern>
