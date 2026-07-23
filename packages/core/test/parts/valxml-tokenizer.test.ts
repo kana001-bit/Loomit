@@ -36,6 +36,13 @@ describe("valXml tokenizer (robust to edge cases the old regex mishandled)", () 
     expect(point?.attrs).toEqual({ label: "a>b", id: "1" });
   });
 
+  it("reads single-quoted attributes (valid XML), including a '>' inside the value", () => {
+    // 守る仕様: 属性値は `"` と `'` の両方を読む。readStartTag が `'` を尊重してタグ終端を取るのに parseAttributes が
+    // `"` しか読まないと、single-quote の正当な XML で属性が丸ごと落ちる(tag は見つかるのに attrs 空)。
+    const [point] = collectSelfClosingTags(`<point id='ghost' label='a>b'/>`, "point");
+    expect(point?.attrs).toEqual({ id: "ghost", label: "a>b" });
+  });
+
   it("returns the same simple blocks as before on well-formed input", () => {
     // 守る仕様(must-not-change): 素直な入れ子はコメント等が無ければ従来どおり。content は開始タグ直後〜対応閉じ直前の生文字列。
     const draw = collectFirstBlock(`<draw><calculation><point id="1"/></calculation></draw>`, "draw");

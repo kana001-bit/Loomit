@@ -3,7 +3,8 @@
 //
 // 本格的な汎用 XML パーサではないが、正規表現ではなく**文字走査のトークナイザ**で抽出する。regex 版が黙って
 // 誤射影していた次の揺れに強い: コメント(`<!-- -->`)/CDATA(`<![CDATA[ ]]>`)/PI(`<? ?>`)/DOCTYPE の中身をタグと
-// 誤認しない・同名タグのネストを深さで正しく閉じる・属性値の引用符内の `>` でタグが切れない・`detail` を
+// 誤認しない・同名タグのネストを深さで正しく閉じる・属性値の引用符内の `>` でタグが切れない・属性値は `"`/`'` の
+// 両方を読む・`detail` を
 // `details` の接頭辞として誤マッチしない(名前は完全一致で判定)。API(`content` はタグの生の内側文字列)は温存し、
 // 呼び出し側(readIncrements / extractOccurrences / collectEdge / listValDetails / projectNotches / projectDarts)は無改修。
 
@@ -98,13 +99,16 @@ export function collectSelfClosingTags(source: string, tagName: string): readonl
   return tags;
 }
 
+// 属性値は `"` と `'` の両方を読む(readStartTag もタグ終端判定で `'` を尊重するのと揃える)。`"` しか読まないと、
+// single-quote の正当な XML で属性が丸ごと落ちる(タグは見つかるのに attrs 空 → increment 黙殺・detail#N フォールバック
+// 等の誤射影を招く)。実 Valentina は `"` だが XML としては両方正当。
 export function parseAttributes(source: string): Readonly<Record<string, string>> {
   const attrs: Record<string, string> = {};
-  const attrPattern = /([A-Za-z0-9_:-]+)\s*=\s*"([^"]*)"/g;
+  const attrPattern = /([A-Za-z0-9_:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
 
   for (const match of source.matchAll(attrPattern)) {
     const key = match[1];
-    const value = match[2];
+    const value = match[2] ?? match[3];
 
     if (key !== undefined && value !== undefined) {
       attrs[key] = value;
