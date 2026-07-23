@@ -246,7 +246,24 @@ loom match <partA> <partB> [--reference <part>] [--slnt <path>] [--tru <path>] [
 - Truer 実行ファイルの解決は `--tru` > `LOOMIT_TRU` > PATH 上の `tru`。見つからなければ error。
 - `--reference` を付けなければ、従来どおり測定のみ（Truer は呼ばない）。
 - `loom match` は pairwise 専用。band seam（1枚 対 複数枚）の不一致 `geometry.band_seam_sum_mismatch` は N-ary でここを通らない ── band を Truer に渡す手順は [`loom slnt check` の band 節](#band-seam-を-truer-に渡して直し方を提案させる)を参照。
-- **`tru propose` の2系統を取り違えない。** ここ（`loom match --reference`）は **DXF を直す**系統（`tru propose <dxf> --diagnostic <report> --reference <BLOCK>`）で、入力は測定済み Seamlint report、対象は follower の DXF。これとは**別系統**として、`.val` ソースのどのパラメータを動かせば直るかを示す **provenance payload**（拘束グラフ・schema `loomit.constraint-payload.v0`）を出す `loom truer request` が計画されている（Slice 5・未実装）。入力（report ↔ payload）も目的（DXF パッチ ↔ ソース provenance）も別物。payload の契約正本は `packages/core/src/schema/constraint-payload.schema.ts`、共有 JSON Schema は `packages/core/schema/constraint-payload.v0.json`。
+- **`tru propose` の2系統を取り違えない。** ここ（`loom match --reference`）は **DXF を直す**系統（`tru propose <dxf> --diagnostic <report> --reference <BLOCK>`）で、入力は測定済み Seamlint report、対象は follower の DXF。これとは**別系統**として、`.val` ソースのどのパラメータを動かせば直るかを示す **provenance payload**（拘束グラフ・schema `loomit.constraint-payload.v0`）を出すのが [`loom truer request`](#loom-truer-request)。入力（report ↔ payload）も目的（DXF パッチ ↔ ソース provenance）も別物。
+
+## `loom truer request`
+
+project から Truer へ渡す**拘束 payload**（provenance）を組み立てる。`truer` は Truer 連携の名前空間で、`request` はその動詞（`slnt request` の対＝**測定は走らせない**純粋な payload ビルダ）。
+
+```text
+loom truer request [path] [--format text|json]
+```
+
+補足:
+
+- `loomit.yml` と part を読み、`slnt request` と同じ readiness 判定をしたうえで、封筒 `{ status, diagnostics, payload }` を出力する。
+- payload は**版付き**（`schema: "loomit.constraint-payload.v0"`）。各 part の `files.source`（`.val`）を読み、`files.piece` の合印が載るカーブ経由で「その seam の長さに効く `.val` パラメータ」を集める。契約正本は `packages/core/src/schema/constraint-payload.schema.ts`、共有 JSON Schema は `packages/core/schema/constraint-payload.v0.json`。
+- **依存は part 単位**（`parts[].dependsOn`）。`connectors[]` は `(partId, connectorId)` の **join 鍵のみ**で `dependsOn` を持たない ── connector 単位では辺を絞れず（どの合印がどの seam かは `.val` に無く、測定辺の特定は Seamlint の責務）、1 piece の全 seam の occurrence が混ざる。
+- 増分は `declared` union（`declared:true`＝`<increments>` に宣言あり・`value` 持ち／`declared:false`＝式で参照されたが宣言なし）。`usedBy` は **part 単位 membership**（その増分をその part のいずれかの追跡 seam 辺に持つ role 集合。per-seam の両辺判定は与えない）。
+- `files.source` / `files.piece` の無い part は payload に載らない。piece が `.val` に無い（`PART_SOURCE_VAL_PIECE_NOT_FOUND`）等は診断で surface する。warning のみなら exit code 0 のまま status `warning` を返す。
+- `diagnostics` は **Loomit 自身の payload 抽出診断**であって Seamlint report ではない（幾何の測定結果は入らない）。Truer は payload を消費し「`.val` のどのパラメータを動かせば seam が直るか」を provenance として提案する（`.val` は書かない）。責務分担は不変（Loomit=構造抽出／Seamlint=幾何測定／Truer=修正提案）。
 
 ## `loom diff`
 
@@ -345,6 +362,7 @@ loom library add <type/name> [project] [--library path] [--role role] [--as name
 - `library list`
 - `slnt request`
 - `slnt check`
+- `truer request`
 
 ## Notes
 

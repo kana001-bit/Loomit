@@ -14,6 +14,7 @@ import { runPublishCommand } from "./commands/publish.js";
 import { runSlntCommand } from "./commands/slnt.js";
 import { runSuggestTestsCommand } from "./commands/suggestTests.js";
 import { runTestCommand } from "./commands/test.js";
+import { runTruerCommand } from "./commands/truer.js";
 import type { SeamlintRunner } from "./commands/seamlintCheck.js";
 import type { TruerRunner } from "./commands/truerPropose.js";
 import type { Prompter } from "./prompter.js";
@@ -159,6 +160,14 @@ export async function runCli(
     });
   }
 
+  if (command === "truer") {
+    return runTruerCommand(args.slice(1), {
+      cwd,
+      stdout: io.stdout,
+      stderr: io.stderr
+    });
+  }
+
   if (command === "suggest-tests") {
     return runSuggestTestsCommand(args.slice(1), {
       cwd,
@@ -215,6 +224,7 @@ export function formatMainHelp(): string {
       "  note   Record a prototype note into notes/prototype-notes.yml.",
       "  publish Copy a part into the Loomit library.",
       "  slnt   Geometry checks via Seamlint (loom slnt request|check).",
+      "  truer  Constraint payload handoff for Truer (loom truer request).",
       "  suggest-tests Suggest movement tests for a project.",
       "  test   Run a movement test risk check.",
       "",
