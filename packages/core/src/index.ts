@@ -58,6 +58,8 @@ export { describeFsError, getErrno } from "./filesystem/fsError.js";
 export type { FsErrorContext } from "./filesystem/fsError.js";
 export { parseYamlText } from "./filesystem/parseYamlText.js";
 export { isCaseInsensitiveFileSystemAt } from "./filesystem/caseSensitivity.js";
+export { checkPathExistence, classifyAccessError } from "./filesystem/pathExists.js";
+export type { PathExistence } from "./filesystem/pathExists.js";
 export { isPathWithin, isSafePathSegment } from "./filesystem/pathWithin.js";
 export { readText } from "./filesystem/readText.js";
 export { writeFileAtomic } from "./filesystem/writeFileAtomic.js";

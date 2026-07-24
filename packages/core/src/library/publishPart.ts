@@ -1,9 +1,10 @@
-import { access, cp, mkdir, rm, stat } from "node:fs/promises";
+import { cp, mkdir, rm, stat } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { stringify } from "yaml";
 
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import { describeFsError } from "../filesystem/fsError.js";
+import { checkPathExistence } from "../filesystem/pathExists.js";
 import { isPathWithin, isSafePathSegment } from "../filesystem/pathWithin.js";
 import { toPosixPath } from "../filesystem/toPosixPath.js";
 import { writeFileAtomic } from "../filesystem/writeFileAtomic.js";
@@ -92,7 +93,26 @@ export async function publishPart(
     };
   }
 
-  if (await pathExists(targetPartDirectory)) {
+  // access() の失敗を「無い」に潰さない。権限エラー(EACCES 等)で存在判定できないまま cp に進むと、
+  // 誤って「既存を上書き」しかねないので、errno を分類して失敗を返す(R3)。
+  const targetExistence = await checkPathExistence(targetPartDirectory);
+
+  if (targetExistence.kind === "inaccessible") {
+    return {
+      ok: false,
+      diagnostics: [
+        describeFsError(targetExistence.error, {
+          code: "LIBRARY_TARGET_UNREADABLE",
+          message:
+            "ライブラリの出力先を確認できませんでした(既存かどうか判定できません)。 / Could not determine whether the library target already exists.",
+          target: targetPartDirectory,
+          suggestion: ["Check the library path and filesystem permissions."]
+        })
+      ]
+    };
+  }
+
+  if (targetExistence.kind === "exists") {
     return {
       ok: false,
       diagnostics: [
@@ -227,13 +247,4 @@ function getLibraryTypeDirectory(type: string): string {
   }
 
   return `${type}s`;
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
 }

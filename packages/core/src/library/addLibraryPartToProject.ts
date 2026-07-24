@@ -1,9 +1,10 @@
-import { access, cp, mkdir, rm } from "node:fs/promises";
+import { cp, mkdir, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { stringify } from "yaml";
 
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import { describeFsError } from "../filesystem/fsError.js";
+import { checkPathExistence } from "../filesystem/pathExists.js";
 import { isPathWithin, isSafePathSegment } from "../filesystem/pathWithin.js";
 import { writeFileAtomic } from "../filesystem/writeFileAtomic.js";
 import type { LoadFileResult } from "../filesystem/loadFileResult.js";
@@ -165,7 +166,26 @@ export async function addLibraryPartToProject(
     };
   }
 
-  if (await pathExists(targetPartDirectory)) {
+  // access() の失敗を「無い」に潰さない。権限で存在判定できないまま cp に進むと誤って上書きしかねない
+  // ので、errno を分類して確認できないときは失敗を返す(R3)。
+  const targetExistence = await checkPathExistence(targetPartDirectory);
+
+  if (targetExistence.kind === "inaccessible") {
+    return {
+      ok: false,
+      diagnostics: [
+        describeFsError(targetExistence.error, {
+          code: "PROJECT_PART_TARGET_UNREADABLE",
+          message:
+            "取り込み先の part ディレクトリが既に存在するか確認できませんでした。/ Could not determine whether a project part directory already exists at the import target.",
+          target: targetPartDirectory,
+          suggestion: ["Check the project path and filesystem permissions."]
+        })
+      ]
+    };
+  }
+
+  if (targetExistence.kind === "exists") {
     return {
       ok: false,
       diagnostics: [
@@ -242,13 +262,4 @@ function getLibraryTypeDirectory(type: string): string {
   }
 
   return `${type}s`;
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
 }

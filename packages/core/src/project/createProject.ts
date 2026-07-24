@@ -1,9 +1,10 @@
-import { access, mkdir, rm } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { stringify } from "yaml";
 
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import { describeFsError } from "../filesystem/fsError.js";
+import { checkPathExistence } from "../filesystem/pathExists.js";
 import { writeFileAtomic } from "../filesystem/writeFileAtomic.js";
 import type { LoadFileResult } from "../filesystem/loadFileResult.js";
 import type { Project } from "../schema/project.schema.js";
@@ -32,8 +33,26 @@ export async function createProject(
 
   // `loom init` は(git init のように)その場で初期化するため、対象ディレクトリは既に存在している
   // 想定。ディレクトリではなく loomit.yml の有無で判定し、既存の Loomit プロジェクトを絶対に
-  // 上書きしない。
-  if (await pathExists(projectFilePath)) {
+  // 上書きしない。access() の失敗を「無い」に潰すと、権限で読めない既存 loomit.yml を新規扱いで
+  // 上書きしかねないので、errno を分類して確認できないときは失敗を返す(R3)。
+  const projectExistence = await checkPathExistence(projectFilePath);
+
+  if (projectExistence.kind === "inaccessible") {
+    return {
+      ok: false,
+      diagnostics: [
+        describeFsError(projectExistence.error, {
+          code: "PROJECT_TARGET_UNREADABLE",
+          message:
+            "この場所が既存の Loomit プロジェクトか確認できませんでした。/ Could not determine whether this location is already a Loomit project.",
+          target: projectFilePath,
+          suggestion: ["Check the target path and filesystem permissions."]
+        })
+      ]
+    };
+  }
+
+  if (projectExistence.kind === "exists") {
     return {
       ok: false,
       diagnostics: [
@@ -62,8 +81,9 @@ export async function createProject(
 
   // この呼び出しが実際に作成したディレクトリだけを記録する。init は既存ディレクトリ内でも走る
   // (targetPath は事前に存在しうる)ため、失敗時は自分が作ったものだけを戻し、既存ディレクトリは
-  // 決して消さない。mkdir(recursive) は新規作成した最上位のパスを返し、既存なら undefined を返すので
-  // それで判定する(pathExists は access 失敗と「不在」を区別できず、既存を誤って削除する恐れがある)。
+  // 決して消さない。存在確認してから mkdir する方式では、確認から作成までの間に他が作りうる(TOCTOU)。
+  // mkdir(recursive) は新規作成した最上位のパスを返し既存なら undefined を返すので、その戻り値で
+  // 「この呼び出しが作った」ものだけを確実に掴んで rollback 対象にする。
   const createdDirectories: string[] = [];
 
   try {
@@ -109,13 +129,4 @@ export async function createProject(
     },
     diagnostics: []
   };
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
 }
