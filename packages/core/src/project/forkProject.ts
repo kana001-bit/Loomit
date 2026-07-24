@@ -1,9 +1,10 @@
-import { access, cp, rm } from "node:fs/promises";
+import { cp, rm } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import { stringify } from "yaml";
 
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import { describeFsError } from "../filesystem/fsError.js";
+import { checkPathExistence } from "../filesystem/pathExists.js";
 import { isPathWithin } from "../filesystem/pathWithin.js";
 import { writeFileAtomic } from "../filesystem/writeFileAtomic.js";
 import type { LoadFileResult } from "../filesystem/loadFileResult.js";
@@ -53,7 +54,26 @@ export async function forkProject(
     };
   }
 
-  if (await pathExists(targetProjectRoot)) {
+  // access() の失敗を「無い」に潰さない。権限で存在判定できないまま cp に進むと誤って上書きしかねない
+  // ので、errno を分類して確認できないときは失敗を返す(R3)。
+  const targetExistence = await checkPathExistence(targetProjectRoot);
+
+  if (targetExistence.kind === "inaccessible") {
+    return {
+      ok: false,
+      diagnostics: [
+        describeFsError(targetExistence.error, {
+          code: "PROJECT_FORK_TARGET_UNREADABLE",
+          message:
+            "fork 先が既に存在するか確認できませんでした。/ Could not determine whether the fork target already exists.",
+          target: targetProjectRoot,
+          suggestion: ["Check the target path and filesystem permissions."]
+        })
+      ]
+    };
+  }
+
+  if (targetExistence.kind === "exists") {
     return {
       ok: false,
       diagnostics: [
@@ -118,13 +138,4 @@ export async function forkProject(
     },
     diagnostics: []
   };
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
 }

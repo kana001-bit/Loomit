@@ -1,4 +1,4 @@
-import { access, copyFile, mkdir, rm } from "node:fs/promises";
+import { copyFile, mkdir, rm } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { stringify } from "yaml";
 
@@ -6,6 +6,7 @@ import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import { describeFsError } from "../filesystem/fsError.js";
 import type { LoadFileResult } from "../filesystem/loadFileResult.js";
+import { checkPathExistence } from "../filesystem/pathExists.js";
 import { isPathWithin, isSafePathSegment } from "../filesystem/pathWithin.js";
 import { writeFileAtomic } from "../filesystem/writeFileAtomic.js";
 import { loadProject } from "../project/loadProject.js";
@@ -145,7 +146,26 @@ export async function addPartToProject(
     };
   }
 
-  if (await pathExists(partDirectory)) {
+  // access() の失敗を「無い」に潰さない。権限で存在判定できないまま書き込みに進むと誤って上書き
+  // しかねないので、errno を分類して確認できないときは失敗を返す(R3)。
+  const partDirectoryExistence = await checkPathExistence(partDirectory);
+
+  if (partDirectoryExistence.kind === "inaccessible") {
+    return {
+      ok: false,
+      diagnostics: [
+        describeFsError(partDirectoryExistence.error, {
+          code: "PART_ADD_DIRECTORY_UNREADABLE",
+          message:
+            "取り込み先の part ディレクトリが既に存在するか確認できませんでした。/ Could not determine whether a part directory already exists at the target.",
+          target: partDirectory,
+          suggestion: ["Check the project path and filesystem permissions."]
+        })
+      ]
+    };
+  }
+
+  if (partDirectoryExistence.kind === "exists") {
     return {
       ok: false,
       diagnostics: [
@@ -236,9 +256,22 @@ export async function addPartToProject(
 // 最終ガードとして同じものを使う。メッセージを1箇所に保つための共有ヘルパー。
 export async function checkValSourceExists(valPath: string): Promise<Diagnostic | undefined> {
   const resolved = resolve(valPath);
+  const existence = await checkPathExistence(resolved);
 
-  if (await pathExists(resolved)) {
+  if (existence.kind === "exists") {
     return undefined;
+  }
+
+  // access() の失敗を「無い」に潰さない。権限で読めない .val を PART_ADD_SOURCE_NOT_FOUND(不在)と
+  // 誤診しないよう、errno を分類して別 code で返す(R3)。
+  if (existence.kind === "inaccessible") {
+    return describeFsError(existence.error, {
+      code: "PART_ADD_SOURCE_UNREADABLE",
+      message:
+        "取り込む .val ソースにアクセスできませんでした。/ The .val source to add could not be accessed.",
+      target: resolved,
+      suggestion: ["Check the path to the .val file and filesystem permissions."]
+    });
   }
 
   return createDiagnostic({
@@ -314,13 +347,4 @@ function buildConnectors(
   }
 
   return connectors;
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
 }

@@ -1,10 +1,11 @@
-import { access, mkdir } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { stringify } from "yaml";
 
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import { describeFsError } from "../filesystem/fsError.js";
 import type { LoadFileResult } from "../filesystem/loadFileResult.js";
+import { checkPathExistence } from "../filesystem/pathExists.js";
 import { writeFileAtomic } from "../filesystem/writeFileAtomic.js";
 import { loadProject } from "../project/loadProject.js";
 import { prototypeNotesSchema } from "../schema/prototype-notes.schema.js";
@@ -59,11 +60,28 @@ export async function addPrototypeNote(
   const notesFilePath = join(projectRoot, ...NOTES_RELATIVE_PATH);
 
   // 既存ノートを読む。無ければ空から始める。存在するのに読めない/schema 不整合はそのまま失敗として
-  // 返す(壊れたファイルに追記して被害を広げない)。
-  const notesExist = await pathExists(notesFilePath);
+  // 返す(壊れたファイルに追記して被害を広げない)。access() の失敗を「無い」に潰すと、権限で読めない
+  // ノートを空とみなして writeFileAtomic で上書きし既存の学びを失うので、errno を分類して失敗を返す(R3)。
+  const notesExistence = await checkPathExistence(notesFilePath);
+
+  if (notesExistence.kind === "inaccessible") {
+    return {
+      ok: false,
+      diagnostics: [
+        describeFsError(notesExistence.error, {
+          code: "PROTOTYPE_NOTES_UNREADABLE",
+          message:
+            "既存の試作ノートを確認できませんでした。 / Could not determine whether the prototype notes file exists.",
+          target: notesFilePath,
+          suggestion: ["Check the project path and filesystem permissions."]
+        })
+      ]
+    };
+  }
+
   let existing: PrototypeNotes = { schema: "loomit.prototype_notes.v0", notes: [] };
 
-  if (notesExist) {
+  if (notesExistence.kind === "exists") {
     const loaded = await loadPrototypeNotesFile(notesFilePath);
 
     if (!loaded.ok) {
@@ -138,7 +156,7 @@ export async function addPrototypeNote(
 
   return {
     ok: true,
-    value: { note, notesFilePath, created: !notesExist },
+    value: { note, notesFilePath, created: notesExistence.kind === "missing" },
     diagnostics: []
   };
 }
@@ -216,13 +234,4 @@ function today(): string {
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
 }

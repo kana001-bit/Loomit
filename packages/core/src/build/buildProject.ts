@@ -1,9 +1,10 @@
-import { access, cp, mkdir } from "node:fs/promises";
+import { cp, mkdir } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
 
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import { createDiagnosticReport } from "../diagnostics/report.js";
 import { describeFsError } from "../filesystem/fsError.js";
+import { checkPathExistence } from "../filesystem/pathExists.js";
 import { isPathWithin } from "../filesystem/pathWithin.js";
 import { toPosixPath } from "../filesystem/toPosixPath.js";
 import { writeFileAtomic } from "../filesystem/writeFileAtomic.js";
@@ -242,7 +243,24 @@ async function validateBuildInputs(
       continue;
     }
 
-    if (!(await pathExists(asset.absoluteSourcePath))) {
+    // access() の失敗を「無い」に潰さない。権限エラー(EACCES 等)は BUILD_INPUT_FILE_MISSING と別の
+    // errno 分類つき diagnostic にして、「権限で読めない」を「ファイルが無い」と誤診しない(R3)。
+    const existence = await checkPathExistence(asset.absoluteSourcePath);
+
+    if (existence.kind === "inaccessible") {
+      diagnostics.push(
+        describeFsError(existence.error, {
+          code: "BUILD_INPUT_UNREADABLE",
+          message:
+            "ビルド対象の part ファイルにアクセスできませんでした。 / A part file referenced for build output could not be accessed.",
+          target: asset.sourcePath,
+          suggestion: ["Check the file path and filesystem permissions."]
+        })
+      );
+      continue;
+    }
+
+    if (existence.kind === "missing") {
       diagnostics.push(
         createDiagnostic({
           severity: "error",
@@ -256,13 +274,4 @@ async function validateBuildInputs(
   }
 
   return diagnostics;
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
 }
