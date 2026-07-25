@@ -12,13 +12,7 @@ It contains the pattern parts, project configuration, prototype notes, and the h
 
 A **Part** is a reusable pattern component, such as a body, sleeve, collar, or cuff.
 
-Parts are the primary building blocks of a garment. They can evolve independently and be reused across different projects.
-
-### Library
-
-A **Library** stores reusable parts.
-
-Publishing a part copies it into the library as a reusable asset. Using a library part copies it into a project, allowing it to be modified freely without affecting the original.
+Parts are the primary building blocks of a garment. They can evolve independently within a project, and an entire project can be forked to reuse its parts as a new starting point.
 
 ### Prototype Notes
 

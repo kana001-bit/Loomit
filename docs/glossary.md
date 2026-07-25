@@ -185,20 +185,6 @@ Project には Part、設定、Prototype Notes などが含まれる。
 
 ---
 
-## Library
-
-再利用したい Part を保存する場所。
-Project 内の Part は自動では登録されず、明示的に publish したものだけが Library に保存される。
-
----
-
-## Publish
-
-Part を Library へ登録する操作。
-Library に登録された Part は他の Project へコピーして利用できる。
-
----
-
 ## Prototype Notes
 
 試作品から得られた知見を記録するデータ。

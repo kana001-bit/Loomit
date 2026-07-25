@@ -229,8 +229,8 @@ describe("part schema", () => {
   });
 
   it("rejects a part type that is not a safe path segment", () => {
-    // 守る仕様: type は library の types/<type>s/ ディレクトリ segment として使うので、`..` を含む
-    // type は拒否する。
+    // 守る仕様: type は role を省いた add で parts/<role>/ ディレクトリ segment の既定値になるので、
+    // `..` を含む type は拒否する。
     const result = partSchema.safeParse({
       schema: "loomit.part.v0",
       name: "puff-sleeve",

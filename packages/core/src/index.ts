@@ -64,16 +64,6 @@ export { isPathWithin, isSafePathSegment } from "./filesystem/pathWithin.js";
 export { readText } from "./filesystem/readText.js";
 export { writeFileAtomic } from "./filesystem/writeFileAtomic.js";
 export type { LoadFileResult } from "./filesystem/loadFileResult.js";
-export { addLibraryPartToProject } from "./library/addLibraryPartToProject.js";
-export type {
-  AddedLibraryPart,
-  AddLibraryPartToProjectOptions
-} from "./library/addLibraryPartToProject.js";
-export { listLibraryParts } from "./library/listLibraryParts.js";
-export type { LibraryPartEntry, ListLibraryPartsOptions } from "./library/listLibraryParts.js";
-export { loadLibraryMetaFile } from "./library/loadLibraryMeta.js";
-export { publishPart } from "./library/publishPart.js";
-export type { PublishedPart, PublishPartOptions } from "./library/publishPart.js";
 export { createTestSuggestionReport, suggestTests } from "./movement-tests/suggestTests.js";
 export type { SuggestTestsOptions } from "./movement-tests/suggestTests.js";
 export type {
@@ -239,8 +229,6 @@ export type {
 } from "./schema/part.schema.js";
 export { projectSchema } from "./schema/project.schema.js";
 export type { Project } from "./schema/project.schema.js";
-export { libraryMetaSchema, libraryPartStatusSchema } from "./schema/library-meta.schema.js";
-export type { LibraryMeta, LibraryPartStatus } from "./schema/library-meta.schema.js";
 export { profileMeasurementsSchema, profileSchema } from "./schema/profile.schema.js";
 export type { Profile, ProfileMeasurements } from "./schema/profile.schema.js";
 export { prototypeNotesSchema } from "./schema/prototype-notes.schema.js";

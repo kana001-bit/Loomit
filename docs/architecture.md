@@ -42,7 +42,6 @@ Loomit
   - 仕上がり寸法ベースの互換チェック
   - fit / movement test のルールベース診断
   - 試作メモの蓄積
-  - パーツ publish / library
   - build 出力の集約
 
 Loomit Studio
@@ -76,8 +75,6 @@ packages/
       fit.ts
       suggest-tests.ts
       test.ts
-      publish.ts
-      library.ts
       build.ts
   studio/
     app/
@@ -99,7 +96,6 @@ packages/
 - `part.loom` を読み書きする
 - パーツ参照を解決する
 - project fork を実行する
-- library への publish を実行する
 - 互換チェックを実行する
 - fit check を実行する
 - movement test を実行する
@@ -121,7 +117,6 @@ runFit(project, profile): FitReport
 suggestTests(project, profile): TestSuggestionReport
 runMovementTest(project, profile, scenario): MovementTestReport
 runTestSuite(project, profile, suite): TestSuiteReport
-publishPart(partPath, options): PublishedPart
 buildProject(project): BuildResult
 ```
 
@@ -151,7 +146,6 @@ Studio は core の上に乗る補助 UI である。
 Studio が持つ責務:
 
 - プロジェクト作成 UI
-- ライブラリ閲覧
 - パーツ選択
 - SVG/PDF プレビュー
 - connector の視覚指定
@@ -238,7 +232,7 @@ outputs:
   dir: ./output
 ```
 
-`parts` は現在の一着で使うパーツを指す。v0 では、library から使う場合もプロジェクト側にコピーしてから参照する方針を基本にする。
+`parts` は現在の一着で使うパーツを指す。
 
 ### Part
 
@@ -389,7 +383,7 @@ preferences:
 - 今ロックするのは上記の「形」だけ: measurements / preferences のバケツ分離、寸法名規約、measurement definition をレジストリとして持つ方針、推定値の source 明示。
 - 後回し: 肩幅・袖丈・裄丈を比較する fit ルール本体、`part.loom` 側 finished 寸法の拡張、`elbow` / `thigh` / `rise` などの寸法追加、`preferences` の内部スキーマ確定。これらは最初に消費する fit ルールと同時に入れる(core の check ループが安定してから)。
 
-body profile は publish 対象にしない。共有時は明示的な確認を必要にする。
+body profile は共有・公開の対象にしない。外部へ渡す場合は明示的な確認を必要にする。
 
 ## 主要フロー
 
@@ -578,45 +572,6 @@ loom test arm-raise --profile my-size
 
 `test` は物理シミュレーションではなく、v0 ではルールベース診断でよい。
 
-### `loom publish`
-
-作業中パーツを、再利用資産としてローカルライブラリへコピーする。
-
-```text
-loom publish parts/sleeve
-```
-
-処理:
-
-```text
-cli.publish
-  -> core.loadPart(partPath)
-  -> core.validatePart(part)
-  -> core.copyPartToLibrary(part)
-  -> core.writeLibraryMeta(part)
-```
-
-方針:
-
-- 作業中パーツを自動でライブラリに入れない。
-- publish は明示操作にする。
-- library にはコピーとして保存する。
-- 元プロジェクトへの参照は provenance として残す。
-- ライブラリ側パーツが後から変わっても、既存プロジェクトには自動反映しない。
-
-想定 library meta:
-
-```yaml
-schema: loomit.library_meta.v0
-name: puff-sleeve
-variant: v3
-type: sleeve
-source_project: /Users/me/loomit/my-blouse-001
-source_part: parts/sleeve
-published_at: 2026-06-28T00:00:00Z
-status: published
-```
-
 ### `loom build`
 
 現在の一着から出力物を集約する。
@@ -703,21 +658,16 @@ v0 の rule:
 
 ## Reuse Model
 
-Loomit の再利用には、2つの経路がある。
+Loomit の再利用は project fork による。
 
 ```text
 Project fork
   - 似た服を作るときに、一着全体を複製する。
   - シルエットの土台ごと持っていく。
   - fork 後は完全に独立する。
-
-Part publish
-  - 気に入ったパーツだけをライブラリへコピーする。
-  - 別プロジェクトに取り込んだ後は、そのプロジェクト固有のものとして編集できる。
-  - 元 library の変化は自動反映しない。
 ```
 
-この2つは混同しない。
+当初はこれに加えて「気に入ったパーツだけを library へ publish して別プロジェクトで流用する」経路も想定していたが、`.val` は共有作図ネットで detail が独立オブジェクトでなく view であるため、パーツ単体をコピーする単位が Valentina のデータモデルに存在しないと分かり撤去した(経緯は [`design-history.md`](design-history.md))。
 
 ## Build Order
 
@@ -735,11 +685,8 @@ v0 実装の推奨順:
 10. `core/movement-tests`
 11. `cli suggest-tests`
 12. `cli test`
-13. `core/library`
-14. `cli publish`
-15. `cli library`
-16. `core/build`
-17. `cli build`
+13. `core/build`
+14. `cli build`
 
 Studio は、CLI と core の境界が安定してから着手する。
 
@@ -766,16 +713,6 @@ v0 では project 内の `notes/prototype-notes.yml` を想定する。
 - ユーザー全体の知識ベースを持つか
 - project notes と global notes を分けるか
 - fork 時にどこまでコピーするか
-
-### Library からの取り込み
-
-v0 方針は「library から project にコピーして使う」である。
-
-検討余地:
-
-- `loomit add sleeve puff-sleeve:v3` のようなコマンドを作るか
-- `loomit.yml` が library を直接参照するモードを許すか
-- 直接参照を許す場合、再現性と独立性をどう守るか
 
 ### Schema Versioning
 

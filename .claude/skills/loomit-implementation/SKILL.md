@@ -24,7 +24,7 @@ Open only the relevant docs:
 
 - `docs/work/implementation-plan.md`: when choosing a slice, following the roadmap, or checking completion criteria.
 - `docs/architecture.md`: when changing schema, domain model, reports, dimensions, or other source-of-truth structures.
-- `docs/work/memo.md`: when touching `variant`, `requires`, `prototype-notes.yml`, fork/publish semantics, or prior design decisions.
+- `docs/work/memo.md`: when touching `variant`, `requires`, `prototype-notes.yml`, fork semantics, or prior design decisions.
 - `docs/work/diffable-domain.md`: when touching `loom diff`, branch-driven pattern exploration, or projected darts.
 - `docs/design-history.md`: when you need why the current design exists — the Loomit / Seamlint / Truer responsibility boundary, seam as a set of participating edges, assembly as a tree, or band seams.
 - `docs/core-concepts.md` and `docs/glossary.md`: when you need the current seam vocabulary — connector `id` / `type` / `side`, coincident vs contiguous, band seam, notch signatures.

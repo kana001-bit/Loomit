@@ -167,8 +167,9 @@ export const partSchema = z
     name: z.string().min(1),
     // 設計判断: variant は識別記号であり、順序を持つソフトウェアの version ではない。
     variant: z.string().min(1),
-    // type は library のディレクトリ segment(types/<type>s/...)として使うため、".." を含みうる
-    // 任意文字列ではなく、安全な単一 segment でなければならない。
+    // type は role を省いて `loom add` したとき role の既定値になり(role は project の
+    // parts/<role>/ ディレクトリ segment)、".." を含みうる任意文字列ではなく安全な単一 segment
+    // でなければならない。
     type: pathSegmentSchema,
     status: partStatusSchema.optional(),
     // files.* は build が読み込み・コピーする。part.loom が part ディレクトリ外のファイルを build に

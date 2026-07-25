@@ -7,7 +7,7 @@
 Loomit の CLI は、大きく次のワークフローに分かれる。
 
 - project を作る・複製する: `init`, `fork`
-- part を追加する・再利用する: `add`, `publish`, `library`
+- part を追加する: `add`
 - project の整合性を確認する: `check`, `doctor`, `fit`, `suggest-tests`, `test`
 - project から成果物を build する: `build`
 - 設計変更を比較する: `diff`
@@ -322,32 +322,6 @@ loom test <scenario> [path] [--notes path] [--format text|json]
 
 - `v0` では scenario の対応範囲を意図的に小さく保っている。
 
-## `loom publish`
-
-part ディレクトリを Loomit library に publish する。
-
-```text
-loom publish <part-path> [--library path] [--name name]
-```
-
-補足:
-
-- 既存の part から再利用可能な library entry を切り出す（自動ではなく明示操作）。
-
-## `loom library`
-
-published part を一覧する、または project に追加する。
-
-```text
-loom library list [--library path] [--type type] [--format text|json]
-loom library add <type/name> [project] [--library path] [--role role] [--as name] [--replace]
-```
-
-補足:
-
-- `list` は library 内の part を一覧する。
-- `add` は published part を project にコピーする。
-
 ## Output Formats
 
 次のコマンドは `--format text|json` を持つ。
@@ -359,7 +333,6 @@ loom library add <type/name> [project] [--library path] [--role role] [--as name
 - `fit`
 - `suggest-tests`
 - `test`
-- `library list`
 - `slnt request`
 - `slnt check`
 - `truer request`

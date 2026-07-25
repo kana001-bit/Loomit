@@ -51,7 +51,7 @@ Changes:
 
 まだ初期段階・ローカルファースト。スコープは正直に書きます。
 
-- **今できること** — 互換 `check`、意味的 `diff`（Git revision 間の差分も。例: `loom diff main..HEAD --part body`）、fit / movement-test 診断、パーツ再利用（`fork`, `publish`, `library`）。
+- **今できること** — 互換 `check`、意味的 `diff`（Git revision 間の差分も。例: `loom diff main..HEAD --part body`）、fit / movement-test 診断、一着まるごとの複製（`fork`）。
 - **Git に委譲（設計判断）** — snapshot・branch・履歴。Loomit の正本はテキスト（`loomit.yml`, `part.loom`）なので、プロジェクトは Git リポジトリの内で動きます。`loom diff` は任意の2版を**洋裁レベルの設計変更**として読み、バージョン管理は再実装しません。
 - **これから** — `fit` ルールの拡充、diff の説明力向上、Loomit Studio（UI）。
 
