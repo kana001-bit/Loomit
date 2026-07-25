@@ -4,7 +4,7 @@ Use these rules when modifying Loomit source code, schemas, package structure, o
 
 ## Implementation Order
 
-Follow `docs/work/implementation-plan.md`. Work by slice. Do not jump ahead to Studio, DB, plugin runtime, CAD engine, physics simulation, or library auto-update.
+Follow `docs/work/implementation-plan.md`. Work by slice. Do not jump ahead to Studio, DB, plugin runtime, CAD engine, or physics simulation.
 
 ## Core and CLI Boundaries
 
@@ -28,8 +28,8 @@ process.stderr.write(text);
 Pure rule logic must not read the current time, generate random values, or access the filesystem inside the rule. Inject deterministic values or preloaded data from the caller.
 
 ```ts
-// Good: deterministic input is injected.
-createPublishedMeta(part, { publishedAt });
+// Good: deterministic input is injected by the caller (illustrative).
+createReport(part, { now });
 ```
 
 ## File I/O vs Domain Logic
@@ -66,10 +66,10 @@ await writeFile(projectFilePath, stringify(project), "utf8");
 
 ### R2. Resolved paths must stay inside an allowed root
 
-Paths derived from file contents (`parts.*`, `outputs.dir`) or CLI arguments (`--name`, `--library`) can escape the project/library root via `..` or an absolute path. `resolve()` alone does not prevent this. Forked, published, and library-imported files come from other people, so these paths are not fully trusted.
+Paths derived from file contents (`parts.*`, `outputs.dir`) or CLI arguments (`--name`, path positionals) can escape the project root via `..` or an absolute path. `resolve()` alone does not prevent this. Forked files come from other people, so these paths are not fully trusted.
 
 - After `resolve()`, verify the path is contained in its allowed root before any I/O (`relative(root, p)` must not start with `..` and must not be absolute). The existing `isSameOrChildPath` check can be generalized into a reusable containment guard.
-- Constrain identifiers used as path segments (`name`, `role`, `type`, `localName`, `outputs.dir`) in the schema to segment-safe characters. Reject slashes, `..`, and absolute paths.
+- Constrain identifiers used as path segments (`name`, `role`, `type`, `outputs.dir`) in the schema to segment-safe characters. Reject slashes, `..`, and absolute paths.
 
 ### R3. I/O errors must be classified by errno, not swallowed
 
@@ -83,7 +83,7 @@ Permission, disk-full, already-exists, and not-found each require a different us
 `cp(recursive)` copies the whole tree, including generated artifacts and large binaries.
 
 - Any recursive copy must limit its scope with an explicit policy.
-- Generated output (`output/`) is not a source of truth and must not be included in `fork` or `publish`.
+- Generated output (`output/`) is not a source of truth and must not be included in `fork`.
 
 ### R5. Concurrent writers are assumed to be single
 

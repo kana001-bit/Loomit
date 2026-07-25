@@ -51,7 +51,7 @@ Changes:
 
 Early, local-first, and honest about scope:
 
-- **Built today** — compatibility `check`, semantic `diff` (including across Git revisions, e.g. `loom diff main..HEAD --part body`), fit / movement-test diagnostics, and part reuse (`fork`, `publish`, `library`).
+- **Built today** — compatibility `check`, semantic `diff` (including across Git revisions, e.g. `loom diff main..HEAD --part body`), fit / movement-test diagnostics, and whole-project reuse (`fork`).
 - **Delegated to Git, by design** — snapshots, branches, and history. Loomit's source of truth is plain text (`loomit.yml`, `part.loom`), so a project lives naturally inside a Git repo. `loom diff` reads any two revisions as sewing-level design changes instead of reimplementing version control.
 - **On the roadmap** — more `fit` rules, richer diff explanations, and Loomit Studio (UI).
 

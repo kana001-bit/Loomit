@@ -7,10 +7,8 @@ import { runDoctorCommand } from "./commands/doctor.js";
 import { runFitCommand } from "./commands/fit.js";
 import { runForkCommand } from "./commands/fork.js";
 import { runInitCommand } from "./commands/init.js";
-import { runLibraryCommand } from "./commands/library.js";
 import { runMatchCommand } from "./commands/match.js";
 import { runNoteCommand } from "./commands/note.js";
-import { runPublishCommand } from "./commands/publish.js";
 import { runSlntCommand } from "./commands/slnt.js";
 import { runSuggestTestsCommand } from "./commands/suggestTests.js";
 import { runTestCommand } from "./commands/test.js";
@@ -143,14 +141,6 @@ export async function runCli(
     });
   }
 
-  if (command === "publish") {
-    return runPublishCommand(args.slice(1), {
-      cwd,
-      stdout: io.stdout,
-      stderr: io.stderr
-    });
-  }
-
   if (command === "slnt") {
     return runSlntCommand(args.slice(1), {
       cwd,
@@ -184,14 +174,6 @@ export async function runCli(
     });
   }
 
-  if (command === "library") {
-    return runLibraryCommand(args.slice(1), {
-      cwd,
-      stdout: io.stdout,
-      stderr: io.stderr
-    });
-  }
-
   if (command === "fork") {
     return runForkCommand(args.slice(1), {
       cwd,
@@ -219,10 +201,8 @@ export function formatMainHelp(): string {
       "  fit    Compare a Loomit project against a body profile.",
       "  fork   Copy an existing Loomit project.",
       "  init   Create a Loomit project in the current directory.",
-      "  library List published Loomit library parts.",
       "  match  Measure the seam(s) joining two parts and report if they match.",
       "  note   Record a prototype note into notes/prototype-notes.yml.",
-      "  publish Copy a part into the Loomit library.",
       "  slnt   Geometry checks via Seamlint (loom slnt request|check).",
       "  truer  Constraint payload handoff for Truer (loom truer request).",
       "  suggest-tests Suggest movement tests for a project.",

@@ -20,7 +20,7 @@ CLI は大きく4種類の作業を支える。
 - `loom init` と `loom fork` で garment project を作る・複製する
 - `loom check` と `loom doctor` で互換性を検証し、失敗理由を読む
 - `loom diff` で設計ブランチの差分を読む
-- `loom fit`、`loom suggest-tests`、`loom test`、`loom publish`、`loom library` で fit 診断、動作テスト候補、再利用パーツ管理を行う
+- `loom fit`、`loom suggest-tests`、`loom test` で fit 診断、動作テスト候補を確認する
 
 ## 準備
 

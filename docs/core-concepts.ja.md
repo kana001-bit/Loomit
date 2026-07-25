@@ -24,18 +24,6 @@ Loomit は、一着ごとに独立したプロジェクトを作成します。
 
 ---
 
-## Library
-
-**Library** は、再利用したい Part を保存する場所です。
-
-Project 内で作業中のパーツは自動では登録されません。
-
-再利用したいと判断した Part だけを明示的に publish し、別の Project へコピーして利用します。
-
-Library の Part は共有参照ではなく、コピーして使うことを前提としています。
-
----
-
 ## Prototype Notes
 
 **Prototype Notes** は、試作から得られた知見を記録するためのデータです。
