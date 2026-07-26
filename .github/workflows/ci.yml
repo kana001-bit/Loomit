@@ -14,7 +14,15 @@ concurrency:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    # slnt / tru をサブプロセス起動する経路は Windows だけ別実装(PATH/PATHEXT 自前解決・cmd.exe 経由の
+    # 引用)で、posix では spawnResolvedProcess の早期 return に入るため ubuntu だけでは一度も実行されない。
+    # Seamlint runner と Truer runner が共有する一本化点なので、両 OS を matrix で回して実際に検証する。
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # 片方が落ちても、もう片方の結果を捨てない(OS 固有の失敗かを切り分けるため)。
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,7 +48,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # lint は OS 非依存なので ubuntu の1本だけで足りる(二重実行しない)。
       - name: Lint
+        if: matrix.os == 'ubuntu-latest'
         run: pnpm lint
 
       - name: Test
