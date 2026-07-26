@@ -96,6 +96,35 @@ describe("assembleConstraintPayload", () => {
     expect(frontRefs.has("#front_only")).toBe(true);
   });
 
+  it("emits per-notch grouping (notches) alongside the flat dependsOn", () => {
+    // 守る仕様: part には dependsOn(フラット)に加えて notches(notch 単位の applicable 用 view)が載る。この合印は
+    // passmarkLine 無し=種別省略だが、錨 spline(31)の長さ候補への辿りは束ねる。dependsOn は従来どおり維持する。
+    const { front, back } = valWithSharedAndOneSided({ extraFrontRef: "#front_only" });
+    const { payload } = assembleConstraintPayload([
+      { role: "front", piece: "front", source: front, connectorIds: ["outseam"] },
+      { role: "back", piece: "back", source: back, connectorIds: ["outseam"] }
+    ]);
+
+    const frontPart = payload.parts.find((part) => part.partId === "front");
+    expect(frontPart?.notches).toEqual([
+      {
+        order: 0,
+        anchorPointId: "146",
+        splineId: "31",
+        lengthCandidates: [
+          { pointId: "15", type: "alongLine", linearity: "linear", expr: "waist_circ / 4 + #shared_ease", refs: ["#shared_ease"] },
+          { pointId: "2", type: "endLine", linearity: "linear", expr: "#front_only", refs: ["#front_only"] },
+          { splineId: "31", handle: "length1", linearity: "nonlinear", expr: "3", refs: [] },
+          { splineId: "31", handle: "length2", linearity: "nonlinear", expr: "15", refs: [] },
+          { splineId: "31", handle: "angle1", linearity: "nonlinear", expr: "-45", refs: [] },
+          { splineId: "31", handle: "angle2", linearity: "nonlinear", expr: "90", refs: [] }
+        ]
+      }
+    ]);
+    // dependsOn はフラットのまま残る(provenance-only を壊さない)。
+    expect(frontPart?.dependsOn.some((occurrence) => "pointId" in occurrence && occurrence.pointId === "146")).toBe(true);
+  });
+
   it("does not duplicate dependsOn across a part's multiple connectors", () => {
     // 守る仕様: 1 part が複数 connector を宣言しても dependsOn は part 単位で1本(connector ごとに複製しない)。
     // connector 次元は provenance を狭めない(過去バグ: 全 connector が同一 dependsOn を持ち connectorId が飾りになった)。

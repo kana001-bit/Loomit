@@ -146,7 +146,9 @@ export type {
   ValOccurrence
 } from "./parts/extractOccurrencesFromVal.js";
 export { collectEdgeOccurrencesFromValText } from "./parts/collectEdgeOccurrencesFromVal.js";
-export type { EdgeOccurrenceResult } from "./parts/collectEdgeOccurrencesFromVal.js";
+export type { EdgeNotch, EdgeOccurrenceResult } from "./parts/collectEdgeOccurrencesFromVal.js";
+export { notchTypeFromPassmarkLine } from "./parts/notchType.js";
+export type { NotchType } from "./parts/notchType.js";
 export { readValSource } from "./parts/readValSource.js";
 export type { ValSourceReadResult } from "./parts/readValSource.js";
 export { assembleConstraintPayload } from "./truer/assembleConstraintPayload.js";

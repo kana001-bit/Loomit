@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { collectEdgeOccurrencesFromValText } from "../../src/index.js";
-import type { ValOccurrence } from "../../src/index.js";
+import type { EdgeNotch, ValOccurrence } from "../../src/index.js";
 
 // 実 cycling_knickers の front outseam を最小再現。合印2個が spline 31 / 33 に載り、各カーブの端点(15/2, 27/25)と
 // 制御ハンドルへ辿れる。detail node.idObject(169/178) → modeling → calculation(146/177)の2段解決も含む。
@@ -56,6 +56,94 @@ describe("collectEdgeOccurrencesFromValText", () => {
       { splineId: "33", handle: "angle1", linearity: "nonlinear", expr: "260", refs: [] },
       { splineId: "33", handle: "angle2", linearity: "nonlinear", expr: "70", refs: [] }
     ]);
+  });
+
+  it("groups each notch with its spline length candidates, contour order, and normalized type", () => {
+    // 守る仕様: notches は「合印 → 錨付ける spline → 長さ候補」を notch 単位に束ねる。order は piece 輪郭順、
+    // notchType は passmarkLine の正規化(vMark→v / tMark→t)、rawPassmarkLine は生値、lengthCandidates は
+    // 錨 spline の端点(point1/point4)＋制御ハンドル。dependsOn(フラット)と両立する additive な view。
+    const result = collectEdgeOccurrencesFromValText(FRONT_OUTSEAM, { piece: "front" });
+
+    expect(result.notches).toEqual<EdgeNotch[]>([
+      {
+        order: 0,
+        rawPassmarkLine: "vMark",
+        notchType: "v",
+        anchorPointId: "146",
+        splineId: "31",
+        lengthCandidates: [
+          { pointId: "15", type: "alongLine", linearity: "linear", expr: "waist_circ / 4 + 5", refs: [] },
+          { pointId: "2", type: "endLine", linearity: "linear", expr: "rise_length_side_sitting", refs: [] },
+          { splineId: "31", handle: "length1", linearity: "nonlinear", expr: "3", refs: [] },
+          { splineId: "31", handle: "length2", linearity: "nonlinear", expr: "15", refs: [] },
+          { splineId: "31", handle: "angle1", linearity: "nonlinear", expr: "-45", refs: [] },
+          { splineId: "31", handle: "angle2", linearity: "nonlinear", expr: "90", refs: [] }
+        ]
+      },
+      {
+        order: 1,
+        rawPassmarkLine: "tMark",
+        notchType: "t",
+        anchorPointId: "177",
+        splineId: "33",
+        lengthCandidates: [
+          { pointId: "27", type: "alongLine", linearity: "linear", expr: "3", refs: [] },
+          { pointId: "25", type: "alongLine", linearity: "linear", expr: "6.5", refs: [] },
+          { splineId: "33", handle: "length1", linearity: "nonlinear", expr: "5", refs: [] },
+          { splineId: "33", handle: "length2", linearity: "nonlinear", expr: "5", refs: [] },
+          { splineId: "33", handle: "angle1", linearity: "nonlinear", expr: "260", refs: [] },
+          { splineId: "33", handle: "angle2", linearity: "nonlinear", expr: "70", refs: [] }
+        ]
+      }
+    ]);
+  });
+
+  it("omits notchType/splineId when the mark is unmapped or not on a spline", () => {
+    // 守る仕様: passmarkLine が無ければ rawPassmarkLine/notchType を省き(発明しない)、合印が spline に載らなければ
+    // splineId を省いて lengthCandidates は空(applicable は昇格しない)。order は輪郭順で維持する。
+    const straightNotch = `<pattern><draw name="d">
+      <calculation>
+        <point id="15" length="waist_circ / 4 + 5" type="alongLine"/>
+        <point id="2" length="rise_length" type="endLine"/>
+      </calculation>
+      <modeling><point id="169" idObject="2" type="modeling"/></modeling>
+      <details><detail name="front"><nodes>
+        <node idObject="169" passmark="true" type="NodePoint"/>
+      </nodes></detail></details>
+    </draw></pattern>`;
+
+    const result = collectEdgeOccurrencesFromValText(straightNotch, { piece: "front" });
+
+    expect(result.notches).toEqual<EdgeNotch[]>([{ order: 0, anchorPointId: "2", lengthCandidates: [] }]);
+  });
+
+  it("keeps contour order when an unresolvable passmark is dropped", () => {
+    // 守る仕様: idObject が解決できない passmark は落とすが、order は passmark 出現順で番号を消費するので、残った
+    // notch の相対順序(ここでは 0 と 2)が保たれる(Truer が測定辺の subset を順序で突き合わせられる)。
+    const withBrokenMiddle = `<pattern><draw name="d">
+      <calculation>
+        <point id="15" length="waist_circ / 4 + 5" type="alongLine"/>
+        <point id="2" length="rise_length" type="endLine"/>
+        <point id="146" length="#a" spline="31" type="cutSpline"/>
+        <point id="148" length="#b" spline="31" type="cutSpline"/>
+        <spline id="31" length1="3" point1="15" point4="2" type="simpleInteractive"/>
+      </calculation>
+      <modeling>
+        <point id="169" idObject="146" type="modeling"/>
+        <point id="173" idObject="148" type="modeling"/>
+      </modeling>
+      <details><detail name="front"><nodes>
+        <node idObject="169" passmark="true" passmarkLine="vMark" type="NodePoint"/>
+        <node idObject="999" passmark="true" passmarkLine="tMark" type="NodePoint"/>
+        <node idObject="173" passmark="true" passmarkLine="vMark" type="NodePoint"/>
+      </nodes></detail></details>
+    </draw></pattern>`;
+
+    const result = collectEdgeOccurrencesFromValText(withBrokenMiddle, { piece: "front" });
+
+    // 真ん中の idObject="999" は modeling に無く解決できないので落ちる。残る2つは order 0 と 2(1 は欠番)。
+    expect(result.notches.map((notch) => notch.order)).toEqual([0, 2]);
+    expect(result.notches.map((notch) => notch.anchorPointId)).toEqual(["146", "148"]);
   });
 
   it("matches the piece name case-insensitively (DXF block matching)", () => {

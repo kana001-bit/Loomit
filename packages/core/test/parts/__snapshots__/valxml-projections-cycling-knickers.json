@@ -1066,6 +1066,212 @@
         "refs": []
       }
     ],
+    "notches": [
+      {
+        "order": 0,
+        "rawPassmarkLine": "vMark",
+        "notchType": "v",
+        "anchorPointId": "146",
+        "splineId": "31",
+        "lengthCandidates": [
+          {
+            "pointId": "15",
+            "type": "alongLine",
+            "linearity": "linear",
+            "expr": "waist_circ / 4 + 5",
+            "refs": []
+          },
+          {
+            "pointId": "2",
+            "type": "endLine",
+            "linearity": "linear",
+            "expr": "rise_length_side_sitting",
+            "refs": []
+          },
+          {
+            "splineId": "31",
+            "handle": "length1",
+            "linearity": "nonlinear",
+            "expr": "3",
+            "refs": []
+          },
+          {
+            "splineId": "31",
+            "handle": "length2",
+            "linearity": "nonlinear",
+            "expr": "15",
+            "refs": []
+          },
+          {
+            "splineId": "31",
+            "handle": "angle1",
+            "linearity": "nonlinear",
+            "expr": "-45",
+            "refs": []
+          },
+          {
+            "splineId": "31",
+            "handle": "angle2",
+            "linearity": "nonlinear",
+            "expr": "90",
+            "refs": []
+          }
+        ]
+      },
+      {
+        "order": 1,
+        "rawPassmarkLine": "tMark",
+        "notchType": "t",
+        "anchorPointId": "140",
+        "splineId": "31",
+        "lengthCandidates": [
+          {
+            "pointId": "15",
+            "type": "alongLine",
+            "linearity": "linear",
+            "expr": "waist_circ / 4 + 5",
+            "refs": []
+          },
+          {
+            "pointId": "2",
+            "type": "endLine",
+            "linearity": "linear",
+            "expr": "rise_length_side_sitting",
+            "refs": []
+          },
+          {
+            "splineId": "31",
+            "handle": "length1",
+            "linearity": "nonlinear",
+            "expr": "3",
+            "refs": []
+          },
+          {
+            "splineId": "31",
+            "handle": "length2",
+            "linearity": "nonlinear",
+            "expr": "15",
+            "refs": []
+          },
+          {
+            "splineId": "31",
+            "handle": "angle1",
+            "linearity": "nonlinear",
+            "expr": "-45",
+            "refs": []
+          },
+          {
+            "splineId": "31",
+            "handle": "angle2",
+            "linearity": "nonlinear",
+            "expr": "90",
+            "refs": []
+          }
+        ]
+      },
+      {
+        "order": 2,
+        "rawPassmarkLine": "vMark",
+        "notchType": "v",
+        "anchorPointId": "147",
+        "splineId": "31",
+        "lengthCandidates": [
+          {
+            "pointId": "15",
+            "type": "alongLine",
+            "linearity": "linear",
+            "expr": "waist_circ / 4 + 5",
+            "refs": []
+          },
+          {
+            "pointId": "2",
+            "type": "endLine",
+            "linearity": "linear",
+            "expr": "rise_length_side_sitting",
+            "refs": []
+          },
+          {
+            "splineId": "31",
+            "handle": "length1",
+            "linearity": "nonlinear",
+            "expr": "3",
+            "refs": []
+          },
+          {
+            "splineId": "31",
+            "handle": "length2",
+            "linearity": "nonlinear",
+            "expr": "15",
+            "refs": []
+          },
+          {
+            "splineId": "31",
+            "handle": "angle1",
+            "linearity": "nonlinear",
+            "expr": "-45",
+            "refs": []
+          },
+          {
+            "splineId": "31",
+            "handle": "angle2",
+            "linearity": "nonlinear",
+            "expr": "90",
+            "refs": []
+          }
+        ]
+      },
+      {
+        "order": 3,
+        "rawPassmarkLine": "tMark",
+        "notchType": "t",
+        "anchorPointId": "177",
+        "splineId": "33",
+        "lengthCandidates": [
+          {
+            "pointId": "27",
+            "type": "alongLine",
+            "linearity": "linear",
+            "expr": "3",
+            "refs": []
+          },
+          {
+            "pointId": "25",
+            "type": "alongLine",
+            "linearity": "linear",
+            "expr": "6.5",
+            "refs": []
+          },
+          {
+            "splineId": "33",
+            "handle": "length1",
+            "linearity": "nonlinear",
+            "expr": "5",
+            "refs": []
+          },
+          {
+            "splineId": "33",
+            "handle": "length2",
+            "linearity": "nonlinear",
+            "expr": "5",
+            "refs": []
+          },
+          {
+            "splineId": "33",
+            "handle": "angle1",
+            "linearity": "nonlinear",
+            "expr": "260",
+            "refs": []
+          },
+          {
+            "splineId": "33",
+            "handle": "angle2",
+            "linearity": "nonlinear",
+            "expr": "70",
+            "refs": []
+          }
+        ]
+      }
+    ],
     "diagnostics": []
   },
   "edgeBack": {
@@ -1183,6 +1389,191 @@
         "linearity": "nonlinear",
         "expr": "70",
         "refs": []
+      }
+    ],
+    "notches": [
+      {
+        "order": 0,
+        "rawPassmarkLine": "vMark",
+        "notchType": "v",
+        "anchorPointId": "148",
+        "splineId": "84",
+        "lengthCandidates": [
+          {
+            "pointId": "69",
+            "type": "endLine",
+            "linearity": "linear",
+            "expr": "5",
+            "refs": []
+          },
+          {
+            "splineId": "84",
+            "handle": "length1",
+            "linearity": "nonlinear",
+            "expr": "5",
+            "refs": []
+          },
+          {
+            "splineId": "84",
+            "handle": "length2",
+            "linearity": "nonlinear",
+            "expr": "5",
+            "refs": []
+          },
+          {
+            "splineId": "84",
+            "handle": "angle1",
+            "linearity": "nonlinear",
+            "expr": "AngleLine_d67w_R - 90",
+            "refs": []
+          },
+          {
+            "splineId": "84",
+            "handle": "angle2",
+            "linearity": "nonlinear",
+            "expr": "85",
+            "refs": []
+          }
+        ]
+      },
+      {
+        "order": 1,
+        "rawPassmarkLine": "tMark",
+        "notchType": "t",
+        "anchorPointId": "143",
+        "splineId": "84",
+        "lengthCandidates": [
+          {
+            "pointId": "69",
+            "type": "endLine",
+            "linearity": "linear",
+            "expr": "5",
+            "refs": []
+          },
+          {
+            "splineId": "84",
+            "handle": "length1",
+            "linearity": "nonlinear",
+            "expr": "5",
+            "refs": []
+          },
+          {
+            "splineId": "84",
+            "handle": "length2",
+            "linearity": "nonlinear",
+            "expr": "5",
+            "refs": []
+          },
+          {
+            "splineId": "84",
+            "handle": "angle1",
+            "linearity": "nonlinear",
+            "expr": "AngleLine_d67w_R - 90",
+            "refs": []
+          },
+          {
+            "splineId": "84",
+            "handle": "angle2",
+            "linearity": "nonlinear",
+            "expr": "85",
+            "refs": []
+          }
+        ]
+      },
+      {
+        "order": 2,
+        "rawPassmarkLine": "vMark",
+        "notchType": "v",
+        "anchorPointId": "149",
+        "splineId": "84",
+        "lengthCandidates": [
+          {
+            "pointId": "69",
+            "type": "endLine",
+            "linearity": "linear",
+            "expr": "5",
+            "refs": []
+          },
+          {
+            "splineId": "84",
+            "handle": "length1",
+            "linearity": "nonlinear",
+            "expr": "5",
+            "refs": []
+          },
+          {
+            "splineId": "84",
+            "handle": "length2",
+            "linearity": "nonlinear",
+            "expr": "5",
+            "refs": []
+          },
+          {
+            "splineId": "84",
+            "handle": "angle1",
+            "linearity": "nonlinear",
+            "expr": "AngleLine_d67w_R - 90",
+            "refs": []
+          },
+          {
+            "splineId": "84",
+            "handle": "angle2",
+            "linearity": "nonlinear",
+            "expr": "85",
+            "refs": []
+          }
+        ]
+      },
+      {
+        "order": 3,
+        "rawPassmarkLine": "tMark",
+        "notchType": "t",
+        "anchorPointId": "180",
+        "splineId": "86",
+        "lengthCandidates": [
+          {
+            "pointId": "70",
+            "type": "alongLine",
+            "linearity": "linear",
+            "expr": "2",
+            "refs": []
+          },
+          {
+            "pointId": "71",
+            "type": "alongLine",
+            "linearity": "linear",
+            "expr": "2",
+            "refs": []
+          },
+          {
+            "splineId": "86",
+            "handle": "length1",
+            "linearity": "nonlinear",
+            "expr": "5",
+            "refs": []
+          },
+          {
+            "splineId": "86",
+            "handle": "length2",
+            "linearity": "nonlinear",
+            "expr": "5",
+            "refs": []
+          },
+          {
+            "splineId": "86",
+            "handle": "angle1",
+            "linearity": "nonlinear",
+            "expr": "260",
+            "refs": []
+          },
+          {
+            "splineId": "86",
+            "handle": "angle2",
+            "linearity": "nonlinear",
+            "expr": "70",
+            "refs": []
+          }
+        ]
       }
     ],
     "diagnostics": []
