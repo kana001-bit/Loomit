@@ -47,6 +47,18 @@ Changes:
 
 `connection risk: none` means the parts still sew together after the change. The same reading works across Git history (`loom diff main..HEAD --part body`). It is one slice of a larger goal — version control for pattern making — but it runs today, from a fresh clone, with no Valentina or `.val`.
 
+## The three tools
+
+Loomit is one third of a pattern-making toolchain, each with a single job:
+
+| Tool                                                    | Job                                                     |
+| ------------------------------------------------------- | ------------------------------------------------------- |
+| **Loomit** (this repo)                                  | Pattern structure, the assembly graph, semantic `diff`. |
+| **[Seamlint](https://github.com/kana001-bit/Seamlint)** | Measures geometry and reports problems.                 |
+| **[Truer](https://github.com/kana001-bit/Truer)**       | Proposes corrections and writes the accepted ones.      |
+
+The boundary is fixed before the internals: Loomit decides *what is joined to what*, Seamlint decides *what is wrong*, Truer decides *how it could be fixed and writes it* — and a human decides *what actually changes*. Loomit never computes geometry and never rewrites a pattern; it issues measurement requests to Seamlint and correction requests to Truer, and reads their answers back. The two hand-off points are `loom slnt check` and `loom match` ([CLI reference](docs/cli.md)).
+
 ## Status
 
 Early, local-first, and honest about scope:

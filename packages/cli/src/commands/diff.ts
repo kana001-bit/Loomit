@@ -9,11 +9,16 @@ import {
   type PrototypeNotes
 } from "@loomit/core";
 import { access } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 import { formatDiffJson } from "../formatters/diffJson.js";
 import { formatDiffText } from "../formatters/diffText.js";
-import { resolveGitRepoRoot, resolveRef, withRefWorktree } from "../git/gitRevision.js";
+import {
+  resolveGitRepoRoot,
+  resolveProjectPrefix,
+  resolveRef,
+  withRefWorktree
+} from "../git/gitRevision.js";
 
 export type DiffOutputFormat = "text" | "json";
 
@@ -112,8 +117,17 @@ async function runRefDiff(
   }
   const repoRoot = repo.repoRoot;
 
-  // 対象の一着は cwd 側とみなし、repo root からの相対位置を各 worktree に投影する。
-  const projectRelPath = relative(repoRoot, options.cwd);
+  // 対象の一着は cwd 側とみなし、repo root からの相対位置を各 worktree に投影する。位置は自前で
+  // 引き算せず git に訊く(理由は resolveProjectPrefix のコメント: 表記の食い違いで「差分なし」と
+  // 嘘をつく経路を消すため)。
+  const prefix = await resolveProjectPrefix(options.cwd);
+  if (!prefix.ok) {
+    options.stderr(
+      `Could not locate ${options.cwd} inside the Git repository: ${prefix.message}\n\n${formatDiffHelp()}`
+    );
+    return 2;
+  }
+  const projectRelPath = prefix.prefix;
 
   // revision は worktree を作る前に解決し、返った SHA をそのまま worktree に使う。symbolic ref
   // (HEAD/branch)を後段で解決し直すと、間に ref が動いたとき検証した版と別の commit を diff しうる
