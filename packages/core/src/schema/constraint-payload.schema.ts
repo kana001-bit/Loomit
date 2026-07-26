@@ -36,6 +36,26 @@ const splineOccurrenceSchema = z
 
 export const valOccurrenceSchema = z.union([pointOccurrenceSchema, splineOccurrenceSchema]);
 
+// notch 種別（Seamlint と同じ意味論 enum）。.val の passmarkLine から写像できたときだけ載る（`../parts/notchType.ts`）。
+const notchTypeSchema = z.enum(["v", "t", "castle", "check", "u"]);
+
+// notch 単位のグループ（applicable 用の view）。dependsOn がフラットに混ぜていた「どの notch がどの spline を錨付け、
+// その長さ候補はどれか」を notch ごとに束ねる。order は piece 輪郭順（位置でなく順序で両方向マッチ）。
+//   rawPassmarkLine … .val の生値（vMark/tMark/one…）。属性が無ければ省く（発明しない）。
+//   notchType … 生値を Seamlint enum に正規化したもの。写像できなければ省く（弱い tie-breaker）。
+//   splineId / lengthCandidates … 合印が spline に載るときだけ。直線上の合印など spline を持たなければ splineId を省き
+//     lengthCandidates は空（applicable は昇格しない）。lengthCandidates は dependsOn と同じ occurrence を再掲する。
+const edgeNotchSchema = z
+  .object({
+    order: z.number().int(),
+    rawPassmarkLine: z.string().optional(),
+    notchType: notchTypeSchema.optional(),
+    anchorPointId: z.string(),
+    splineId: z.string().optional(),
+    lengthCandidates: z.array(valOccurrenceSchema)
+  })
+  .strict();
+
 // 増分 param。declared/value の不変条件を discriminated union で schema に落とす（#3 の区別＝「未宣言 ref」と
 // 「formula 無しの宣言済みツマミ」を consumer が schema validation で信じられるように）:
 //   declared:true  → value 必須（"" = formula 無しの既定0ツマミ）。note? は任意。
@@ -65,12 +85,17 @@ export const constraintConnectorRefSchema = z
   })
   .strict();
 
-// part 単位の依存（その piece の全 seam の occurrence が混ざる）。
+// part 単位の依存（その piece の全 seam の occurrence が混ざる）。notches は同じ occurrence を notch 単位に束ね直した
+// additive な view（dependsOn はフラットのまま残す = provenance-only 消費者を壊さない）。
+// notches は v0 契約では **optional**: この emitter は常に emit する（空なら `[]`）が、notches を持たない既存 v0 payload も
+// 契約上 valid のままにして版を上げずに後方互換を保つ。**必須化したいなら schema id を v1 へ上げること**（v0 のまま
+// required にすると、旧 v0 payload をこの validator に通したときに notches 欠如だけで落ちる）。
 export const constraintPartSchema = z
   .object({
     partId: z.string(),
     piece: z.string(),
-    dependsOn: z.array(valOccurrenceSchema)
+    dependsOn: z.array(valOccurrenceSchema),
+    notches: z.array(edgeNotchSchema).optional()
   })
   .strict();
 

@@ -82,6 +82,20 @@ describe("constraint payload contract schema", () => {
     );
   });
 
+  it("accepts a v0 payload without notches (notches stays additive/optional)", () => {
+    // 守る仕様(must-not-fire): notches は v0 に additive で足した optional フィールド。notches を持たない既存 v0 payload も
+    // 契約上 valid のまま(版を上げずに後方互換を保つ)。v0 のまま必須化して旧 payload を落とす退行を防ぐ = 必須化するなら
+    // schema id を v1 へ上げること。
+    const legacyWithoutNotches = {
+      schema: "loomit.constraint-payload.v0",
+      params: {},
+      parts: [{ partId: "front", piece: "front", dependsOn: [] }],
+      connectors: []
+    };
+
+    expect(constraintPayloadSchema.safeParse(legacyWithoutNotches).success).toBe(true);
+  });
+
   it("keeps the generated JSON Schema artifact in sync", async () => {
     // 守る仕様: zod から生成した JSON Schema が committed artifact と一致する。Truer は言語非依存にこの JSON Schema を
     // copy して validate するので、zod を変えたら artifact も更新される(drift したら落ちて再生成を促す)。

@@ -2,6 +2,7 @@ import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import { CONSTRAINT_PAYLOAD_SCHEMA_ID } from "../schema/constraint-payload.schema.js";
 import { collectEdgeOccurrencesFromValText } from "../parts/collectEdgeOccurrencesFromVal.js";
+import type { EdgeNotch } from "../parts/collectEdgeOccurrencesFromVal.js";
 import { readIncrementsFromValText } from "../parts/readIncrementsFromVal.js";
 import type { ValIncrement } from "../parts/readIncrementsFromVal.js";
 import type { ValOccurrence } from "../parts/extractOccurrencesFromVal.js";
@@ -60,6 +61,11 @@ export interface ConstraintPart {
   readonly partId: string;
   readonly piece: string;
   readonly dependsOn: readonly ValOccurrence[];
+  // notch 単位のグループ(applicable 用の view)。dependsOn を notch ごとに束ね直した additive な追加で、dependsOn 自体は
+  // フラットのまま残す(provenance-only 消費者を壊さない)。中身は collectEdgeOccurrencesFromVal の EdgeNotch。
+  // この emitter は常に emit する(空なら [])が、v0 契約 schema では optional 扱い(notches を持たない旧 v0 payload と
+  // 後方互換。constraint-payload.schema.ts 参照)。
+  readonly notches: readonly EdgeNotch[];
 }
 
 export interface ConstraintPayload {
@@ -143,10 +149,12 @@ export function assembleConstraintPayload(
     }
 
     // 依存は part 単位で1回だけ出す(connector ごとに複製しない = connector では絞れない [C6])。
+    // notches は同じ occurrence を notch 単位に束ね直した applicable 用の view(dependsOn はフラットのまま維持)。
     payloadParts.push({
       partId: part.role,
       piece: part.piece,
-      dependsOn: edge.occurrences
+      dependsOn: edge.occurrences,
+      notches: edge.notches
     });
 
     // connector は join 鍵だけ列挙する(dependsOn は持たない)。宣言順を保つ。

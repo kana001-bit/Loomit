@@ -2,10 +2,33 @@ import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import { extractOccurrencesFromCalculationContent } from "./extractOccurrencesFromVal.js";
 import type { ValOccurrence } from "./extractOccurrencesFromVal.js";
+import { notchTypeFromPassmarkLine } from "./notchType.js";
+import type { NotchType } from "./notchType.js";
 import { collectBlocks, collectFirstBlock, collectSelfClosingTags } from "./valXml.js";
+
+// notch 単位のグループ(applicable 用の view)。dependsOn がフラットに混ぜていた「どの notch がどの spline を錨付け、
+// その長さ候補はどれか」を notch ごとに束ね直す。幾何評価はせず .val の calculation グラフ構造だけで決まる。
+export interface EdgeNotch {
+  // piece 輪郭順(detail <nodes> の passmark 出現順・0 始まり)。位置でなく順序で両方向マッチする用
+  // (projectNotchesFromVal の order と同義)。idObject が解決できず落ちた passmark も番号を消費するので、
+  // 残った notch の相対順序は保たれる。
+  readonly order: number;
+  // .val の passmarkLine 生値(vMark/tMark/one…)。属性が無ければ省く(発明しない)。
+  readonly rawPassmarkLine?: string;
+  // rawPassmarkLine を Seamlint の種別 enum に正規化したもの。写像できなければ省く(弱い tie-breaker)。
+  readonly notchType?: NotchType;
+  // 合印が載る calculation 点(cutSpline 点)の id。
+  readonly anchorPointId: string;
+  // 合印が錨付ける spline の id(cutSpline のときだけ。直線上の合印など spline を持たなければ省く)。
+  readonly splineId?: string;
+  // その spline の長さ候補 occurrence(端点 point1/point4 ＋ 制御ハンドル)。spline が無ければ空。
+  // dependsOn にも同じ occurrence が出るが、こちらは notch 単位にグループ化した applicable 用の view。
+  readonly lengthCandidates: readonly ValOccurrence[];
+}
 
 export interface EdgeOccurrenceResult {
   readonly occurrences: readonly ValOccurrence[];
+  readonly notches: readonly EdgeNotch[];
   readonly diagnostics: readonly Diagnostic[];
 }
 
@@ -15,9 +38,12 @@ export interface EdgeOccurrenceResult {
 //   → calculation 点が cutSpline なら spline 属性で通過カーブを特定 → そのカーブ(spline)の端点(point1/point4)と
 //     制御ハンドル(length1/2・angle1/2)の occurrence を集める。
 //
+// 返り値は2つの view: occurrences(part 単位フラット・provenance-only 用)と notches(合印ごとに「錨 spline → 長さ候補」を
+//   束ねた applicable 用。同じ occurrence を notch 単位に再編成しただけで、幾何評価は足していない)。
+//
 // 重要な限界(= [C6], provenance-only では踏まない): connector は BLOCK 全体を指し、実際に測る辺は Seamlint が
 //   発見する。よってここで返すのは「この piece の合印が載るカーブ上の occurrence」であって「測定辺そのもの」ではない。
-//   数値提案(applicable)を出す段では Seamlint の測定辺端点と突き合わせて確定が要る。
+//   数値提案(applicable)を出す段では Seamlint の測定辺端点と突き合わせて確定が要る(notches の順序/種別で突き合わせる)。
 export function collectEdgeOccurrencesFromValText(
   source: string,
   options: { readonly piece: string }
@@ -28,6 +54,7 @@ export function collectEdgeOccurrencesFromValText(
   if (lookup.status === "not-found") {
     return {
       occurrences: [],
+      notches: [],
       diagnostics: [
         createDiagnostic({
           severity: "warning",
@@ -78,7 +105,7 @@ export function collectEdgeOccurrencesFromValText(
       })
     );
 
-    return { occurrences: [], diagnostics };
+    return { occurrences: [], notches: [], diagnostics };
   }
 
   const draw = lookup.draw;
@@ -122,14 +149,15 @@ export function collectEdgeOccurrencesFromValText(
     selected.push(occurrence);
   };
 
+  const passmarks = collectDetailPassmarks(draw.detailContent, modelingToCalc);
   const splineIds: string[] = [];
 
-  for (const anchorCalcId of collectDetailPassmarkAnchorCalcIds(draw.detailContent, modelingToCalc)) {
+  for (const passmark of passmarks) {
     // 合印そのものが載る点の occurrence(cutSpline=linearity none 等)。辺上の点なので含める。
-    add(pointOccurrenceById.get(anchorCalcId));
+    add(pointOccurrenceById.get(passmark.anchorCalcId));
 
     // cutSpline なら通過カーブを控える(端点・ハンドルは後でまとめて追加)。
-    const splineId = calcPointById.get(anchorCalcId)?.spline;
+    const splineId = calcPointById.get(passmark.anchorCalcId)?.spline;
 
     if (splineId !== undefined && !splineIds.includes(splineId)) {
       splineIds.push(splineId);
@@ -149,7 +177,72 @@ export function collectEdgeOccurrencesFromValText(
     }
   }
 
-  return { occurrences: selected, diagnostics };
+  // notches: dependsOn がフラットに畳んだ「notch → その spline → 長さ候補」を notch 単位に束ね直す(applicable 用 view)。
+  // dependsOn は上でそのまま維持しているので provenance-only 消費者には影響しない(純追加)。
+  const notches: EdgeNotch[] = passmarks.map((passmark) => {
+    const splineId = calcPointById.get(passmark.anchorCalcId)?.spline;
+    const notchType =
+      passmark.passmarkLine === undefined ? undefined : notchTypeFromPassmarkLine(passmark.passmarkLine);
+
+    return {
+      order: passmark.order,
+      // 生値/正規化は「有るときだけ」載せる(発明しない・写像できないものは省く)。
+      ...(passmark.passmarkLine === undefined ? {} : { rawPassmarkLine: passmark.passmarkLine }),
+      ...(notchType === undefined ? {} : { notchType }),
+      anchorPointId: passmark.anchorCalcId,
+      // spline に載らない合印(直線上等)は splineId を持たず、長さ候補も空(applicable は昇格しない)。
+      ...(splineId === undefined ? {} : { splineId }),
+      lengthCandidates:
+        splineId === undefined
+          ? []
+          : collectSplineLengthCandidates(
+              splineId,
+              splineById,
+              pointOccurrenceById,
+              splineOccurrencesById
+            )
+    };
+  });
+
+  return { occurrences: selected, notches, diagnostics };
+}
+
+// 1本の spline の長さ候補 occurrence(端点 point1/point4 ＋ 制御ハンドル length1/2・angle1/2)を集める。
+// dependsOn 構築と同じ選び方だが、notch 単位に閉じて重複を畳む(2つの候補が同一 occurrence を指しても1度だけ)。
+function collectSplineLengthCandidates(
+  splineId: string,
+  splineById: ReadonlyMap<string, Readonly<Record<string, string>>>,
+  pointOccurrenceById: ReadonlyMap<string, ValOccurrence>,
+  splineOccurrencesById: ReadonlyMap<string, readonly ValOccurrence[]>
+): readonly ValOccurrence[] {
+  const spline = splineById.get(splineId);
+  const candidates: ValOccurrence[] = [];
+  const seen = new Set<string>();
+  const push = (occurrence: ValOccurrence | undefined): void => {
+    if (occurrence === undefined) {
+      return;
+    }
+
+    const key =
+      "pointId" in occurrence
+        ? `p:${occurrence.pointId}`
+        : `s:${occurrence.splineId}:${occurrence.handle}`;
+
+    if (seen.has(key)) {
+      return;
+    }
+
+    seen.add(key);
+    candidates.push(occurrence);
+  };
+
+  push(pointOccurrenceById.get(spline?.point1 ?? ""));
+  push(pointOccurrenceById.get(spline?.point4 ?? ""));
+  for (const handleOccurrence of splineOccurrencesById.get(splineId) ?? []) {
+    push(handleOccurrence);
+  }
+
+  return candidates;
 }
 
 interface DrawWithDetail {
@@ -243,34 +336,59 @@ function buildModelingToCalc(drawContent: string): ReadonlyMap<string, string> {
   return map;
 }
 
-// detail の passmark node を calculation 点 id 列へ解決する(detail 内 passmark 順)。解決できない node は
-// 壊れた参照として黙って落とす(防御)。
-function collectDetailPassmarkAnchorCalcIds(
+// detail の passmark node を解決する(detail 内 passmark 順)。各 passmark について輪郭順(order)・錨点の calculation 点 id・
+// passmarkLine 生値を持って返す。order は passmark 出現順で、idObject が解決できず落ちた node も番号を消費するので、
+// 残った passmark の相対順序は保たれる(Truer が測定辺の subset を順序で突き合わせる用)。解決できない node は
+// 壊れた参照として黙って落とす(防御・従来の anchor-calc-id 解決と同じ)。
+interface DetailPassmark {
+  readonly order: number;
+  readonly anchorCalcId: string;
+  readonly passmarkLine?: string;
+}
+
+function collectDetailPassmarks(
   detailContent: string,
   modelingToCalc: ReadonlyMap<string, string>
-): readonly string[] {
+): readonly DetailPassmark[] {
   const nodesBlock = collectFirstBlock(detailContent, "nodes");
 
   if (nodesBlock === undefined) {
     return [];
   }
 
-  const calcIds: string[] = [];
+  const passmarks: DetailPassmark[] = [];
+  let order = 0;
 
   for (const node of collectSelfClosingTags(nodesBlock.content, "node")) {
     if (node.attrs.passmark !== "true") {
       continue;
     }
 
+    // order は passmark 出現順(輪郭順)。解決可否に関係なく番号を消費する。
+    const currentOrder = order;
+    order += 1;
+
     const modelingId = node.attrs.idObject;
     const calcId = modelingId === undefined ? undefined : modelingToCalc.get(modelingId);
 
-    if (calcId !== undefined) {
-      calcIds.push(calcId);
+    if (calcId === undefined) {
+      continue;
     }
+
+    // passmarkLine が空文字なら「種別なし」として省く(projectNotchesFromVal の type と同じ約束)。
+    const rawPassmarkLine =
+      node.attrs.passmarkLine !== undefined && node.attrs.passmarkLine.trim() !== ""
+        ? node.attrs.passmarkLine
+        : undefined;
+
+    passmarks.push({
+      order: currentOrder,
+      anchorCalcId: calcId,
+      ...(rawPassmarkLine === undefined ? {} : { passmarkLine: rawPassmarkLine })
+    });
   }
 
-  return calcIds;
+  return passmarks;
 }
 
 // calculation の点を id で引けるよう属性ごと索引する(cutSpline の spline 属性を引くため)。
