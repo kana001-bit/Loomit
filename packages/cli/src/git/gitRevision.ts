@@ -82,6 +82,30 @@ export async function resolveGitRepoRoot(cwd: string): Promise<GitRepoRootResult
   };
 }
 
+// cwd の位置(repo root から見た相対パス)の解決結果。root 直下なら prefix は空文字。
+export type GitPrefixResult =
+  | { readonly ok: true; readonly prefix: string }
+  | { readonly ok: false; readonly message: string };
+
+// cwd が repo root から見てどこにあるかを git 自身に答えさせる(POSIX 区切り・末尾 `/` 付き・root なら空)。
+//
+// relative(repoRoot, cwd) で自前計算してはいけない: repoRoot は git の出力(解決済みの実パス)、cwd は Node
+// 側の文字列で、同じディレクトリを指していても表記が食い違う環境がある ── Windows の 8.3 短縮名
+// (CI runner の TEMP が `C:\Users\RUNNER~1\...`)、macOS の `/var` -> `/private/var`、symlink 経由の cwd。
+// 食い違うと relative() が repo 外へ登る相対パスを返し、worktree に join した結果が元の作業ツリーへ戻る。
+// すると2版とも同じ現在の作業ツリーを読み、diff は**エラーを出さずに「差分なし」と答える**(false negative)。
+// git に訊けばこの一族がまとめて消える(repoRoot を得たのと同じ git・同じ cwd の答えなので必ず整合する)。
+export async function resolveProjectPrefix(cwd: string): Promise<GitPrefixResult> {
+  const result = await runGit(["rev-parse", "--show-prefix"], cwd);
+
+  if (!result.ok) {
+    return { ok: false, message: result.stderr.trim() || `git exited ${result.code ?? "null"}.` };
+  }
+
+  // root 直下なら改行だけが返る = 空文字。末尾の `/` は join が吸収するので落とさない。
+  return { ok: true, prefix: result.stdout.trim() };
+}
+
 // ref が commit として解決できれば SHA を返し、できなければ undefined。worktree を作る前に
 // 不正な revision を弾いて、明快なエラーにするために使う(`^{commit}` で tag/branch も commit に寄せる)。
 export async function resolveRef(repoRoot: string, ref: string): Promise<string | undefined> {
