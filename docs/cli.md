@@ -186,7 +186,7 @@ loom slnt check [path] [--slnt <path>] [--format text|json]
 
 band seam（1枚 対 複数枚）の不一致 `geometry.band_seam_sum_mismatch` は **project 全体を測る `loom slnt check` からしか出ない**（N-ary なので2パーツ指定の `loom match` は通らない）。pairwise の [`loom match --reference`](#--reference-part-truer-に直し方を提案させる) に相当する band 専用の `loom` 動詞は今のところ無い ── band は稀にしか鳴らず、Truer は report に混ざって届いた band 診断をそのまま消費できる（入口に依存しない）設計なので、薄い動詞を1本足すより**手動導線**に倒している（設計判断。将来 `loom` に passthrough を足す余地は残す）。
 
-手順（`slnt` / `tru` は用意済みの前提。実データ fixture は `loomitest3-band-mismatch`）:
+手順（`slnt` / `tru` は用意済みの前提）:
 
 1. **project 全体を測って band-seam を含む report を JSON で出す。**
 
@@ -215,7 +215,7 @@ band seam（1枚 対 複数枚）の不一致 `geometry.band_seam_sum_mismatch` 
    - Truer の `--slnt` は preview の辺解決で内部から Seamlint を呼ぶために要る。**こちらは空白区切りで `"node <slnt.js>"` を受ける**（`loom` の `--slnt` と扱いが違う）。git-bash では Windows 形式（`C:/...`）で渡す（`/c/...` は `C:\c\...` に化ける）。
    - proposal は **preview-only（advisory）**。`changes: []` で source DXF は書き換えない ── 人が Valentina で当てるための指示ログ。
 
-fuller な end-to-end 手順（request を手で組む版・ハマりどころ集）は Truer 側の `docs/task-specs/band-seam-consumption/e2e-runbook.md` と fixture `loomitest3-band-mismatch/README.md` にある。
+Truer 側の CLI 仕様（`tru propose` のオプション・proposal の読み方）は [Truer](https://github.com/kana001-bit/Truer) の `docs/cli.md` にある。
 
 ## `loom match`
 
