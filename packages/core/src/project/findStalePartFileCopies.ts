@@ -7,22 +7,22 @@ import { describeFsError, getErrno } from "../filesystem/fsError.js";
 import { toPosixPath } from "../filesystem/toPosixPath.js";
 import type { ResolvedProject } from "./resolveParts.js";
 
-// 設計判断: files.* は part 相対でしか書けない(schema/paths.ts の relativePathSchema が絶対パスと ".."
-// を拒否する)。そのため 1 つの原本が part ごとのコピーに分かれる: .val は loom add が part ディレクトリ
-// へコピーし(addPartToProject)、DXF は運用手順で手コピーする。原本だけを編集すると part 側のコピーが
-// 黙って古いまま取り残される。
+// 設計判断: 同じ files.* の値が project root と part ディレクトリの両方に実体を持ちうる。`loom add` が
+// .val を part ディレクトリへコピーし(addPartToProject)、DXF は運用手順で手コピーするため、1 つの原本が
+// コピーに分かれた project が現に存在する。
 //
-// この乖離は下流を静かに汚す。loadProjectedPart は part 側のコピーから darts / notches を射影するため、
-// loom diff が「part.loom 由来は最新・幾何射影は古い」の混在レポートを出す。createGeometryRequest は
-// part 側の DXF/SVG を Seamlint に渡すため、測定が古い幾何に対して行われる。どちらも失敗として表に
-// 出ないので、検出しない限り気付けない。
+// files.* の解決は root 相対を優先する(resolvePartFilePath)ので、両方在るときに読まれるのは root 側。
+// したがってこの検出が見つけるのは「古いものを読んでいる」ではなく「**このコピーは読まれない**」状態。
+// 放置すると2つの形で刺さる: (1) コピーを編集しても結果が変わらない(編集の空振り)、(2) 同名の別ファイルを
+// 意図して part 側に置いていた場合、root 側が黙って勝つ。どちらも失敗として表に出ないので、検出しない
+// 限り気付けない。
 //
 // 判定は「同じ相対パスが project root にも在って、内容が違う」という事実だけに留める。同名が偶然の
 // 別ファイルである可能性は原理的に排除できないため、断定(「古いから上書きしろ」)はしない。上書きを
-// 促して別ファイルだった場合、ユーザーのファイルを壊してしまう。事実だけを述べ、両方の読みを
-// suggestion で案内する。
+// 促して別ファイルだった場合、ユーザーのファイルを壊してしまう。事実だけを述べ、削除・root 側の更新・
+// リネームの3通りを suggestion で案内する。
 //
-// 根本解決(files.* を project root 相対で解決してコピー自体を無くす)は別件。ここは検出のみを担う。
+// コピーを作らないようにする(`loom add` の copyFile 廃止)のは別件。ここは検出のみを担う。
 
 // 検査対象は files.* のうちパスを持つフィールド。piece は detail 名(= DXF BLOCK 名)であってパスでは
 // ないため含めない。
@@ -68,6 +68,8 @@ export async function findStalePartFileCopies(
         continue;
       }
 
+      // 例外的に resolvePartFilePath を通さない。あれは「どちらか一方を選ぶ」関数だが、ここは
+      // 両方を突き合わせるのが仕事なので、part 側と root 側の生パスが2つとも要る。
       const copyPath = resolve(dirname(part.filePath), relativeValue);
       const originPath = resolve(projectRoot, relativeValue);
 

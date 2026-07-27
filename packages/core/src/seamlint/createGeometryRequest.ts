@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
 
+import { resolvePartFilePath } from "../parts/resolvePartFilePath.js";
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import type { ResolvedProject, ResolvedProjectPart } from "../project/resolveParts.js";
@@ -146,6 +146,13 @@ interface ResolvedPartGeometry {
   readonly format: SeamlintGeometrySourceFormat;
 }
 
+// 幾何ソース解決に要る状態をまとめて配る。projectRoot は resolvePartFilePath に渡して root の原本を
+// 優先させるため、cache は欠落警告と再計算を part につき1度にするため(両者は必ず同じ場所へ一緒に届く)。
+interface PartGeometryContext {
+  readonly projectRoot: string;
+  readonly cache: Map<string, ResolvedPartGeometry | null>;
+}
+
 export function createSeamlintGeometryRequest(
   resolvedProject: ResolvedProject
 ): SeamlintGeometryRequestBuildResult {
@@ -154,7 +161,10 @@ export function createSeamlintGeometryRequest(
   const checks: SeamlintGeometryCheckSpec[] = [];
   // part.role -> 解決済みソース / null(ソース欠落を既に警告済み)。geometry/preview は part 単位の
   // プロパティなので、その part が複数の join に参加していても欠落警告は1度だけにする。
-  const partSourceCache = new Map<string, ResolvedPartGeometry | null>();
+  const partGeometry: PartGeometryContext = {
+    projectRoot: resolvedProject.paths.projectRoot,
+    cache: new Map<string, ResolvedPartGeometry | null>()
+  };
 
   for (const [joinId, participants] of collectPartsByJoinId(resolvedProject)) {
     // connector id を共有する part がちょうど2つでない場合は、黙って捨てず理由を診断で示す。
@@ -224,7 +234,7 @@ export function createSeamlintGeometryRequest(
           band: bandShape.band,
           neighbours: bandShape.neighbours,
           geometryParts,
-          partSourceCache,
+          partGeometry,
           checks,
           diagnostics
         });
@@ -301,10 +311,10 @@ export function createSeamlintGeometryRequest(
       from.part,
       joinId,
       from.connector,
-      partSourceCache,
+      partGeometry,
       diagnostics
     );
-    const toSide = resolveGeometrySide(to.part, joinId, to.connector, partSourceCache, diagnostics);
+    const toSide = resolveGeometrySide(to.part, joinId, to.connector, partGeometry, diagnostics);
 
     if (fromSide === undefined || toSide === undefined) {
       continue;
@@ -473,11 +483,11 @@ function emitBandSeam(input: {
   readonly band: JoinParticipant;
   readonly neighbours: readonly JoinParticipant[];
   readonly geometryParts: Map<string, MutableGeometryPartRef>;
-  readonly partSourceCache: Map<string, ResolvedPartGeometry | null>;
+  readonly partGeometry: PartGeometryContext;
   readonly checks: SeamlintGeometryCheckSpec[];
   readonly diagnostics: Diagnostic[];
 }): void {
-  const { joinId, band, neighbours, geometryParts, partSourceCache, checks, diagnostics } = input;
+  const { joinId, band, neighbours, geometryParts, partGeometry, checks, diagnostics } = input;
   const roles = [band.part.role, ...neighbours.map((neighbour) => neighbour.part.role)];
 
   // check id / paths キーは role・joinId を区切り文字("." "/" ":" "__")で連結する。危険な識別子は別 seam と同じ
@@ -520,7 +530,7 @@ function emitBandSeam(input: {
   }
 
   // band + 全 neighbour を先に検証(mutation なし)。どれかが path_ref / 幾何ソース欠落なら何も commit せず抜ける。
-  const bandSide = resolveGeometrySide(band.part, joinId, band.connector, partSourceCache, diagnostics);
+  const bandSide = resolveGeometrySide(band.part, joinId, band.connector, partGeometry, diagnostics);
   if (bandSide === undefined) {
     return;
   }
@@ -531,7 +541,7 @@ function emitBandSeam(input: {
       neighbour.part,
       joinId,
       neighbour.connector,
-      partSourceCache,
+      partGeometry,
       diagnostics
     );
     if (side === undefined) {
@@ -635,7 +645,7 @@ function resolveGeometrySide(
   part: ResolvedProjectPart,
   connectorId: string,
   connector: Connector,
-  partSourceCache: Map<string, ResolvedPartGeometry | null>,
+  partGeometry: PartGeometryContext,
   diagnostics: Diagnostic[]
 ): ResolvedGeometrySide | undefined {
   const pathRef = connector.path_ref;
@@ -654,7 +664,7 @@ function resolveGeometrySide(
     return undefined;
   }
 
-  const geometry = resolvePartGeometry(part, partSourceCache, diagnostics);
+  const geometry = resolvePartGeometry(part, partGeometry, diagnostics);
   if (geometry === undefined) {
     return undefined;
   }
@@ -672,10 +682,10 @@ function resolveGeometrySide(
 // part 単位なので結果を memo 化し、欠落警告(と再計算)を part につき1度だけにする。
 function resolvePartGeometry(
   part: ResolvedProjectPart,
-  partSourceCache: Map<string, ResolvedPartGeometry | null>,
+  partGeometry: PartGeometryContext,
   diagnostics: Diagnostic[]
 ): ResolvedPartGeometry | undefined {
-  const cached = partSourceCache.get(part.role);
+  const cached = partGeometry.cache.get(part.role);
   if (cached !== undefined) {
     return cached === null ? undefined : cached;
   }
@@ -698,11 +708,15 @@ function resolvePartGeometry(
         ]
       })
     );
-    partSourceCache.set(part.role, null);
+    partGeometry.cache.set(part.role, null);
     return undefined;
   }
 
-  const absoluteSourcePath = join(dirname(part.filePath), preferredSource.path);
+  const absoluteSourcePath = resolvePartFilePath({
+    partFilePath: part.filePath,
+    value: preferredSource.path,
+    projectRoot: partGeometry.projectRoot
+  });
   if (!existsSync(absoluteSourcePath)) {
     diagnostics.push(
       createDiagnostic({
@@ -715,7 +729,7 @@ function resolvePartGeometry(
         ]
       })
     );
-    partSourceCache.set(part.role, null);
+    partGeometry.cache.set(part.role, null);
     return undefined;
   }
 
@@ -723,7 +737,7 @@ function resolvePartGeometry(
     geometrySource: absoluteSourcePath,
     format: geometryFormatOf(preferredSource.path)
   };
-  partSourceCache.set(part.role, resolved);
+  partGeometry.cache.set(part.role, resolved);
   return resolved;
 }
 

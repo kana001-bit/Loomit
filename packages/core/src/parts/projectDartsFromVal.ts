@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
 
 import { collectBlocks, collectFirstBlock, collectSelfClosingTags } from "./valXml.js";
+import { resolvePartFilePath } from "./resolvePartFilePath.js";
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import { getErrno } from "../filesystem/fsError.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
@@ -154,9 +154,15 @@ export function projectDartsFromValText(
 // .val から取り出したい消費者に向く粒度なので温存する。責務分担は docs/work/diffable-domain.md 参照。
 export async function projectPartDartsFromSource(
   partFilePath: string,
-  sourceRelativePath: string
+  sourceRelativePath: string,
+  // project root が分かる呼び手は渡す。渡すと root の原本を優先する(resolvePartFilePath の優先順位)。
+  projectRoot?: string
 ): Promise<ValentinaDartProjectionResult> {
-  const sourceFilePath = resolve(dirname(partFilePath), sourceRelativePath);
+  const sourceFilePath = resolvePartFilePath({
+    partFilePath,
+    value: sourceRelativePath,
+    ...(projectRoot === undefined ? {} : { projectRoot })
+  });
   return projectDartsFromValFile(sourceFilePath);
 }
 

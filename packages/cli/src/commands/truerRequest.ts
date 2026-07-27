@@ -113,7 +113,11 @@ async function collectPayloadParts(project: ResolvedProject): Promise<CollectedP
       continue;
     }
 
-    const sourceResult = await readValSource(resolved.filePath, sourceRelativePath);
+    const sourceResult = await readValSource(
+      resolved.filePath,
+      sourceRelativePath,
+      project.paths.projectRoot
+    );
     diagnostics.push(...sourceResult.diagnostics);
 
     if (sourceResult.source === undefined) {

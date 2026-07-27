@@ -110,6 +110,28 @@ describe("findUnregisteredValSources", () => {
     }
   });
 
+  it("does not offer a project root .val that a part already claims as its source", async () => {
+    // 守る仕様: files.source は project root 相対とも part 相対とも解決されうるため、part は
+    // 「両方の候補位置」を主張する。root に置いた原本を候補に出すと「取り込み済みの原本を loom add
+    // しろ」と誤案内することになり、従うと同じ role が二重登録される。
+    //
+    // NOTE: 以前この位置には逆の仕様(root の .val を残骸とみなし削除を促す)のテストがあった。
+    // files.* を root 相対で解決するようにした時点で原本とコピーの向きが反転したため差し替えた。
+    const projectRoot = await mkdtemp(join(tmpdir(), "loomit-find-claimed-"));
+
+    try {
+      await writeProject(projectRoot, "parts:\n  body: ./parts/body/part.loom");
+      await writeBodyPart(projectRoot);
+      await writeFile(join(projectRoot, "parts/body/body.val"), "body source\n", "utf8");
+      // root 直下の原本。part の files.source: body.val はこの位置も主張する。
+      await writeFile(join(projectRoot, "body.val"), "body source\n", "utf8");
+
+      expect(await scanOk(projectRoot, { includeProjectRoot: true })).toEqual([]);
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
+
   it("marks a candidate that duplicates a registered source with duplicateOf", async () => {
     // 守る仕様: 登録済み source と同一内容の候補には duplicateOf(登録済み側の相対パス)が付く。
     // loom add の自動発見はこれを取り込まず、check は「削除」を促す(残骸の再 add を防ぐ)。
@@ -119,13 +141,14 @@ describe("findUnregisteredValSources", () => {
       await writeProject(projectRoot, "parts:\n  body: ./parts/body/part.loom");
       await writeBodyPart(projectRoot);
       await writeFile(join(projectRoot, "parts/body/body.val"), "body source\n", "utf8");
-      // 登録済み parts/body/body.val と同一内容の残骸を root 直下に置く(明示パス add の取り残し)。
-      await writeFile(join(projectRoot, "body.val"), "body source\n", "utf8");
+      // 登録済み source と同一内容の残骸。part が主張する2箇所(root 直下・parts/body/)の
+      // どちらでもない位置に置く。
+      await writeFile(join(projectRoot, "parts/leftover.val"), "body source\n", "utf8");
 
-      const sources = await scanOk(projectRoot, { includeProjectRoot: true });
+      const sources = await scanOk(projectRoot);
 
       expect(sources).toHaveLength(1);
-      expect(sources[0]?.relativePath).toBe("body.val");
+      expect(sources[0]?.relativePath).toBe("parts/leftover.val");
       expect(sources[0]?.duplicateOf).toBe("parts/body/body.val");
     } finally {
       await rm(projectRoot, { recursive: true, force: true });

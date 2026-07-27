@@ -521,7 +521,13 @@ describe("loom add (no .val argument)", () => {
 
   it("reports nothing to add when re-run after the import, instead of re-adding", async () => {
     // 守る仕様: 取り込み済みプロジェクトでの再実行は「取り込むものが無い」で正常終了する(exit 0・書き込みなし)。
-    // root に残った原本は登録済みコピーと同一内容 = 残骸として候補から除き、role 衝突エラーの藪に落とさない。
+    // root の原本は part の files.source が主張する位置なので「登録済み」として候補から除き、role 衝突
+    // エラーの藪に落とさない。
+    //
+    // NOTE: 以前は同じ状況を「残骸(duplicate)なので Skipped と理由を出す」で守っていた。files.* を
+    // project root 相対で解決するようにしたことで root の .val は残骸ではなく原本になり、"Skipped" では
+    // なく「全て登録済み」と言うのが正しい説明になった。
+
     const root = await makeProject();
     const out: string[] = [];
     const err: string[] = [];
@@ -544,8 +550,8 @@ describe("loom add (no .val argument)", () => {
 
       expect(err.join("")).toBe("");
       expect(code).toBe(0);
-      // 残骸(root の原本)は理由つきで候補から外し、取り込むものが無いことを明言する。
-      expect(out.join("")).toContain("Skipped knickers.val");
+      // root の原本は登録済みとして候補から外し、取り込むものが無いことを明言する。
+      expect(out.join("")).toContain("already registered");
       expect(out.join("")).toContain("nothing to add");
       // 書き込みなし: front2 のような追加 role は作られない。
       const project = await readFile(join(root, "loomit.yml"), "utf8");

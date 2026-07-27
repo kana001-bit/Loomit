@@ -1993,6 +1993,14 @@ describe("runCli", () => {
       expect(stdout).toContain("Loomit build: warning");
       expect(stdout).toContain("PART_FILE_COPY_STALE");
       expect(stdout).toContain("parts/body/body.val");
+
+      // 守る仕様: manifest の sourcePath は「実際に build 元にしたファイル」を記録する。files.* は
+      // project root 相対を優先して解決するので、root に原本があるときは part コピーではなく root 側を
+      // 指す。manifest は durable な正本なので、この対応関係を pin しておく。
+      const manifest = await readFile(join(tempRoot, "output/manifest.json"), "utf8");
+      expect(JSON.parse(manifest)).toMatchObject({
+        assets: [expect.objectContaining({ role: "body", kind: "source", sourcePath: "body.val" })]
+      });
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }

@@ -1,10 +1,11 @@
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 import {
   createDiagnostic,
+  resolvePartFilePath,
   type Diagnostic,
   type ResolvedProject,
   type SeamlintGeometryCheckRequest,
@@ -146,7 +147,14 @@ export async function runTruerPropose(input: RunTruerProposeInput): Promise<True
     return { outcome: { kind: "skipped", reason: "follower part has no DXF geometry" }, diagnostics };
   }
 
-  const followerDxf = resolve(dirname(followerPart.filePath), followerGeometry);
+  // 測定に使った DXF と同じ規則で解決する。createGeometryRequest(Seamlint に渡す幾何)は project root
+  // 相対を優先するので、ここで part 相対だけを見ると「root の DXF を測って part コピーの DXF を直す」
+  // という食い違いになる。Truer は DXF を書き換えるため、測った対象と違うファイルへ黙って書き込むことになる。
+  const followerDxf = resolvePartFilePath({
+    partFilePath: followerPart.filePath,
+    value: followerGeometry,
+    projectRoot: input.resolvedProject.paths.projectRoot
+  });
   if (!existsSync(followerDxf)) {
     diagnostics.push(
       createDiagnostic({

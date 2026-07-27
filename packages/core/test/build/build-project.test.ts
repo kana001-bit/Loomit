@@ -93,9 +93,14 @@ describe("buildProject", () => {
     }
   });
 
-  it("refuses to read a source file outside the part directory", async () => {
-    // 守る仕様: hand-built ResolvedProject を含め、build は part directory の外にある source を読まない。
-    // project root 内でも part 外(例: 別 part の profiles)を指す source は拒否する。
+  it("refuses to read a source file outside the project root", async () => {
+    // 守る仕様: hand-built ResolvedProject を含め、build は project root の外にある source を読まない。
+    // 境界は project root。files.* は root 相対でも part 相対でも解決されうる(resolvePartFilePath)ため、
+    // 「part ディレクトリ配下」で見ると root 直下に置いた正当な原本まで拒否してしまう。
+    //
+    // NOTE: 以前この位置には「part ディレクトリの外なら project 内でも拒否」(BUILD_INPUT_ESCAPES_PART)の
+    // テストがあった。files.* を root 相対で解決するようにした時点でその制約が成り立たなくなったため、
+    // 境界を project root に緩めて差し替えた。守っている安全性(build が project 外を読まない)は同じ。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-build-"));
 
     try {
@@ -108,14 +113,15 @@ describe("buildProject", () => {
             name: "build-body",
             variant: "test",
             type: "body",
-            files: { source: "../profiles/private.yml" }
+            // parts/body/ から3つ上がると project root の外に出る。
+            files: { source: "../../../outside.yml" }
           }
         }
       });
       const result = await buildProject(resolved);
 
       expect(result.ok).toBe(false);
-      expect(result.ok ? "" : result.diagnostics[0]?.code).toBe("BUILD_INPUT_ESCAPES_PART");
+      expect(result.ok ? "" : result.diagnostics[0]?.code).toBe("BUILD_INPUT_ESCAPES_PROJECT");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }

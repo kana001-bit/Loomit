@@ -8,6 +8,7 @@ import { checkPathExistence } from "../filesystem/pathExists.js";
 import { isPathWithin } from "../filesystem/pathWithin.js";
 import { toPosixPath } from "../filesystem/toPosixPath.js";
 import { writeFileAtomic } from "../filesystem/writeFileAtomic.js";
+import { resolvePartFilePath } from "../parts/resolvePartFilePath.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import type { DiagnosticReport } from "../diagnostics/report.js";
 import type { LoadFileResult } from "../filesystem/loadFileResult.js";
@@ -37,7 +38,6 @@ export interface BuildReport extends DiagnosticReport {
 }
 
 interface PlannedBuildAsset extends BuildManifestAsset {
-  readonly partDirectory: string;
   readonly absoluteSourcePath: string;
   readonly absoluteOutputPath: string;
 }
@@ -75,7 +75,10 @@ export async function buildProject(
     outputDir,
     resolvedProject.paths.projectRoot
   );
-  const diagnostics = await validateBuildInputs(plannedAssets, { outputDir });
+  const diagnostics = await validateBuildInputs(plannedAssets, {
+    outputDir,
+    projectRoot: resolvedProject.paths.projectRoot
+  });
 
   if (diagnostics.length > 0) {
     return {
@@ -171,7 +174,6 @@ function planPartAssets(
   outputDir: string,
   projectRoot: string
 ): readonly PlannedBuildAsset[] {
-  const partDirectory = dirname(resolvedPart.filePath);
   const assets: PlannedBuildAsset[] = [];
 
   for (const kind of buildAssetKinds) {
@@ -181,7 +183,11 @@ function planPartAssets(
       continue;
     }
 
-    const absoluteSourcePath = resolve(partDirectory, filePath);
+    const absoluteSourcePath = resolvePartFilePath({
+      partFilePath: resolvedPart.filePath,
+      value: filePath,
+      projectRoot
+    });
     const absoluteOutputPath = join(
       outputDir,
       "parts",
@@ -198,7 +204,6 @@ function planPartAssets(
       // Windows で書いた manifest を macOS / Linux でもそのまま解釈できるようにする。
       sourcePath: toPosixPath(relative(projectRoot, absoluteSourcePath)),
       outputPath: toPosixPath(relative(projectRoot, absoluteOutputPath)),
-      partDirectory,
       absoluteSourcePath,
       absoluteOutputPath
     });
@@ -209,22 +214,23 @@ function planPartAssets(
 
 async function validateBuildInputs(
   assets: readonly PlannedBuildAsset[],
-  roots: { readonly outputDir: string }
+  roots: { readonly outputDir: string; readonly projectRoot: string }
 ): Promise<readonly Diagnostic[]> {
   const diagnostics: Diagnostic[] = [];
 
   for (const asset of assets) {
-    // 多層防御: schema が files.* を part 相対に、role を安全な segment に保っていても、buildProject は
-    // 手組みの ResolvedProject も受け取る public API。part の files はその part 自身のディレクトリ配下
-    // (単に project 内ではなく)になければならず、出力は outputDir 配下に留めなければならない。
-    if (!isPathWithin(asset.partDirectory, asset.absoluteSourcePath)) {
+    // 多層防御: schema が files.* の ".." と絶対パスを、role を安全な segment に拒否していても、
+    // buildProject は手組みの ResolvedProject も受け取る public API。files.* は project root 相対でも
+    // part 相対でも解決されうる(resolvePartFilePath)ので、境界は **project root** で見る。出力は
+    // outputDir 配下に留めなければならない。
+    if (!isPathWithin(roots.projectRoot, asset.absoluteSourcePath)) {
       diagnostics.push(
         createDiagnostic({
           severity: "error",
-          code: "BUILD_INPUT_ESCAPES_PART",
-          message: "A part file referenced for build output is outside the part directory.",
+          code: "BUILD_INPUT_ESCAPES_PROJECT",
+          message: "A part file referenced for build output is outside the project root.",
           target: asset.sourcePath,
-          suggestion: ["Use a part-relative files path without \"..\" or an absolute path."]
+          suggestion: ["Use a files path inside the project without \"..\" or an absolute path."]
         })
       );
       continue;

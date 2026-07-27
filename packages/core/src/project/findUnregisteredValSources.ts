@@ -1,6 +1,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 
+import { resolvePartFilePath } from "../parts/resolvePartFilePath.js";
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import { isCaseInsensitiveFileSystemAt } from "../filesystem/caseSensitivity.js";
@@ -142,14 +143,22 @@ function collectRegisteredSources(
   resolvedProject: ResolvedProject,
   normalizeKey: (path: string) => string
 ): ReadonlySet<string> {
+  const { projectRoot } = resolvedProject.paths;
   const registered = new Set<string>();
 
   for (const part of Object.values(resolvedProject.parts)) {
     const source = part.part.files?.source;
 
-    if (source !== undefined) {
-      registered.add(normalizeKey(resolve(dirname(part.filePath), source)));
+    if (source === undefined) {
+      continue;
     }
+
+    // 設計判断: ここは「どちらを読むか」(resolvePartFilePath)ではなく「どの .val が part に主張されて
+    // いるか」を集める。files.source は project root 相対とも part 相対とも解決されうるので、両方の候補
+    // 位置を登録済みとして押さえる。片方だけにすると、選ばれなかった側が「未登録」に落ちて
+    // `loom add <その .val>` を促し、実行すると同じ role が二重登録される。
+    registered.add(normalizeKey(resolve(projectRoot, source)));
+    registered.add(normalizeKey(resolve(dirname(part.filePath), source)));
   }
 
   return registered;
@@ -173,7 +182,11 @@ async function readRegisteredSourceContents(
       continue;
     }
 
-    const absolute = resolve(dirname(part.filePath), source);
+    const absolute = resolvePartFilePath({
+      partFilePath: part.filePath,
+      value: source,
+      projectRoot
+    });
 
     try {
       const content = await readFile(absolute, "utf8");
