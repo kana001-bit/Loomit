@@ -404,6 +404,69 @@ describe("runMatchCommand", () => {
     }
   });
 
+  it("hands Truer the same DXF that was measured when a project root original exists", async () => {
+    // 守る仕様: Truer に渡す follower の DXF は、Seamlint が測ったのと同じ規則(project root 相対を優先)で
+    // 解決する。ここを part 相対だけで解決すると「root の DXF を測って part コピーの DXF を直す」ことになり、
+    // Truer は DXF を書き換えるので、測った対象とは別のファイルへ黙って書き込む。
+    const root = await writeTempProject([
+      {
+        role: "front",
+        partLoom:
+          "schema: loomit.part.v0\nname: front\nvariant: v1\ntype: front\nfiles:\n  geometry: front.dxf\nconnectors:\n  outseam:\n    type: outseam\n    path_ref: FRONT\n",
+        files: { "front.dxf": DXF }
+      },
+      {
+        role: "back",
+        partLoom:
+          "schema: loomit.part.v0\nname: back\nvariant: v1\ntype: back\nfiles:\n  geometry: back.dxf\nconnectors:\n  outseam:\n    type: outseam\n    path_ref: BACK\n",
+        files: { "back.dxf": DXF }
+      }
+    ]);
+
+    try {
+      // project root 側にも同名の原本を置く。解決規則により、測定も Truer もこちらを使うのが正しい。
+      await writeFile(join(root, "front.dxf"), DXF, "utf8");
+
+      const seamlintReport = {
+        status: "ok" as const,
+        target: "geometry-request",
+        diagnostics: [],
+        reports: [
+          {
+            status: "ok" as const,
+            target: "front.outseam/back.outseam",
+            lengthMm: 800,
+            diagnostics: []
+          }
+        ]
+      };
+      const { runner } = fakeRunner({ ok: true, report: seamlintReport, exitCode: 0 });
+      const { runner: truer, calls: truerCalls } = fakeTruerRunner({ ok: true, exitCode: 0 });
+      const out = collect();
+
+      const exitCode = await runMatchCommand(
+        ["front", "back", "--reference", "back", "--format", "json"],
+        {
+          cwd: root,
+          stdout: out.io.stdout,
+          stderr: out.io.stderr,
+          runner,
+          truerRunner: truer
+        }
+      );
+
+      expect(exitCode).toBe(0);
+      expect(truerCalls.length).toBe(1);
+
+      // root 側の front.dxf を渡している(parts/front/front.dxf ではない)。
+      const dxfArg = (truerCalls[0]?.[1] ?? "").replace(/\\/g, "/");
+      expect(dxfArg.endsWith("/front.dxf")).toBe(true);
+      expect(dxfArg).not.toContain("parts/front/");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("rejects --reference that is not one of the two parts", async () => {
     // 守る仕様: --reference は名指しした2パーツのどちらかでなければ usage エラー(exit 2)で弾く。
     const { runner } = fakeRunner({ ok: false, code: "SHOULD_NOT_RUN", message: "must not run" });

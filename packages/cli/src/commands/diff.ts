@@ -55,6 +55,11 @@ type ParsedDiffArgs =
 interface ResolvedDiffPaths {
   readonly fromPath: string;
   readonly toPath: string;
+  // 各辺の project root。loadProjectedPart は files.source を project root 相対優先で解決するので、
+  // 既に project を読んでいる経路(--part / revision)ではその root をそのまま渡し、part.loom から
+  // loomit.yml を探して登り直させない。パス指定モード(project を読まない)では undefined。
+  readonly fromProjectRoot?: string;
+  readonly toProjectRoot?: string;
   readonly prototypeNotes?: PrototypeNotes;
   readonly notesDiagnostics: readonly Diagnostic[];
 }
@@ -210,7 +215,10 @@ async function diffResolvedParts(
   parsedArgs: ParsedDiffArgs,
   options: DiffCommandOptions
 ): Promise<number> {
-  const fromResult = await loadProjectedPart(value.fromPath);
+  const fromResult = await loadProjectedPart(
+    value.fromPath,
+    value.fromProjectRoot === undefined ? undefined : { projectRoot: value.fromProjectRoot }
+  );
 
   if (!fromResult.ok) {
     writeReport(
@@ -221,7 +229,10 @@ async function diffResolvedParts(
     return 1;
   }
 
-  const toResult = await loadProjectedPart(value.toPath);
+  const toResult = await loadProjectedPart(
+    value.toPath,
+    value.toProjectRoot === undefined ? undefined : { projectRoot: value.toProjectRoot }
+  );
 
   if (!toResult.ok) {
     writeReport(
@@ -372,12 +383,8 @@ async function resolveProjectPartPaths(
 ): Promise<
   | {
       readonly ok: true;
-      readonly value: {
-        readonly fromPath: string;
-        readonly toPath: string;
-        readonly prototypeNotes?: PrototypeNotes;
-        readonly notesDiagnostics: readonly Diagnostic[];
-      };
+      // 形が drift しないよう ResolvedDiffPaths をそのまま使う(以前はここに同じ形を重複定義していた)。
+      readonly value: ResolvedDiffPaths;
     }
   | {
       readonly ok: false;
@@ -494,6 +501,8 @@ async function resolveProjectPartPaths(
     value: {
       fromPath: fromPartPath,
       toPath: toPartPath,
+      fromProjectRoot: fromProjectResult.value.paths.projectRoot,
+      toProjectRoot: toProjectResult.value.paths.projectRoot,
       notesDiagnostics,
       ...(prototypeNotes === undefined ? {} : { prototypeNotes })
     }

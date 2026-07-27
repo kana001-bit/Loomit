@@ -151,7 +151,8 @@ describe("collectProjectReadinessDiagnostics", () => {
 
   it("warns when a part's copied .val no longer matches the project root original", async () => {
     // 守る仕様: part 内のコピーが root の同名原本と食い違うとき PART_FILE_COPY_STALE を warning で出し、
-    // 射影(darts / notches)が古い .val を読む状態であることを message で伝える。
+    // 「root 側が読まれるのでこの part コピーは使われない」ことを message で伝える(コピーを編集しても
+    // 効かない、という空振りに気付けるようにする)。
     const projectRoot = await mkdtemp(join(tmpdir(), "loomit-readiness-stale-"));
 
     try {
@@ -165,7 +166,8 @@ describe("collectProjectReadinessDiagnostics", () => {
       expect(diagnostics).toHaveLength(1);
       expect(diagnostics[0]?.code).toBe("PART_FILE_COPY_STALE");
       expect(diagnostics[0]?.severity).toBe("warning");
-      expect(diagnostics[0]?.message).toContain("loom diff");
+      // 「読まれない」ことが message に出ている(「古いものを読む」ではない)。
+      expect(diagnostics[0]?.message).toContain("この part コピーは使われません");
     } finally {
       await rm(projectRoot, { recursive: true, force: true });
     }

@@ -1,7 +1,6 @@
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import { findStalePartFileCopies } from "./findStalePartFileCopies.js";
-import type { CopiedFileField } from "./findStalePartFileCopies.js";
 import { findUnregisteredValSources } from "./findUnregisteredValSources.js";
 import type { ResolvedProject } from "./resolveParts.js";
 
@@ -72,15 +71,18 @@ export async function collectProjectReadinessDiagnostics(
     );
   }
 
-  // part 内のコピーが project root の原本と食い違っている状態を警告する。射影(darts / notches)と
-  // Seamlint 測定は part 側コピーを読むため、古いコピーは「失敗」ではなく「静かに間違った結果」になる。
+  // part 内のコピーが project root の同名ファイルと食い違っている状態を警告する。
+  //
+  // files.* は root 相対を優先して解決する(resolvePartFilePath)ため、両方在れば読まれるのは root 側。
+  // つまりこの警告は「古いものを読んでいる」ではなく「**このコピーは読まれない**」の通知になる。
+  // 危ないのは編集の空振り(コピーを直しても効かない)と、同名の別ファイルを置いていた場合に root 側が
+  // 黙って勝つこと。どちらも message で「root が読まれる」と明言することで気付けるようにする。
   const staleCopies = await findStalePartFileCopies(resolvedProject);
 
   // 比較できなかった事実(権限エラー等)も落とさず見せる。黙って一致扱いにすると検出自体が嘘になる。
   diagnostics.push(...staleCopies.diagnostics);
 
   for (const copy of staleCopies.value) {
-    const impact = describeStaleImpact(copy.field);
     const pair = `${copy.copyRelativePath} ≠ ${copy.originRelativePath}`;
 
     diagnostics.push(
@@ -88,39 +90,17 @@ export async function collectProjectReadinessDiagnostics(
         severity: "warning",
         code: "PART_FILE_COPY_STALE",
         message:
-          `part 内の files.${copy.field} が project root の同名ファイルと一致しません${impact.ja}: ${pair}` +
-          ` / The part's files.${copy.field} does not match the same-named file at the project root${impact.en}: ${pair}`,
+          `part 内の files.${copy.field} が project root の同名ファイルと一致しません。Loomit は root 側を読むため、この part コピーは使われません: ${pair}` +
+          ` / The part's files.${copy.field} does not match the same-named file at the project root. Loomit reads the project root file, so this part copy is unused: ${pair}`,
         target: copy.copyPath,
         suggestion: [
-          `If ${copy.originRelativePath} is the original, copy it over ${copy.copyRelativePath}.`,
-          "If they are unrelated files that happen to share a name, rename one so the copy relationship is unambiguous."
+          `If ${copy.originRelativePath} is the original, delete the unused copy at ${copy.copyRelativePath}.`,
+          `If the copy holds the version you want, update ${copy.originRelativePath} instead — edits to the copy have no effect.`,
+          `If they are unrelated files that happen to share a name, rename one — otherwise Loomit silently reads ${copy.originRelativePath}.`
         ]
       })
     );
   }
 
   return diagnostics;
-}
-
-// 古いコピーが何を汚すかはフィールドごとに違う。影響のあるフィールドだけ結果への波及を message に添え、
-// 「直さなくてよい警告」と誤解されるのを防ぐ。print は出力用 artifact なので check / diff への波及はない。
-function describeStaleImpact(field: CopiedFileField): {
-  readonly ja: string;
-  readonly en: string;
-} {
-  switch (field) {
-    case "source":
-      return {
-        ja: "(loom diff が古い .val から darts / notches を射影します)",
-        en: " (loom diff will project darts / notches from the stale .val)"
-      };
-    case "preview":
-    case "geometry":
-      return {
-        ja: "(Seamlint が古い幾何を測ります)",
-        en: " (Seamlint will measure the stale geometry)"
-      };
-    case "print":
-      return { ja: "", en: "" };
-  }
 }

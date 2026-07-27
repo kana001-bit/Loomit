@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
 
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import { getErrno } from "../filesystem/fsError.js";
+import { resolvePartFilePath } from "./resolvePartFilePath.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 
 export interface ValSourceReadResult {
@@ -18,9 +18,16 @@ export interface ValSourceReadResult {
 // source.val が無いのは正常系(ENOENT→silent)。存在するのに読めない(権限等)ときだけ warning を返す。
 export async function readValSource(
   partFilePath: string,
-  sourceRelativePath: string
+  sourceRelativePath: string,
+  // project root が分かる呼び手は渡す。渡すと root の原本を優先して読む(resolvePartFilePath の優先順位)。
+  // 省略時は従来どおり part 相対のみで解決する。
+  projectRoot?: string
 ): Promise<ValSourceReadResult> {
-  const sourceFilePath = resolve(dirname(partFilePath), sourceRelativePath);
+  const sourceFilePath = resolvePartFilePath({
+    partFilePath,
+    value: sourceRelativePath,
+    ...(projectRoot === undefined ? {} : { projectRoot })
+  });
 
   try {
     return {

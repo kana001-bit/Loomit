@@ -151,6 +151,7 @@ export { notchTypeFromPassmarkLine } from "./parts/notchType.js";
 export type { NotchType } from "./parts/notchType.js";
 export { readValSource } from "./parts/readValSource.js";
 export type { ValSourceReadResult } from "./parts/readValSource.js";
+export { resolvePartFilePath } from "./parts/resolvePartFilePath.js";
 export { assembleConstraintPayload } from "./truer/assembleConstraintPayload.js";
 export type {
   ConstraintParam,

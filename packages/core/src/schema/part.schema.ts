@@ -172,14 +172,17 @@ export const partSchema = z
     // でなければならない。
     type: pathSegmentSchema,
     status: partStatusSchema.optional(),
-    // files.* は build が読み込み・コピーする。part.loom が part ディレクトリ外のファイルを build に
-    // 指させないよう part 相対に限定する(絶対パスと ".." は拒否)。
+    // files.* は build が読み込み・コピーする。schema は絶対パスと ".." を拒否し、実パスへの解決は
+    // resolvePartFilePath が担う(project root 相対を優先し、root に無ければ part ディレクトリ相対)。
+    // 境界は project root であって part ディレクトリではない(buildProject の BUILD_INPUT_ESCAPES_PROJECT
+    // が多層防御として同じ境界を見る)。
     files: z
       .object({
         source: relativePathSchema.optional(),
         piece: z.string().min(1).optional(),
         preview: relativePathSchema.optional(),
-        // 設計判断: geometry は測定用の幾何 artifact(DXF-ASTM 等)への part 相対パス。preview(視覚用 SVG)とは
+        // 設計判断: geometry は測定用の幾何 artifact(DXF-ASTM 等)への参照(解決規則は上の files.* と同じ)。
+        // preview(視覚用 SVG)とは
         // 別立てにする。SVG は detail identity も notch も落とすが、DXF(ASTM)は BLOCK 名=detail と縫い線
         // (layer 14)を保持するため、Seamlint に「どの座標を測るか」を渡せる。意味(identity)は .val/.loom 側の
         // 責務のまま変えない(docs/seamlint-dxf-export-request.md)。
