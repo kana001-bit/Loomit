@@ -148,4 +148,45 @@ describe("collectProjectReadinessDiagnostics", () => {
       await rm(projectRoot, { recursive: true, force: true });
     }
   });
+
+  it("warns when a part's copied .val no longer matches the project root original", async () => {
+    // 守る仕様: part 内のコピーが root の同名原本と食い違うとき PART_FILE_COPY_STALE を warning で出し、
+    // 射影(darts / notches)が古い .val を読む状態であることを message で伝える。
+    const projectRoot = await mkdtemp(join(tmpdir(), "loomit-readiness-stale-"));
+
+    try {
+      await writeProject(projectRoot, "parts:\n  body: ./parts/body/part.loom");
+      await writeBodyPart(projectRoot);
+      // writeBodyPart のコピーは "body source\n"。root の原本だけを編集した状態にする。
+      await writeFile(join(projectRoot, "body.val"), "edited in Valentina\n", "utf8");
+
+      const diagnostics = await collectProjectReadinessDiagnostics(await resolve(projectRoot));
+
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]?.code).toBe("PART_FILE_COPY_STALE");
+      expect(diagnostics[0]?.severity).toBe("warning");
+      expect(diagnostics[0]?.message).toContain("loom diff");
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("stays silent when the copied .val still matches the project root original", async () => {
+    // 守る仕様: 内容が一致していれば root に同名ファイルが在っても警告しない(コピー配置は正常な状態で、
+    // 同名の存在だけで PART_FILE_COPY_STALE を出してはならない)。
+    const projectRoot = await mkdtemp(join(tmpdir(), "loomit-readiness-fresh-"));
+
+    try {
+      await writeProject(projectRoot, "parts:\n  body: ./parts/body/part.loom");
+      await writeBodyPart(projectRoot);
+      // writeBodyPart が書くコピーと同一内容の原本を root に置く。
+      await writeFile(join(projectRoot, "body.val"), "body source\n", "utf8");
+
+      const diagnostics = await collectProjectReadinessDiagnostics(await resolve(projectRoot));
+
+      expect(diagnostics).toEqual([]);
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
 });

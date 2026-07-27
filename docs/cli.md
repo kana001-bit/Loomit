@@ -124,6 +124,8 @@ loom check [path] [--format text|json]
 - `loomit.yml` と参照している part を検証する。
 - connector や `requires` の互換を確認する。
 - `parts/` 配下に、どの part も参照していない `.val` があれば warning で知らせる。
+- この2つ（`UNREGISTERED_VAL_SOURCE` / `PART_FILE_COPY_STALE`）は **readiness 判定**として共有され、`loom build` / `loom slnt request` / `loom slnt check` / `loom truer request` でも同じように出る。いずれのコマンドも同じファイルを読むため、`check` だけの警告にはしない。
+- part 内の `files.*`（`source` / `preview` / `geometry` / `print`）が、project root の同名ファイルと内容不一致なら warning（`PART_FILE_COPY_STALE`）で知らせる。`files.*` は part 相対でしか書けないため `.val` や DXF は part ディレクトリへコピーされる。root の原本だけを編集するとコピーが古いまま取り残され、`loom diff` の darts / notches 射影や Seamlint の測定が古いファイルを読む（どちらも失敗として表に出ない）。同名が偶然の別ファイルである場合もあるため、診断は内容が違うという事実だけを述べ、再コピーとリネームの両方を案内する。
 
 ## `loom doctor`
 
@@ -148,7 +150,7 @@ loom build [path] [--format text|json]
 
 補足:
 
-- part を解決し、`check` 相当の互換検証を走らせてから build 出力を書く。
+- part を解決し、`check` と同じ readiness 判定と互換検証を走らせてから build 出力を書く。readiness の warning（`UNREGISTERED_VAL_SOURCE` / `PART_FILE_COPY_STALE`）は build が成功しても握りつぶさずレポートに載せる。build は `files.*` を output へ配るため、part 内のコピーが古いと古い成果物をそのまま配ることになる。
 - 致命的でない問題は、逐一失敗させず可能なら warning で伝える。
 
 ## `loom slnt request`
@@ -161,7 +163,7 @@ loom slnt request [path] [--format text|json]
 
 補足:
 
-- `loomit.yml` と part を読み、check と同じ readiness 判定をしたうえで `parts` / `checks` からなる request を出力する。
+- `loomit.yml` と part を読み、check と同じ readiness 判定をしたうえで `parts` / `checks` からなる request を出力する。readiness の warning（`UNREGISTERED_VAL_SOURCE` / `PART_FILE_COPY_STALE`）は結果に載る。
 - part の geometry source は `files.geometry` を優先し、無ければ `files.preview` を使う。
 - `path_ref` や geometry source が欠けている seam は diagnostic を出して skip する。
 - warning のみであれば、exit code 0 のまま report status `warning` を返す。
@@ -176,6 +178,7 @@ loom slnt check [path] [--slnt <path>] [--format text|json]
 
 補足:
 
+- `loomit.yml` と part を読み、`slnt request` と同じ readiness 判定をしたうえで request を組み立てる。readiness の warning（`UNREGISTERED_VAL_SOURCE` / `PART_FILE_COPY_STALE`）は結果に載る。渡す幾何ファイルが古いと、Seamlint は古い幾何を測った結果を正しい測定として返す。
 - request を組み立て、各 part の geometry source（`files.geometry` 優先、無ければ `files.preview`）を読んで request に inline し、self-contained な JSON を作る。
 - その JSON を `slnt check-request --json` に stdin で渡し、返ってきた `GeometryRequestReport`（seam ごとの pass/fail・長さ）を Loomit 側の診断と合わせて表示する。
 - Seamlint 実行ファイルは `--slnt <path>`、環境変数 `LOOMIT_SLNT`、PATH 上の `slnt` の順で解決する。見つからなければ error（`SEAMLINT_NOT_FOUND`）にして、インストールか `--slnt` 指定を促す。
@@ -258,7 +261,7 @@ loom truer request [path] [--format text|json]
 
 補足:
 
-- `loomit.yml` と part を読み、`slnt request` と同じ readiness 判定をしたうえで、封筒 `{ status, diagnostics, payload }` を出力する。
+- `loomit.yml` と part を読み、`slnt request` と同じ readiness 判定をしたうえで、封筒 `{ status, diagnostics, payload }` を出力する。readiness の warning（`UNREGISTERED_VAL_SOURCE` / `PART_FILE_COPY_STALE`）は結果に載る。payload は各 part の `files.source` から拘束パラメータを抽出するため、コピーが古いと古い `.val` から抽出した payload を Truer に渡すことになる。
 - payload は**版付き**（`schema: "loomit.constraint-payload.v0"`）。各 part の `files.source`（`.val`）を読み、`files.piece` の合印が載るカーブ経由で「その seam の長さに効く `.val` パラメータ」を集める。契約正本は `packages/core/src/schema/constraint-payload.schema.ts`、共有 JSON Schema は `packages/core/schema/constraint-payload.v0.json`。
 - **依存は part 単位**（`parts[].dependsOn`）。`connectors[]` は `(partId, connectorId)` の **join 鍵のみ**で `dependsOn` を持たない ── connector 単位では辺を絞れず（どの合印がどの seam かは `.val` に無く、測定辺の特定は Seamlint の責務）、1 piece の全 seam の occurrence が混ざる。
 - **`parts[].notches[]`** は同じ occurrence を **notch 単位に束ね直した additive な view**（`dependsOn` はフラットのまま残す）。各 notch は `order`（piece 輪郭順・位置でなく順序でマッチ）・`rawPassmarkLine`（`.val` の生値）・`notchType`（`v`/`t`/`castle`/`check`/`u` に正規化・写像できたときだけ）・`anchorPointId`・`splineId`・`lengthCandidates`（その spline の端点/ハンドル occurrence）を持つ。Truer が測定辺の合印と順序＋種別で突き合わせ、`linearity:linear` かつ候補 1 項のとき具体数値を提案する（applicable）用。spline に載らない合印は `splineId` を持たず `lengthCandidates` は空。
