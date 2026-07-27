@@ -165,4 +165,74 @@ describe("runSeamlintRequestCommand", () => {
       await rm(tempRoot, { recursive: true, force: true });
     }
   });
+
+  it("surfaces a stale part geometry copy, since the request hands that file to Seamlint", async () => {
+    // 守る仕様: PART_FILE_COPY_STALE は共有 readiness 診断であり check 専用ではない。request は part 内の
+    // geometry source を Seamlint に渡すため、そのコピーが root の原本と食い違えば診断に載せる。
+    // 黙って渡すと、Seamlint が古い幾何を測った結果を正しい測定として報告してしまう。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-seamlint-request-stale-"));
+
+    try {
+      await mkdir(join(tempRoot, "parts/body"), { recursive: true });
+      await writeFile(
+        join(tempRoot, "loomit.yml"),
+        [
+          "schema: loomit.project.v0",
+          "name: seamlint-request-stale",
+          "garment: blouse",
+          "parts:",
+          "  body: ./parts/body/part.loom"
+        ].join("\n"),
+        "utf8"
+      );
+      await writeFile(
+        join(tempRoot, "parts/body/part.loom"),
+        [
+          "schema: loomit.part.v0",
+          "name: body",
+          "variant: v1",
+          "type: body",
+          "files:",
+          "  preview: body.svg"
+        ].join("\n"),
+        "utf8"
+      );
+      // part 側のコピーは古く、root の原本だけが再エクスポートされた状態。
+      await writeFile(
+        join(tempRoot, "parts/body/body.svg"),
+        '<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="100mm" viewBox="0 0 100 100"><path id="body-armhole" d="M 0 0 L 100 0" /></svg>\n',
+        "utf8"
+      );
+      await writeFile(
+        join(tempRoot, "body.svg"),
+        '<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="100mm" viewBox="0 0 100 100"><path id="body-armhole" d="M 0 0 L 120 0" /></svg>\n',
+        "utf8"
+      );
+
+      const stdout: string[] = [];
+      const stderr: string[] = [];
+      const exitCode = await runSeamlintRequestCommand([tempRoot, "--format", "json"], {
+        cwd: fixturesRoot,
+        stdout: (text) => {
+          stdout.push(text);
+        },
+        stderr: (text) => {
+          stderr.push(text);
+        }
+      });
+
+      const report = JSON.parse(stdout.join("")) as {
+        readonly status: string;
+        readonly diagnostics: readonly { readonly code: string }[];
+      };
+
+      expect(exitCode).toBe(0);
+      expect(report.diagnostics.map((diagnostic) => diagnostic.code)).toContain(
+        "PART_FILE_COPY_STALE"
+      );
+      expect(stderr).toEqual([]);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
 });

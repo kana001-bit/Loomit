@@ -1970,6 +1970,34 @@ describe("runCli", () => {
     }
   });
 
+  it("surfaces a stale part file copy on build, not only on check", async () => {
+    // 守る仕様: PART_FILE_COPY_STALE は共有 readiness 診断であり check 専用ではない。build は files.* を
+    // output へ配るため、part 内コピーが root の原本と食い違えば build のレポートにも warning で載る
+    // (build 自体は止めない)。この共有を外すと、build だけ古いファイルを黙って配ることになる。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-build-stale-"));
+
+    try {
+      await writeCliBuildFixture(tempRoot);
+      // fixture の parts/body/body.val は "body source\n"。root の原本だけを編集した状態を作る。
+      await writeFile(join(tempRoot, "body.val"), "edited in Valentina\n", "utf8");
+
+      const output = createOutputCollector();
+      const exitCode = await runCli(["node", "loom", "build", tempRoot], {
+        cwd: workspaceRoot,
+        io: output.io
+      });
+
+      const stdout = output.stdout.join("");
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Loomit build: warning");
+      expect(stdout).toContain("PART_FILE_COPY_STALE");
+      expect(stdout).toContain("parts/body/body.val");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   it("builds with JSON output and reports status ok", async () => {
     // 守る仕様: build --format json は parseable な JSON を stdout に出し(json 配線)、status:ok を返す。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-build-json-"));

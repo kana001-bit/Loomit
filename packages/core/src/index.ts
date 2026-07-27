@@ -176,6 +176,12 @@ export type {
 export { createProject } from "./project/createProject.js";
 export type { CreatedProject, CreateProjectOptions } from "./project/createProject.js";
 export { collectProjectReadinessDiagnostics } from "./project/collectProjectReadiness.js";
+export { findStalePartFileCopies } from "./project/findStalePartFileCopies.js";
+export type {
+  CopiedFileField,
+  StalePartFileCopy,
+  StalePartFileCopyScan
+} from "./project/findStalePartFileCopies.js";
 export { findUnregisteredValSources } from "./project/findUnregisteredValSources.js";
 export type { UnregisteredValSource } from "./project/findUnregisteredValSources.js";
 export { findProjectRoot } from "./project/findProjectRoot.js";
