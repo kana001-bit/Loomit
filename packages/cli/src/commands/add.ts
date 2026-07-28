@@ -239,12 +239,7 @@ export async function runAddCommand(
       return await addOnePart(options, valPath, answers);
     }
 
-    for (const [index, piece] of detectedPieces.entries()) {
-      // 元 .val が parts/ 内なら「取り込み後に削除(= 実質 move)」だが、複数ピースでは後続が同じ元を要る。
-      // 消費(削除)は最後のピースだけに任せ、途中で元を消して後続が PART_ADD_SOURCE_NOT_FOUND で落ちて
-      // 部分取り込みになるのを防ぐ。途中で失敗しても元は残る(最後の成功まで消えない)。
-      const isLastPiece = index === detectedPieces.length - 1;
-
+    for (const piece of detectedPieces) {
       // 今どのピースを訊いているかを毎回見出しで示す(複数ピースを続けて訊くので迷子にしない)。
       options.stdout(formatPiecePromptHeader(piece));
 
@@ -262,7 +257,6 @@ export async function runAddCommand(
         type: answers.type,
         variant: answers.variant,
         piece: piece.pieceName,
-        keepSource: !isLastPiece,
         ...(answers.connectors.length === 0 ? {} : { connectors: answers.connectors })
       });
 
@@ -690,12 +684,7 @@ async function addAllPiecesWithDefaults(
     }
   }
 
-  for (const [index, { piece, role }] of resolvedRoles.entries()) {
-    // 元 .val の消費(parts/ 内なら削除)は、全ピースを足しきる最後の1件だけに任せる(途中で消して後続が
-    // PART_ADD_SOURCE_NOT_FOUND で落ちるのを防ぐ)。ただし skip が1件でもあれば消費しない(hasSkips。
-    // skip 分の手動追加に元 .val が要る)。
-    const isLastPiece = index === resolvedRoles.length - 1;
-
+  for (const { piece, role } of resolvedRoles) {
     const result = await addPartToProject({
       projectPath: options.cwd,
       valPath,
@@ -703,8 +692,7 @@ async function addAllPiecesWithDefaults(
       role,
       type: "body",
       variant: "v1",
-      piece: piece.pieceName,
-      keepSource: hasSkips || !isLastPiece
+      piece: piece.pieceName
     });
 
     if (!result.ok) {
@@ -1238,7 +1226,9 @@ function formatAddSuccess(added: AddedPart): string {
   return (
     [
       `Added part "${added.name}" as role "${added.role}":`,
-      `  ${rel(added.sourceFilePath)}   (placed)`,
+      // .val をコピーしたのは project 外から取り込んだときだけ。project 内の .val はその場を参照する
+      // ので「置いた」と書くと嘘になる(複製が増えていないことが読み手に伝わるようにする)。
+      `  ${rel(added.sourceFilePath)}   (${added.sourceCopied ? "placed" : "referenced"})`,
       `  ${rel(added.partFilePath)}   (generated)`,
       `  ${rel(added.projectFilePath)}   (registered)`,
       "",

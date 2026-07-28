@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -988,8 +989,9 @@ describe("runCli", () => {
       expect(output.stdout.join("")).toContain('Added part "body"');
       expect(output.stderr).toEqual([]);
 
-      // .val は part ディレクトリへコピーされ、part.loom が生成され、loomit.yml に登録される。
-      expect(await readFile(join(projectPath, "parts/body/body.val"), "utf8")).toBe("body source\n");
+      // project 内の .val はその場を参照する。part ディレクトリに複製は作られない。
+      expect(await readFile(join(projectPath, "body.val"), "utf8")).toBe("body source\n");
+      expect(existsSync(join(projectPath, "parts/body/body.val"))).toBe(false);
       const generatedPart = await readFile(join(projectPath, "parts/body/part.loom"), "utf8");
       expect(generatedPart).toContain("schema: loomit.part.v0");
       expect(generatedPart).toContain("type: body");
@@ -1097,7 +1099,10 @@ describe("runCli", () => {
     }
   });
 
-  it("imports every piece and consumes the source only after the last, even from inside parts/", async () => {
+  // 守る仕様: 1 .val→N part でも .val は1つのまま。各 part は project root 相対で同じ .val を参照する。
+  // NOTE: 以前は「各ピースが自分の dir にコピーを持ち、最後のピースの後に元を削除する」を守っていた。
+  // コピーをやめたので、複製も削除も起きないのが正しい姿になった。
+  it("imports every piece from one shared .val without copying it per part", async () => {
     // 守る仕様: 1 .val→N part で元 .val が parts/ 内にあっても、最後のピースまで元を残す。
     // 途中で元を消して後続ピースが PART_ADD_SOURCE_NOT_FOUND で落ち、部分取り込みになるのを防ぐ。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-consume-"));
@@ -1136,11 +1141,17 @@ describe("runCli", () => {
       const loomit = await readFile(join(tempRoot, "loomit.yml"), "utf8");
       expect(loomit).toContain("front: ./parts/front/part.loom");
       expect(loomit).toContain("back: ./parts/back/part.loom");
-      // v0 = per-part copy: 各ピースは自分の dir に .val コピーを持つ。
-      expect(await readFile(join(tempRoot, "parts/front/foo.val"), "utf8")).toContain("<detail");
-      expect(await readFile(join(tempRoot, "parts/back/foo.val"), "utf8")).toContain("<detail");
-      // 元 .val は全ピース取り込み後に1回だけ消費(削除)される。
-      await expect(readFile(join(tempRoot, "parts/foo.val"), "utf8")).rejects.toThrow();
+      // 1 .val→N part でも複製は増えない。両ピースが同じ1つの .val をその場で参照する。
+      expect(existsSync(join(tempRoot, "parts/front/foo.val"))).toBe(false);
+      expect(existsSync(join(tempRoot, "parts/back/foo.val"))).toBe(false);
+      expect(await readFile(join(tempRoot, "parts/front/part.loom"), "utf8")).toContain(
+        "source: parts/foo.val"
+      );
+      expect(await readFile(join(tempRoot, "parts/back/part.loom"), "utf8")).toContain(
+        "source: parts/foo.val"
+      );
+      // 元 .val は削除しない(コピーを作らないので二重にならず、消す理由が無い)。
+      expect(await readFile(join(tempRoot, "parts/foo.val"), "utf8")).toContain("<detail");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }

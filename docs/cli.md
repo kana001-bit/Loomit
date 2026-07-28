@@ -51,6 +51,10 @@ loom add [file.val] [--yes]
 - `.val` から `<detail>` ピースを検出したら、**ピースごとに part を1つ** scaffold する。
 - 生成した part は `parts/<role>/` に書き出す。
 - 生成した各 `part.loom` は `files.source`（共有 `.val`）と `files.piece`（担当する detail 名）を記録する。
+- **`.val` はコピーされない。** project 内にある `.val` はその場を参照し、`files.source` には project root 相対パス（例: `knickers.val`、`parts/knickers.val`）を書く。1着の `.val` から N 個の part を作っても `.val` は1つのまま。
+- project の外にある `.val`（Downloads 等）だけは取り込む。schema が絶対パスと `..` を拒否するため参照できないので、**project root に1つだけ**コピーする（part ごとではない）。取り込み元は削除しない。
+- project root に同名ファイルが既にある場合、内容が同じならコピーせずそれを参照し、内容が違えば `PART_ADD_SOURCE_TARGET_CONFLICT` で失敗して何も書き込まない（既存ファイルを黙って差し替えない）。
+- 内外の判定は symlink を解決した実体パスで行う。project 内の名前で project 外のファイルに届く場合（外を指す symlink / ディレクトリリンク越し）は `PART_ADD_SOURCE_ESCAPES_PROJECT` で失敗する。実体のパスを渡せば、project 外の `.val` として正しく取り込める。
 - `<draw>` はあるが `<detail>` が1つも無い `.val`（construction のみ）は、案内を表示して何も追加せずに終了する。
 - draw も detail も検出できない `.val` は、従来どおり単一 part の対話に倒す。
 
