@@ -30,8 +30,8 @@ function twoParts(): ConstraintPayloadPart[] {
   </pattern>`;
 
   return [
-    { role: "front", piece: "front", source: source("front", " + #front_only"), connectorIds: ["outseam"] },
-    { role: "back", piece: "back", source: source("back", ""), connectorIds: ["outseam"] }
+    { role: "front", piece: "front", source: source("front", " + #front_only"), connectors: [{ id: "outseam" }] },
+    { role: "back", piece: "back", source: source("back", ""), connectors: [{ id: "outseam" }] }
   ];
 }
 
@@ -94,6 +94,33 @@ describe("constraint payload contract schema", () => {
     };
 
     expect(constraintPayloadSchema.safeParse(legacyWithoutNotches).success).toBe(true);
+  });
+
+  it("accepts a v0 payload whose connectors carry no pathRef (pathRef stays additive/optional)", () => {
+    // 守る仕様(must-not-fire): pathRef は v0 に additive で足した optional フィールド。pathRef を持たない既存 v0
+    // payload(この field 以前の emit / path_ref 未宣言の connector)も契約上 valid のまま。v0 のまま必須化して
+    // 旧 payload を落とす退行を防ぐ = 必須化するなら schema id を v1 へ上げること。
+    const legacyWithoutPathRef = {
+      schema: "loomit.constraint-payload.v0",
+      params: {},
+      parts: [{ partId: "front", piece: "front", dependsOn: [], notches: [] }],
+      connectors: [{ partId: "front", connectorId: "outseam" }]
+    };
+
+    expect(constraintPayloadSchema.safeParse(legacyWithoutPathRef).success).toBe(true);
+  });
+
+  it("rejects a connector ref with an unknown key", () => {
+    // 守る仕様: connectors[] は strict。pathRef を足しても余剰キーは弾く(Truer 側 adapter の strict と対で、
+    // 綴り違いの field を黙って無視して住所が落ちる事故を防ぐ)。
+    const withUnknownKey = {
+      schema: "loomit.constraint-payload.v0",
+      params: {},
+      parts: [],
+      connectors: [{ partId: "front", connectorId: "outseam", blockName: "FRONT" }]
+    };
+
+    expect(constraintPayloadSchema.safeParse(withUnknownKey).success).toBe(false);
   });
 
   it("keeps the generated JSON Schema artifact in sync", async () => {

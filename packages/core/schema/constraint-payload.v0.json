@@ -301,6 +301,9 @@
           },
           "connectorId": {
             "type": "string"
+          },
+          "pathRef": {
+            "type": "string"
           }
         },
         "required": [

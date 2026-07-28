@@ -7,6 +7,19 @@ import { z } from "zod";
 
 // payload の版付け識別子。file schema（loomit.part.v0 等）と同じ規約。consumer は未知版を弾ける。
 // 形を破壊的に変えるときは v1 へ上げる（additive なフィールド追加は上げない）。
+//
+// **additive 追加のときに必ず守る手順（この契約は全オブジェクトが `.strict()` = `additionalProperties: false`）。**
+// strict は「綴り違いの field を黙って無視して値が落ちる」事故を防ぐための選択で、その代償として互換性が
+// 非対称になる:
+//   - 後方（旧 payload → 新 validator）: optional で足す限り保たれる。既存 payload は valid のまま。
+//   - 前方（新 payload → **更新していない** validator）: **保たれない。** 未知 field を strict が弾くので
+//     payload 全体が reject される。
+// よって additive な追加でも **consumer 先行**で入れる。順序は必ず「① consumer が新 field を受理できる版を
+// 出す → ② Loomit が emit を始める」。逆順にすると provenance が全部落ちる（fail-closed なので危険ではないが
+// 機能停止する）。この手順を踏むなら版は v0 のままでよい ── v1 へ上げると未知版として**即座に全 consumer が
+// 弾く**ので、非互換の窓を狭めるどころか広げる。
+// 前例: `parts[].notches[]`（2026-07-25）、`connectors[].pathRef`（2026-07-28, [C10]。Truer PR #44/#45 が
+// 受理側を先に main へ入れてから emit を開始した）。
 export const CONSTRAINT_PAYLOAD_SCHEMA_ID = "loomit.constraint-payload.v0";
 
 // occurrence の linearity（構造だけで決まる: cutSpline/導出点=none 等）。
@@ -78,10 +91,16 @@ export const constraintParamSchema = z.discriminatedUnion("declared", [
 ]);
 
 // connector は join 鍵のみ（dependsOn は持たない = [C6]）。
+// pathRef は幾何ソース上の住所（正規化済みの `path_ref`）で、Seamlint 診断の `blockName` と綴りまで一致する。
+// v0 契約では **optional**: `path_ref` 自体が optional なので identity だけの connector が正当に存在し、
+// pathRef を持たない payload（この field を足す前の v0）も valid のまま保つ。必須化するなら schema id を v1 へ。
+// 追加手順（consumer 先行）と、strict ゆえに前方互換が無いことは冒頭 CONSTRAINT_PAYLOAD_SCHEMA_ID のコメント参照。
+// 詳細な設計判断（住所の権威が piece でなく connector にある理由）は `../truer/assembleConstraintPayload.ts` 側。
 export const constraintConnectorRefSchema = z
   .object({
     partId: z.string(),
-    connectorId: z.string()
+    connectorId: z.string(),
+    pathRef: z.string().optional()
   })
   .strict();
 

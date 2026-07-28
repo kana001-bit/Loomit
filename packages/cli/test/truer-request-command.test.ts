@@ -29,7 +29,11 @@ const SHARED_VAL = `<pattern>
   </draw>
 </pattern>`;
 
-function partLoom(piece: string): string {
+// path_ref は「幾何ソース上の住所」で files.piece(= .val の detail 名)とは別フィールド。実データ
+// (loomitest3-band-mismatch)と同じく **綴りが違う**形(piece: front / path_ref: FRONT)を既定にして、
+// payload の pathRef が piece の写しではなく path_ref 由来であることを固定する。
+// pathRef=null は path_ref を宣言しない part（identity だけの connector）。
+function partLoom(piece: string, pathRef: string | null): string {
   return [
     "schema: loomit.part.v0",
     `name: ${piece}`,
@@ -40,11 +44,15 @@ function partLoom(piece: string): string {
     `  piece: ${piece}`,
     "connectors:",
     "  outseam:",
-    "    type: outseam"
+    "    type: outseam",
+    ...(pathRef === null ? [] : [`    path_ref: ${pathRef}`])
   ].join("\n");
 }
 
-async function writeProject(root: string): Promise<void> {
+async function writeProject(
+  root: string,
+  options: { readonly frontPathRef?: string | null } = {}
+): Promise<void> {
   await mkdir(join(root, "parts/front"), { recursive: true });
   await mkdir(join(root, "parts/back"), { recursive: true });
 
@@ -61,8 +69,9 @@ async function writeProject(root: string): Promise<void> {
     "utf8"
   );
   // .val は part 相対にしか置けない(schema が ".." を弾く)ので、各 part dir に同じ .val をコピーする(loomitest3 と同形)。
-  await writeFile(join(root, "parts/front/part.loom"), partLoom("front"), "utf8");
-  await writeFile(join(root, "parts/back/part.loom"), partLoom("back"), "utf8");
+  const frontPathRef = options.frontPathRef === undefined ? "FRONT" : options.frontPathRef;
+  await writeFile(join(root, "parts/front/part.loom"), partLoom("front", frontPathRef), "utf8");
+  await writeFile(join(root, "parts/back/part.loom"), partLoom("back", "BACK"), "utf8");
   await writeFile(join(root, "parts/front/source.val"), SHARED_VAL, "utf8");
   await writeFile(join(root, "parts/back/source.val"), SHARED_VAL, "utf8");
 }
@@ -70,8 +79,10 @@ async function writeProject(root: string): Promise<void> {
 describe("runTruerRequestCommand", () => {
   it("builds a versioned constraint payload with part-level dependsOn and part-granularity usedBy", async () => {
     // 守る仕様: 健全な project で ok の JSON payload を組む。封筒は { status, diagnostics, payload }、payload は版付き
-    // (schema=loomit.constraint-payload.v0)・依存は part 単位(parts[].dependsOn)・connectors は join 鍵のみ・
-    // 増分は declared union。両 detail が #ease を辺に持つので usedBy=[back,front]。
+    // (schema=loomit.constraint-payload.v0)・依存は part 単位(parts[].dependsOn)・connectors は join 鍵＋幾何ソース上の
+    // 住所(pathRef)・増分は declared union。両 detail が #ease を辺に持つので usedBy=[back,front]。
+    // pathRef は connectors.*.path_ref 由来で files.piece の写しではない(fixture は piece:front / path_ref:FRONT と
+    // 綴りを変えてある)。大小も畳まない ── Seamlint が要求綴りをそのまま診断に echo するため。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-truer-request-"));
 
     try {
@@ -96,7 +107,11 @@ describe("runTruerRequestCommand", () => {
           readonly schema: string;
           readonly params: Record<string, { readonly declared: boolean; readonly usedBy: readonly string[]; readonly value?: string }>;
           readonly parts: readonly { readonly partId: string; readonly dependsOn: readonly unknown[] }[];
-          readonly connectors: readonly { readonly partId: string; readonly connectorId: string }[];
+          readonly connectors: readonly {
+            readonly partId: string;
+            readonly connectorId: string;
+            readonly pathRef?: string;
+          }[];
         };
       };
 
@@ -107,8 +122,8 @@ describe("runTruerRequestCommand", () => {
       expect(report.payload.parts.map((part) => part.partId).sort()).toEqual(["back", "front"]);
       expect(report.payload.connectors).toEqual(
         expect.arrayContaining([
-          { partId: "front", connectorId: "outseam" },
-          { partId: "back", connectorId: "outseam" }
+          { partId: "front", connectorId: "outseam", pathRef: "FRONT" },
+          { partId: "back", connectorId: "outseam", pathRef: "BACK" }
         ])
       );
       expect(report.payload.params["#ease"]).toEqual({
@@ -117,6 +132,46 @@ describe("runTruerRequestCommand", () => {
         usedBy: ["back", "front"]
       });
       expect(stderr).toEqual([]);
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("omits pathRef for a connector that declares no path_ref", async () => {
+    // 守る仕様(must-not-fire): path_ref を宣言していない connector は payload でも pathRef を持たない。
+    // files.piece から住所を発明しない(piece は .val の detail 名であって幾何ソース上の住所ではない)。
+    // 消費側はこれで「住所が無い」と「住所が一致しない」を区別できる。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-truer-request-no-path-ref-"));
+
+    try {
+      await writeProject(tempRoot, { frontPathRef: null });
+
+      const stdout: string[] = [];
+      const exitCode = await runTruerRequestCommand([tempRoot, "--format", "json"], {
+        cwd: tempRoot,
+        stdout: (text) => {
+          stdout.push(text);
+        },
+        stderr: () => {}
+      });
+
+      const report = JSON.parse(stdout.join("")) as {
+        readonly payload: {
+          readonly connectors: readonly {
+            readonly partId: string;
+            readonly connectorId: string;
+            readonly pathRef?: string;
+          }[];
+        };
+      };
+
+      expect(exitCode).toBe(0);
+      expect(report.payload.connectors).toEqual(
+        expect.arrayContaining([
+          { partId: "front", connectorId: "outseam" },
+          { partId: "back", connectorId: "outseam", pathRef: "BACK" }
+        ])
+      );
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }

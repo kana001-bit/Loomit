@@ -128,7 +128,12 @@ async function collectPayloadParts(project: ResolvedProject): Promise<CollectedP
       role: resolved.role,
       piece,
       source: sourceResult.source,
-      connectorIds: Object.keys(resolved.part.connectors ?? {})
+      // path_ref は生値のまま渡す(正規化は core = assembleConstraintPayload の責務。CLI で正規化すると
+      // Seamlint request 経路と規則が二重管理になり綴りが割れうる)。
+      connectors: Object.entries(resolved.part.connectors ?? {}).map(([id, connector]) => ({
+        id,
+        ...(connector.path_ref === undefined ? {} : { pathRef: connector.path_ref })
+      }))
     });
   }
 
