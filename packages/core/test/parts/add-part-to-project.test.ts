@@ -572,6 +572,52 @@ describe("addPartToProject", () => {
     }
   });
 
+  it("returns sourceFilePath in the caller's path frame, not the realpath frame", async () => {
+    // 守る仕様: AddedPart.sourceFilePath は「呼び手が渡した projectPath」と同じフレームで返す。
+    // 内外判定は realpath で行うが(R2)、結果をそのまま返すとフレームが混ざる。CLI は
+    // relative(projectRoot, sourceFilePath) で表示するので、混ざると ".." だらけの壊れたパスになる。
+    //
+    // 回帰防止: Windows CI がこれで落ちた。os.tmpdir() が 8.3 短縮名(C:\Users\RUNNER~1)を返し、
+    // realpath がそれを長い名前(C:\Users\runneradmin)へ展開するため、渡したパスと戻り値が食い違った。
+    // ここでは同じ状況をディレクトリリンクで再現する(junction は権限不要・POSIX では通常の symlink)。
+    const realRoot = await mkdtemp(join(tmpdir(), "loomit-add-frame-"));
+    const linkParent = await mkdtemp(join(tmpdir(), "loomit-add-frame-link-"));
+    const linkedRoot = join(linkParent, "project");
+
+    try {
+      await writeFile(
+        join(realRoot, "loomit.yml"),
+        ["schema: loomit.project.v0", "name: framed", "garment: blouse", "parts: {}"].join("\n"),
+        "utf8"
+      );
+      await writeFile(join(realRoot, "body.val"), "body source\n", "utf8");
+      await symlink(realRoot, linkedRoot, "junction");
+
+      // project もソースもリンク側のパスで渡す。
+      const result = await addPartToProject({
+        projectPath: linkedRoot,
+        valPath: join(linkedRoot, "body.val"),
+        name: "body",
+        type: "body",
+        variant: "v1"
+      });
+
+      expect(result.ok).toBe(true);
+
+      if (!result.ok) {
+        return;
+      }
+
+      // 戻り値は渡したフレーム(リンク側)のまま。実体側(realRoot)に化けていない。
+      expect(result.value.sourceFilePath).toBe(join(linkedRoot, "body.val"));
+      // files.source は相対なのでどちらのフレームでも同じ。
+      expect(result.value.part.files?.source).toBe("body.val");
+    } finally {
+      await rm(linkParent, { recursive: true, force: true });
+      await rm(realRoot, { recursive: true, force: true });
+    }
+  });
+
   it("errors when the .val source does not exist", async () => {
     // 守る仕様: 参照先 .val が存在しなければ PART_ADD_SOURCE_NOT_FOUND を返し、何も書き込まない。
     const projectRoot = await makeProject();

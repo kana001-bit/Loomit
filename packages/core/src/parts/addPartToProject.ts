@@ -344,11 +344,19 @@ async function planValSource(
   }
 
   if (insideByReal) {
+    // 相対部分は realpath フレームで求める(境界判定と同じ土俵にそろえる)。この相対パスは呼び手の
+    // フレームでも同じものを指す ── <shortRoot>/x.val と <realRoot>/x.val は同じファイルなので。
+    const relativePath = toPosixPath(relative(realRoot.value, realVal.value));
+
     return {
       ok: true,
       value: {
-        sourceFilePath: realVal.value,
-        relativePath: toPosixPath(relative(realRoot.value, realVal.value)),
+        // 実体パスをそのまま返さず、渡された projectRoot から組み直す。呼び手(CLI)は
+        // relative(projectRoot, sourceFilePath) で表示するため、realpath 済みのパスを返すと
+        // フレームが混ざって ".." だらけの壊れたパスになる。Windows の 8.3 短縮名
+        // (C:\Users\RUNNER~1 ⇔ C:\Users\runneradmin)や symlink 経由の projectRoot で実際に起きる。
+        sourceFilePath: resolve(projectRoot, relativePath),
+        relativePath,
         copy: false
       }
     };
