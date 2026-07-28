@@ -12,7 +12,7 @@ import { assembleConstraintPayload, collectEdgeOccurrencesFromValText } from "..
 //
 // この回帰が守るのは「実 front/back **piece** の射影」であって「outseam **固有**の挙動」ではない。理由:
 // assembleConstraintPayload は connector 単位で occurrence を絞らない。collectEdgeOccurrences は piece(detail)の**全 passmark**が
-// 載るカーブを集め、usedBy は **part 単位 membership**(seam 単位ではない=[C6])。connectorIds は part を seam に参加させるためだけで
+// 載るカーブを集め、usedBy は **part 単位 membership**(seam 単位ではない=[C6])。connectors は part を seam に参加させるためだけで
 // occurrence を絞らない(値を "waist" 等に変えても結果は同じ)。原本 .val を差し替えたら下記の実測値(16/15・4 増分)は見直す。
 const valPath = join(dirname(fileURLToPath(import.meta.url)), "../fixtures/cycling-knickers-val/source.val");
 
@@ -40,8 +40,8 @@ describe("real cycling_knickers.val (constraint payload ground-truth regression)
     // 出る増分は 4 つで、いずれも front/back 両 part に出る = usedBy=[back,front]。合成でなく原本の membership を固定する。
     const source = await readVal();
     const { payload, diagnostics } = assembleConstraintPayload([
-      { role: "front", piece: "front", source, connectorIds: ["outseam"] },
-      { role: "back", piece: "back", source, connectorIds: ["outseam"] }
+      { role: "front", piece: "front", source, connectors: [{ id: "outseam" }] },
+      { role: "back", piece: "back", source, connectors: [{ id: "outseam" }] }
     ]);
 
     expect(diagnostics).toEqual([]);

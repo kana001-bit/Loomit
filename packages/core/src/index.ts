@@ -158,6 +158,7 @@ export type {
   ConstraintConnectorRef,
   ConstraintPart,
   ConstraintPayload,
+  ConstraintPayloadConnector,
   ConstraintPayloadPart,
   ConstraintPayloadResult
 } from "./truer/assembleConstraintPayload.js";

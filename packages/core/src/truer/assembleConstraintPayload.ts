@@ -1,5 +1,6 @@
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
+import { normalizeConnectorPathRef } from "../schema/connectorPathRef.js";
 import { CONSTRAINT_PAYLOAD_SCHEMA_ID } from "../schema/constraint-payload.schema.js";
 import { collectEdgeOccurrencesFromValText } from "../parts/collectEdgeOccurrencesFromVal.js";
 import type { EdgeNotch } from "../parts/collectEdgeOccurrencesFromVal.js";
@@ -7,15 +8,26 @@ import { readIncrementsFromValText } from "../parts/readIncrementsFromVal.js";
 import type { ValIncrement } from "../parts/readIncrementsFromVal.js";
 import type { ValOccurrence } from "../parts/extractOccurrencesFromVal.js";
 
+// 入力側の connector 1件。part.loom の `connectors` の1エントリをそのまま運ぶ。
+export interface ConstraintPayloadConnector {
+  readonly id: string;
+  // part.loom の path_ref の**生値**(未正規化)。`svg:path#armhole` のような fragment 付きも来る。
+  // 正規化(normalizeConnectorPathRef)は emit 時にこの core 側で行う ── CLI に正規化を任せると Seamlint 経路と
+  // 綴りが割れうるため。宣言が無い connector は undefined(identity だけの connector は正当に存在する)。
+  readonly pathRef?: string;
+}
+
 // Truer に渡す拘束 payload の入力 1 part 分(ファイル読みは呼び出し側 = CLI が済ませて渡す。core は純粋)。
 export interface ConstraintPayloadPart {
   readonly role: string;
-  // files.piece(= .val の detail 名 = DXF BLOCK 名)。辺の occurrence をこの piece の合印から辿る。
+  // files.piece(= .val の detail 名)。辺の occurrence をこの piece の合印から辿る。
+  // 注意: DXF BLOCK 名**そのもの**ではない(Valentina が export 時に大文字化する)。幾何ソース上の住所は
+  // connector の path_ref 側にある(下記 connectors)。
   readonly piece: string;
   // files.source(.val)のテキスト。
   readonly source: string;
-  // この part が宣言している connector の id 一覧。
-  readonly connectorIds: readonly string[];
+  // この part が宣言している connector 一覧(宣言順)。
+  readonly connectors: readonly ConstraintPayloadConnector[];
 }
 
 // 変数(増分)1件。params のキーは常に増分参照 #name(インラインリテラル/measurement は occurrence.expr に載るので
@@ -52,6 +64,19 @@ export type ConstraintParam =
 export interface ConstraintConnectorRef {
   readonly partId: string;
   readonly connectorId: string;
+  // 幾何ソース上の住所(正規化済みの path_ref)。Seamlint 診断の blockName と**綴りまで一致する**値で、Truer は
+  // これで診断 → connector → part を推測なしに辿る([C10] 案A)。
+  // 設計判断: 住所の権威は piece ではなく **connector** に載る。path_ref は per-connector で、幾何ソースの形式ごとに
+  // 語彙が違う(DXF=BLOCK 名 / SVG=path id)。一方 parts[].piece は `.val` の detail 名で、dependsOn / notches の
+  // provenance 鍵。両者は loom connect の既定で一致することが多いが、一致は保証されない(files.piece は export 前の
+  // 綴り・path_ref は override 可能)ので、BLOCK 名として使ってよいのは pathRef だけ。
+  // path_ref を宣言していない connector では省く(fallback を発明しない = 誤 join より欠落の方が安全)。
+  // 欠落は実際に起きる: loom add の対話 scaffold は path_ref を書かない(addPartToProject の buildConnectors は
+  // type/length_mm だけ)ので、loom connect 由来の connector と混在した payload になりうる。
+  // ただし **pathRef 欠落 ⊇ Seamlint 未測定**: path_ref の無い connector は createGeometryRequest が
+  // check を組めず(resolveGeometrySide が undefined を返し join ごと skip)、Seamlint 診断に現れない。
+  // よって「診断に現れる connector は必ず pathRef を持つ」= 欠落によって取りこぼす provenance は無い。
+  readonly pathRef?: string;
 }
 
 // part 単位の依存。dependsOn = その piece の合印が載るカーブ上の occurrence(その piece の全 seam が混ざる)。
@@ -106,7 +131,7 @@ export function assembleConstraintPayload(
 
   for (const part of parts) {
     // connector を持たない part は seam に参加しないので payload に出さない(usedBy にも数えない)。
-    if (part.connectorIds.length === 0) {
+    if (part.connectors.length === 0) {
       continue;
     }
 
@@ -157,11 +182,15 @@ export function assembleConstraintPayload(
       notches: edge.notches
     });
 
-    // connector は join 鍵だけ列挙する(dependsOn は持たない)。宣言順を保つ。
-    for (const connectorId of part.connectorIds) {
+    // connector は join 鍵だけ列挙する(dependsOn は持たない)。宣言順を保つ。pathRef は Seamlint request と
+    // 同じ normalize を通して出す ── 綴りが割れると Truer の join が silent に落ちるため(connectorPathRef.ts)。
+    for (const connector of part.connectors) {
       connectors.push({
         partId: part.role,
-        connectorId
+        connectorId: connector.id,
+        ...(connector.pathRef === undefined
+          ? {}
+          : { pathRef: normalizeConnectorPathRef(connector.pathRef) })
       });
     }
   }

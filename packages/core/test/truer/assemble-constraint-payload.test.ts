@@ -54,8 +54,8 @@ describe("assembleConstraintPayload", () => {
     // 片側=coupling 危険。coupling ラベルは Loomit が付けず、この事実(usedBy)から Truer が判定する。
     const { front, back } = valWithSharedAndOneSided({ extraFrontRef: "#front_only" });
     const parts: ConstraintPayloadPart[] = [
-      { role: "front", piece: "front", source: front, connectorIds: ["outseam"] },
-      { role: "back", piece: "back", source: back, connectorIds: ["outseam"] }
+      { role: "front", piece: "front", source: front, connectors: [{ id: "outseam" }] },
+      { role: "back", piece: "back", source: back, connectors: [{ id: "outseam" }] }
     ];
 
     const { payload, diagnostics } = assembleConstraintPayload(parts);
@@ -80,8 +80,8 @@ describe("assembleConstraintPayload", () => {
     // dependsOn を持たない(connector 単位で辺を絞れない [C6])。
     const { front, back } = valWithSharedAndOneSided({ extraFrontRef: "#front_only" });
     const { payload } = assembleConstraintPayload([
-      { role: "front", piece: "front", source: front, connectorIds: ["outseam"] },
-      { role: "back", piece: "back", source: back, connectorIds: ["outseam"] }
+      { role: "front", piece: "front", source: front, connectors: [{ id: "outseam" }] },
+      { role: "back", piece: "back", source: back, connectors: [{ id: "outseam" }] }
     ]);
 
     expect(payload.connectors).toEqual([
@@ -101,8 +101,8 @@ describe("assembleConstraintPayload", () => {
     // passmarkLine 無し=種別省略だが、錨 spline(31)の長さ候補への辿りは束ねる。dependsOn は従来どおり維持する。
     const { front, back } = valWithSharedAndOneSided({ extraFrontRef: "#front_only" });
     const { payload } = assembleConstraintPayload([
-      { role: "front", piece: "front", source: front, connectorIds: ["outseam"] },
-      { role: "back", piece: "back", source: back, connectorIds: ["outseam"] }
+      { role: "front", piece: "front", source: front, connectors: [{ id: "outseam" }] },
+      { role: "back", piece: "back", source: back, connectors: [{ id: "outseam" }] }
     ]);
 
     const frontPart = payload.parts.find((part) => part.partId === "front");
@@ -130,7 +130,12 @@ describe("assembleConstraintPayload", () => {
     // connector 次元は provenance を狭めない(過去バグ: 全 connector が同一 dependsOn を持ち connectorId が飾りになった)。
     const { front } = valWithSharedAndOneSided({ extraFrontRef: "#front_only" });
     const { payload } = assembleConstraintPayload([
-      { role: "front", piece: "front", source: front, connectorIds: ["outseam", "inseam", "waist"] }
+      {
+        role: "front",
+        piece: "front",
+        source: front,
+        connectors: [{ id: "outseam" }, { id: "inseam" }, { id: "waist" }]
+      }
     ]);
 
     // parts は front 1件、connectors は3件(join 鍵)。
@@ -142,12 +147,48 @@ describe("assembleConstraintPayload", () => {
     ]);
   });
 
+  it("emits each connector's normalized pathRef as the join address", () => {
+    // 守る仕様: connectors[] は幾何ソース上の住所(pathRef)を運ぶ。Truer は Seamlint 診断の blockName をこれと
+    // 突き合わせて part を引く([C10] 案A)ので、parts[].piece(= .val の detail 名)を BLOCK 名の代用にさせない。
+    // 正規化は Seamlint request と同じ規則(svg:path#x → x)を通し、大小は変換しない ── Seamlint は要求された綴りを
+    // そのまま診断に echo するので、fold 無しで厳密一致させるのが目的。
+    const { front } = valWithSharedAndOneSided({ extraFrontRef: "#front_only" });
+    const { payload } = assembleConstraintPayload([
+      {
+        role: "front",
+        piece: "front",
+        source: front,
+        connectors: [
+          { id: "outseam", pathRef: "FRONT" },
+          { id: "waist", pathRef: "svg:path#front-waist" }
+        ]
+      }
+    ]);
+
+    expect(payload.connectors).toEqual([
+      { partId: "front", connectorId: "outseam", pathRef: "FRONT" },
+      { partId: "front", connectorId: "waist", pathRef: "front-waist" }
+    ]);
+  });
+
+  it("omits pathRef for a connector that declares no path_ref", () => {
+    // 守る仕様(must-not-fire): path_ref は optional で、identity だけの connector は正当に存在する。宣言が無ければ
+    // pathRef を **省く** ── piece 等から住所を発明しない。誤った住所で join させるより住所を持たない方が安全
+    // (消費側は「一致する pathRef が無い」と分かる)。
+    const { front } = valWithSharedAndOneSided({ extraFrontRef: "#front_only" });
+    const { payload } = assembleConstraintPayload([
+      { role: "front", piece: "front", source: front, connectors: [{ id: "outseam" }] }
+    ]);
+
+    expect(payload.connectors).toEqual([{ partId: "front", connectorId: "outseam" }]);
+  });
+
   it("keeps every dependsOn ref resolvable in params", () => {
     // 守る仕様: dependsOn の各 ref は必ず params に解決先を持つ(Truer が dependsOn.refs → params で引ける不変条件)。
     const { front, back } = valWithSharedAndOneSided({ extraFrontRef: "#front_only" });
     const { payload } = assembleConstraintPayload([
-      { role: "front", piece: "front", source: front, connectorIds: ["outseam"] },
-      { role: "back", piece: "back", source: back, connectorIds: ["outseam"] }
+      { role: "front", piece: "front", source: front, connectors: [{ id: "outseam" }] },
+      { role: "back", piece: "back", source: back, connectors: [{ id: "outseam" }] }
     ]);
 
     for (const part of payload.parts) {
@@ -165,8 +206,8 @@ describe("assembleConstraintPayload", () => {
     // front と back がそれぞれ2 connector を宣言し、#shared_ease は両 part の辺に出る。
     const { front, back } = valWithSharedAndOneSided({ extraFrontRef: "#front_only" });
     const { payload } = assembleConstraintPayload([
-      { role: "front", piece: "front", source: front, connectorIds: ["outseam", "waist"] },
-      { role: "back", piece: "back", source: back, connectorIds: ["inseam", "waist"] }
+      { role: "front", piece: "front", source: front, connectors: [{ id: "outseam" }, { id: "waist" }] },
+      { role: "back", piece: "back", source: back, connectors: [{ id: "inseam" }, { id: "waist" }] }
     ]);
 
     // usedBy は part 単位なので、どの connector 経由かに関係なく「front と back の辺に出る」= [back, front]。
@@ -177,7 +218,7 @@ describe("assembleConstraintPayload", () => {
     // 守る仕様: connector を持たない part は seam に参加しないので parts にも connectors にも usedBy にも入れない。
     const { front } = valWithSharedAndOneSided({ extraFrontRef: "#front_only" });
     const { payload } = assembleConstraintPayload([
-      { role: "front", piece: "front", source: front, connectorIds: [] }
+      { role: "front", piece: "front", source: front, connectors: [] }
     ]);
 
     expect(payload.parts).toEqual([]);
@@ -205,8 +246,8 @@ describe("assembleConstraintPayload", () => {
     // 守る仕様: 同名増分の**値(式)**が part 間で食い違うと coupling を誤らせる(両側で同じツマミに見えて別物)ので、
     // 黙って1つへ潰さず PART_CONSTRAINT_INCREMENT_CONFLICT を出す。
     const { payload, diagnostics } = assembleConstraintPayload([
-      { role: "front", piece: "front", source: makeEaseSource("front", `formula="1"`), connectorIds: ["outseam"] },
-      { role: "back", piece: "back", source: makeEaseSource("back", `formula="99"`), connectorIds: ["outseam"] }
+      { role: "front", piece: "front", source: makeEaseSource("front", `formula="1"`), connectors: [{ id: "outseam" }] },
+      { role: "back", piece: "back", source: makeEaseSource("back", `formula="99"`), connectors: [{ id: "outseam" }] }
     ]);
 
     expect(diagnostics.map((diagnostic) => diagnostic.code)).toContain(
@@ -220,8 +261,8 @@ describe("assembleConstraintPayload", () => {
     // 守る仕様: value(式)が同じで description だけ違うのは coupling に無関係(同じツマミ)。ハザードでないので
     // PART_CONSTRAINT_INCREMENT_CONFLICT を発火させない(理由=coupling 誤り と発火条件を一致させる)。
     const { diagnostics } = assembleConstraintPayload([
-      { role: "front", piece: "front", source: makeEaseSource("front", `formula="2" description="front メモ"`), connectorIds: ["outseam"] },
-      { role: "back", piece: "back", source: makeEaseSource("back", `formula="2" description="back メモ"`), connectorIds: ["outseam"] }
+      { role: "front", piece: "front", source: makeEaseSource("front", `formula="2" description="front メモ"`), connectors: [{ id: "outseam" }] },
+      { role: "back", piece: "back", source: makeEaseSource("back", `formula="2" description="back メモ"`), connectors: [{ id: "outseam" }] }
     ]);
 
     expect(diagnostics.map((diagnostic) => diagnostic.code)).not.toContain(
@@ -251,7 +292,7 @@ describe("assembleConstraintPayload", () => {
     </pattern>`;
 
     const { payload } = assembleConstraintPayload([
-      { role: "front", piece: "front", source, connectorIds: ["outseam"] }
+      { role: "front", piece: "front", source, connectors: [{ id: "outseam" }] }
     ]);
 
     // 宣言済み・formula 無し: declared:true かつ value=""(既定0のツマミ)。

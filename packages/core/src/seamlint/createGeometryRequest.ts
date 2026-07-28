@@ -4,6 +4,7 @@ import { resolvePartFilePath } from "../parts/resolvePartFilePath.js";
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import type { ResolvedProject, ResolvedProjectPart } from "../project/resolveParts.js";
+import { normalizeConnectorPathRef } from "../schema/connectorPathRef.js";
 import { classifyJoinSides } from "../schema/connectorSides.js";
 import { isDelimiterSafeIdentifier } from "../schema/joinIdentifier.js";
 import { resolveJoinedConnectorToleranceMm } from "../schema/connectorTolerance.js";
@@ -672,7 +673,8 @@ function resolveGeometrySide(
   return {
     role: part.role,
     connectorId,
-    pathRef: normalizePathRefForSeamlint(pathRef),
+    // 正規化は Truer payload の connectors[].pathRef と共有する(綴りが割れると Truer の join が落ちる)。
+    pathRef: normalizeConnectorPathRef(pathRef),
     geometrySource: geometry.geometrySource,
     format: geometry.format
   };
@@ -770,16 +772,6 @@ function commitGeometrySide(
   };
   geometryParts.set(side.role, created);
   return created;
-}
-
-function normalizePathRefForSeamlint(pathRef: string): string {
-  const fragmentIndex = pathRef.indexOf("#");
-
-  if (fragmentIndex >= 0 && fragmentIndex < pathRef.length - 1) {
-    return pathRef.slice(fragmentIndex + 1);
-  }
-
-  return pathRef.startsWith("#") ? pathRef.slice(1) : pathRef;
 }
 
 // connector range を見て、この seam に対して emit できる Seamlint check を組み立てて返す。あわせて emit
