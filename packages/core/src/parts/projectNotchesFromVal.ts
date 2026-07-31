@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 
+import { normalizePieceKey } from "./valPieceScope.js";
 import { collectBlocks, collectFirstBlock, collectSelfClosingTags } from "./valXml.js";
 import { resolvePartFilePath } from "./resolvePartFilePath.js";
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
@@ -68,10 +69,16 @@ export async function projectNotchesFromValFile(
 // <details> の passmark="true" node を持たない)ため、両スキャナを流しても二重計上しない。
 // 注: .val の寸法は pattern の <unit>(cm/mm/inch)依存。現状は既存の射影(darts 含む)と同様に単位変換せず、
 //     数値をそのまま mm として読む。<unit>→mm 変換は follow-up とする。
+//
+// piece を渡すと、方言2(detail 由来)の合印をその型紙ピースの分だけに絞る。省略時は .val 全体＝着丸ごとの合印が
+// 返るので、part へ射影する経路(loadProjectedPart)は必ず渡すこと。渡さないと front の合印が back の diff に出る。
+// **方言1 は絞り込みの対象外**: seam path 由来の合印は piece でなく seam_ref で anchor する別方言で、.val 上に
+// piece への帰属情報を持たない。piece で落とすと帰属が分からないだけの合印を消してしまうため、そのまま残す。
 export function projectNotchesFromValText(
   source: string,
   options: {
     readonly filePath: string;
+    readonly piece?: string;
   }
 ): ValentinaNotchProjectionResult {
   const notches: Record<string, Notch> = {};
@@ -171,11 +178,12 @@ function projectSeamPathNotches(
 // 損失回避にならない。よって最初の detail を採用し、以降の同名 detail は黙って上書きせず warning で知らせて捨てる。
 function projectDetailNotches(
   source: string,
-  options: { readonly filePath: string },
+  options: { readonly filePath: string; readonly piece?: string },
   notches: Record<string, Notch>,
   diagnostics: Diagnostic[]
 ): void {
   const seenPieces = new Set<string>();
+  const wantedPieceKey = options.piece === undefined ? undefined : normalizePieceKey(options.piece);
 
   for (const drawBlock of collectBlocks(source, "draw")) {
     const detailsBlock = collectFirstBlock(drawBlock.content, "details");
@@ -194,7 +202,7 @@ function projectDetailNotches(
 
       // 一意性は Seamlint の BLOCK 照合(blockName.trim().toUpperCase())に合わせて case-insensitive で見る。
       // "Front" と "front" は同じ BLOCK に解決するので、大小違いも同名扱いにしないと DXF handoff が黙って壊れる。
-      const pieceKey = pieceName.trim().toLowerCase();
+      const pieceKey = normalizePieceKey(pieceName);
 
       // 同名 detail は契約違反(piece 名は一意)。最初を採用し、以降は warning を出して捨てる(黙って上書きしない)。
       if (seenPieces.has(pieceKey)) {
@@ -214,6 +222,12 @@ function projectDetailNotches(
       }
 
       seenPieces.add(pieceKey);
+
+      // piece 指定時は他ピースの合印を射影しない。重複 detail の検出(上)は絞り込みより前に置く ── 契約違反は
+      // 「今どの part を読んでいるか」に関係なく .val の性質なので、無関係なピースの重複でも黙らせない。
+      if (wantedPieceKey !== undefined && pieceKey !== wantedPieceKey) {
+        continue;
+      }
 
       const nodesBlock = collectFirstBlock(detail.content, "nodes");
 
@@ -252,6 +266,8 @@ function projectDetailNotches(
 
 // NOTE: loadProjectedPart は source.val を1回読みに集約したため、現状この関数の Loomit 内部消費者は無い。
 // ただし「part の相対パスから notches だけを read-only に射影する」自己完結APIとして public に残す。
+// 注: この経路は piece で絞らない(.val 全体の合印を返す)。part 単位へ射影する呼び手は projectNotchesFromValText に
+// piece を渡すこと。
 // Seamlint(merge 周りの seam/geometry を focused に検査する将来ツール)のように、単一フィーチャだけを
 // .val から取り出したい消費者に向く粒度なので温存する。責務分担は docs/work/diffable-domain.md 参照。
 export async function projectPartNotchesFromSource(

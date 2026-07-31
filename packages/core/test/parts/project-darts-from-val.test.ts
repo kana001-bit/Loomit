@@ -1,6 +1,14 @@
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import { projectDartsFromValText } from "../../src/index.js";
+
+function corpusPath(name: string): string {
+  return join(dirname(fileURLToPath(import.meta.url)), "../fixtures/val-corpus", `${name}.val`);
+}
 
 describe("projectDartsFromValText", () => {
   it("projects a 5-point dart path that repeats its anchor point", () => {
@@ -95,5 +103,60 @@ describe("projectDartsFromValText", () => {
         }
       }
     });
+  });
+});
+
+// 実データ(CC0 パブリックドメインの petticoat)で piece 絞り込みを固定する。この .val は detail が front / back の
+// 2枚で、ダーツ(path id=119)は front の <iPaths> にだけ載っている ── 「1つの .val に複数 part」という実 .val の
+// 構造で、ダーツが part 単位に帰属することを実物で示せる最小の材料。
+describe("projectDartsFromValText (piece scope)", () => {
+  const filePath = "parts/petticoat/source.val";
+  const frontDart = {
+    apex_ref: "val:point#pattern/A4qqq",
+    legs: {
+      left_ref: "val:point#pattern/A5h",
+      right_ref: "val:point#pattern/A4"
+    }
+  };
+
+  it("keeps only the darts the piece lists in iPaths", async () => {
+    // 守る仕様: piece を渡すと、その detail が <iPaths>/<record path> で名指ししているダーツだけを射影する。
+    //           ダーツは <modeling> にあり自分の所属ピースを知らないので、この逆参照だけが帰属の根拠。
+    const source = await readFile(corpusPath("petticoat"), "utf8");
+
+    const result = projectDartsFromValText(source, { filePath, piece: "front" });
+
+    expect(result.darts).toEqual({ "val:pattern:dart:119": frontDart });
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it("does not leak another piece's dart into a piece that lists none", async () => {
+    // 守る仕様(must-not-fire): back は <iPaths> を持たない=ダーツ0本。front のダーツが back に混ざってはならない
+    //           (混ざると front のダーツ変更が back の diff に出る)。
+    const source = await readFile(corpusPath("petticoat"), "utf8");
+
+    const result = projectDartsFromValText(source, { filePath, piece: "back" });
+
+    expect(result.darts).toEqual({});
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it("matches the piece name case-insensitively", async () => {
+    // 守る仕様: piece 名の比較は Seamlint の BLOCK 照合(大小無視)に揃える。"FRONT" と "front" が別ピース扱いに
+    //           なると、綴りが合っているのに射影が空になる。
+    const source = await readFile(corpusPath("petticoat"), "utf8");
+
+    const result = projectDartsFromValText(source, { filePath, piece: " FRONT " });
+
+    expect(result.darts).toEqual({ "val:pattern:dart:119": frontDart });
+  });
+
+  it("projects every dart when no piece is given", async () => {
+    // 守る仕様: piece 省略時は従来どおり .val 全体を射影する(単一フィーチャだけを取り出す自己完結 API の互換)。
+    const source = await readFile(corpusPath("petticoat"), "utf8");
+
+    const result = projectDartsFromValText(source, { filePath });
+
+    expect(Object.keys(result.darts)).toEqual(["val:pattern:dart:119"]);
   });
 });

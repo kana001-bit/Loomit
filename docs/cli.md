@@ -291,6 +291,7 @@ loom diff <rev> --part <role> [--format text|json]
 
 - raw file diff ではなく、ドメインを踏まえた変更として読む。
 - connector や requirement について recheck のヒントを含める。
+- **`part.loom` が書いていない darts / notches は `files.source`（`.val`）から read-only に射影して比べる**。1つの `.val` は1着ぶん（1 draw ＋ N detail）なので、射影は **`files.piece` の detail に属するものだけ**に絞る（合印は detail 直下の node、ダーツは detail の `<iPaths>` が id で名指しする内部パス）。`files.piece` が無く detail が2枚以上ある `.val` では絞れないため、全ピース分を射影したうえで `PART_SOURCE_VAL_PIECE_UNDECLARED`（warning）を出す ── 他ピースのフィーチャが混ざった差分になりうる、という意味。逆に**宣言した `files.piece` が `.val` に無い**ときは `PART_SOURCE_VAL_PIECE_NOT_FOUND`（warning）を出して射影は空のままにする（全ピースへは広げない）── 綴り違いや Valentina 側の detail リネームで、差分からダーツ・合印が丸ごと消えたまま正常に見えるのを防ぐ。`part.loom` に inline で書いてあるフィーチャは射影せずそのまま使う。
 - **各 revision は project の snapshot**であり、`loom diff` は2つの snapshot を意味的に比較する。snapshot の保存・履歴・branch は Git に委譲し、Loomit は独自の `snapshot` / `commit` コマンドを持たない（用語は [glossary.md](glossary.md) の Snapshot / Revision 参照）。
 - **revision 形式**は現在の一着（cwd の project）を Git 履歴の版と比較する。history は Git に委譲する方針（[design-history.md](design-history.md) 参照）で、Loomit は各 revision を一時 worktree に展開してから既存の意味差分に流す。git shell は CLI 層に閉じ、core の diff は pure なまま。
   - `main..HEAD` は2つの revision を比較。`<rev>` 単体はその版と作業ツリー（未コミット含む）を比較。

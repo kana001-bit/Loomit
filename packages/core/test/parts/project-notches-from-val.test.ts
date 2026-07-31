@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -519,6 +520,111 @@ describe("projectNotchesFromValText", () => {
         position: 0.5
       }
     });
+  });
+});
+
+// 実データ(CC0 パブリックドメインの petticoat)で piece 絞り込みを固定する。detail は front / back の2枚で、
+// 合印は front に 2 個・back に 2 個ある。
+describe("projectNotchesFromValText (piece scope)", () => {
+  const corpusPath = join(
+    fileURLToPath(new URL("../fixtures/val-corpus/", import.meta.url)),
+    "petticoat.val"
+  );
+  const filePath = "parts/petticoat/source.val";
+
+  it("keeps only the notches that belong to the piece", async () => {
+    // 守る仕様(方言2): piece を渡すと、その detail の passmark だけを射影する。order は piece 内で 0 から数え直す。
+    const source = await readFile(corpusPath, "utf8");
+
+    const result = projectNotchesFromValText(source, { filePath, piece: "front" });
+
+    expect(result.notches).toEqual({
+      "val:front:notch:130": {
+        piece: "front",
+        order: 0,
+        type: "tMark",
+        angle: "straightforward"
+      },
+      "val:front:notch:105": { piece: "front", order: 1, type: "one", angle: "straightforward" }
+    });
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it("does not leak another piece's notches", async () => {
+    // 守る仕様(must-not-fire): back を読んだときに front の合印が混ざってはならない。混ざると front の合印を
+    //           1つ外しただけで back の diff にも [removed] が出る(このブランチが直したバグそのもの)。
+    const source = await readFile(corpusPath, "utf8");
+
+    const result = projectNotchesFromValText(source, { filePath, piece: "back" });
+
+    expect(Object.keys(result.notches).sort()).toEqual(["val:back:notch:109", "val:back:notch:131"]);
+    expect(Object.values(result.notches).every((notch) => notch.piece === "back")).toBe(true);
+  });
+
+  it("keeps seam-path notches even when a piece is given", () => {
+    // 守る仕様(must-not-fire): 方言1(seam path)の合印は piece でなく seam_ref で anchor する別方言で、.val 上に
+    //           piece への帰属情報を持たない。piece 指定で絞り落とすと、帰属が不明なだけの合印が消える。
+    const result = projectNotchesFromValText(
+      `<pattern>
+  <draw name="bodice">
+    <modeling>
+      <path id="40" inUse="true" name="seam" seam="side" type="1">
+        <nodes>
+          <node idObject="51" type="NodePoint" passmark="1" position="0.25"/>
+        </nodes>
+      </path>
+    </modeling>
+    <details>
+      <detail name="front">
+        <nodes>
+          <node idObject="70" passmark="true" passmarkLine="vMark" type="NodePoint"/>
+        </nodes>
+      </detail>
+      <detail name="back">
+        <nodes>
+          <node idObject="80" passmark="true" passmarkLine="vMark" type="NodePoint"/>
+        </nodes>
+      </detail>
+    </details>
+  </draw>
+</pattern>`,
+      { filePath: "fixture.val", piece: "front" }
+    );
+
+    expect(Object.keys(result.notches).sort()).toEqual([
+      "val:bodice:notch:side:51",
+      "val:front:notch:70"
+    ]);
+  });
+
+  it("still reports duplicate detail names for pieces it does not project", () => {
+    // 守る仕様: piece 名の一意性は .val の契約であって「今どの part を読んでいるか」に依存しない。front を
+    //           読んでいても back の重複は warning で surface する(絞り込みが契約違反を隠さない)。
+    const result = projectNotchesFromValText(
+      `<pattern>
+  <draw name="bodice">
+    <details>
+      <detail name="front">
+        <nodes>
+          <node idObject="70" passmark="true" passmarkLine="vMark" type="NodePoint"/>
+        </nodes>
+      </detail>
+      <detail name="back">
+        <nodes><node idObject="80" passmark="true" type="NodePoint"/></nodes>
+      </detail>
+      <detail name="BACK">
+        <nodes><node idObject="81" passmark="true" type="NodePoint"/></nodes>
+      </detail>
+    </details>
+  </draw>
+</pattern>`,
+      { filePath: "fixture.val", piece: "front" }
+    );
+
+    expect(Object.keys(result.notches)).toEqual(["val:front:notch:70"]);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      "PART_SOURCE_VAL_NOTCH_DUPLICATE_PIECE"
+    ]);
   });
 });
 
