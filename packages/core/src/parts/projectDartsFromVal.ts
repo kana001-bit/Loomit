@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 
+import { collectPieceInternalPathIds } from "./valPieceScope.js";
 import { collectBlocks, collectFirstBlock, collectSelfClosingTags } from "./valXml.js";
 import { resolvePartFilePath } from "./resolvePartFilePath.js";
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
@@ -53,15 +54,22 @@ export async function projectDartsFromValFile(filePath: string): Promise<Valenti
   });
 }
 
+// piece を渡すと、その型紙ピースが `<iPaths>` で名指ししているダーツだけを射影する(帰属の規則は valPieceScope)。
+// 省略時は .val 全体のダーツを射影する ── ダーツは `<draw>/<modeling>` に置かれ、パス自体は自分がどのピースに
+// 載るかを知らないため、piece を渡さない呼び手には「着丸ごと」が返る。part へ射影する経路(loadProjectedPart)は
+// 必ず piece を渡すこと。渡さないと front のダーツが back の diff に出る。
 export function projectDartsFromValText(
   source: string,
   options: {
     readonly filePath: string;
+    readonly piece?: string;
   }
 ): ValentinaDartProjectionResult {
   const drawBlocks = collectBlocks(source, "draw");
   const darts: Record<string, Dart> = {};
   const diagnostics: Diagnostic[] = [];
+  const ownedPathIds =
+    options.piece === undefined ? undefined : collectPieceInternalPathIds(source, options.piece);
 
   for (const drawBlock of drawBlocks) {
     const drawName = drawBlock.attrs.name ?? "draw";
@@ -111,6 +119,16 @@ export function projectDartsFromValText(
         continue;
       }
 
+      // piece 指定時は、その piece の `<iPaths>` に載っているダーツだけを残す。id の無いパスは名指しできない
+      // ＝どのピースにも帰属できないので、推測せず落とす(id 無しは実 Valentina では起きない)。
+      if (ownedPathIds !== undefined) {
+        const pathId = pathTag.attrs.id;
+
+        if (pathId === undefined || !ownedPathIds.has(pathId)) {
+          continue;
+        }
+      }
+
       const nodePointIds = collectSelfClosingTags(pathTag.content, "node")
         .map((node) => node.attrs.idObject)
         .filter((id): id is string => id !== undefined);
@@ -150,6 +168,8 @@ export function projectDartsFromValText(
 
 // NOTE: loadProjectedPart は source.val を1回読みに集約したため、現状この関数の Loomit 内部消費者は無い。
 // ただし「part の相対パスから darts だけを read-only に射影する」自己完結APIとして public に残す。
+// 注: この経路は piece で絞らない(.val 全体のダーツを返す)。part 単位へ射影する呼び手は projectDartsFromValText に
+// piece を渡すこと。
 // Seamlint(merge 周りの seam/geometry を focused に検査する将来ツール)のように、単一フィーチャだけを
 // .val から取り出したい消費者に向く粒度なので温存する。責務分担は docs/work/diffable-domain.md 参照。
 export async function projectPartDartsFromSource(
