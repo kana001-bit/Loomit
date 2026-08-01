@@ -20,8 +20,20 @@ export {
   runCompatibilityRules
 } from "./compatibility/rules.js";
 export type { CompatibilityRule, CompatibilityRuleRegistry } from "./compatibility/rules.js";
+export { cliDiagnosticCodes, coreDiagnosticCodes, diagnosticCodes } from "./diagnostics/codes.js";
+export type {
+  CliDiagnosticCode,
+  CoreDiagnosticCode,
+  CustomDiagnosticCode,
+  DiagnosticCode,
+  RegisteredDiagnosticCode
+} from "./diagnostics/codes.js";
 export { createDiagnostic, diagnosticSeverities } from "./diagnostics/diagnostic.js";
-export type { Diagnostic, DiagnosticSeverity } from "./diagnostics/diagnostic.js";
+export type {
+  Diagnostic,
+  DiagnosticSeverity,
+  RegisteredDiagnostic
+} from "./diagnostics/diagnostic.js";
 export { diffParts } from "./diff/partDiff.js";
 export type {
   ConnectionRisk,

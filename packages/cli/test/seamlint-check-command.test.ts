@@ -28,6 +28,25 @@ function fakeRunner(result: SeamlintRunResult): { runner: SeamlintRunner; calls:
   };
 }
 
+// 「Seamlint を呼ばずに終わる」ことを守るテスト用の runner。以前は code: "SHOULD_NOT_RUN" という
+// 実在しない診断コードを返すダミーだったが、返り値は誰も検査しないので呼ばれても静かに素通りしていた。
+//
+// 呼ばれたら「calls に記録してから throw」する。throw は呼び出しをその場で落とし、calls への記録は
+// 呼び出し側が throw を握り潰した場合に後段の `expect(calls).toEqual([])` で捉えるための保険。
+// 記録しないと calls が常に空になり、そのアサーションが無条件に通る恒真検査に化ける。
+function neverCalledRunner(): { runner: SeamlintRunner; calls: string[] } {
+  const calls: string[] = [];
+  return {
+    calls,
+    runner: {
+      run: async (requestJson: string): Promise<SeamlintRunResult> => {
+        calls.push(requestJson);
+        throw new Error("Seamlint runner must not be called in this scenario");
+      }
+    }
+  };
+}
+
 function collect() {
   const stdout: string[] = [];
   const stderr: string[] = [];
@@ -184,7 +203,7 @@ describe("runSeamlintCheckCommand", () => {
         "utf8"
       );
 
-      const { runner, calls } = fakeRunner({ ok: false, code: "SHOULD_NOT_RUN", message: "runner must not be called" });
+      const { runner, calls } = neverCalledRunner();
       const out = collect();
 
       const exitCode = await runSeamlintCheckCommand([tempRoot, "--format", "json"], {

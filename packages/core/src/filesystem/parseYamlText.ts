@@ -1,10 +1,11 @@
 import { parseDocument } from "yaml";
 
+import type { RegisteredDiagnosticCode } from "../diagnostics/codes.js";
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { LoadFileResult } from "./loadFileResult.js";
 
 interface ParseYamlTextOptions {
-  readonly invalidCode: string;
+  readonly invalidCode: RegisteredDiagnosticCode;
   readonly target: string;
 }
 

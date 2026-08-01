@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { diffParts } from "../../src/index.js";
-import type { Part, PrototypeNotes } from "../../src/index.js";
+import type { Diagnostic, Part, PrototypeNotes } from "../../src/index.js";
 
 describe("diffParts", () => {
   it("reports no changes when the same dart structure is compared", () => {
@@ -716,8 +716,8 @@ describe("diffParts", () => {
   it("surfaces input diagnostics and reflects them in status", () => {
     // 守る仕様: 前段(part load / darts 射影)で出た診断を diff レポートに載せ、status にも反映する。
     const part = createBodyPart({});
-    const inputDiagnostic = {
-      severity: "warning" as const,
+    const inputDiagnostic: Diagnostic = {
+      severity: "warning",
       code: "PART_SOURCE_VAL_READ_FAILED",
       message:
         "source.val からダーツを読み取れませんでした。 / Could not read darts from source.val.",

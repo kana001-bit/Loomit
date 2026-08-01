@@ -8,6 +8,7 @@ import { loadPrototypeNotesFile } from "../../src/prototype-notes/loadPrototypeN
 import { loadProject } from "../../src/project/loadProject.js";
 import { resolveParts } from "../../src/project/resolveParts.js";
 import { getStatusForDiagnostics } from "../../src/diagnostics/report.js";
+import type { Diagnostic } from "../../src/diagnostics/diagnostic.js";
 import type { ResolvedProject } from "../../src/project/resolveParts.js";
 import type { MovementTestRule } from "../../src/movement-tests/rules.js";
 
@@ -119,15 +120,16 @@ describe("runMovementTest", () => {
 
   it("can run supplied movement test rules instead of the default rules", async () => {
     // 守る仕様: rules を渡すと既定ルールの代わりにその movement test ルールで検査できる(ルール差し替えの拡張点)。
+    // 守る仕様: 注入した rule は Loomit の語彙に無い診断コードを X_ 接頭辞で出せる(拡張点は code まで開いている)。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const customRule: MovementTestRule = {
       id: "arm-raise.custom-note",
       description: "Checks a custom movement note.",
       check: (context) => {
-        const diagnostics = [
+        const diagnostics: readonly Diagnostic[] = [
           {
-            severity: "warning" as const,
-            code: "MOVEMENT_TEST_CUSTOM_NOTE",
+            severity: "warning",
+            code: "X_MOVEMENT_TEST_CUSTOM_NOTE",
             message: `Custom rule matched ${context.scenario}.`,
             target: context.scenario
           }
@@ -153,7 +155,7 @@ describe("runMovementTest", () => {
       diagnostics: [
         {
           severity: "warning",
-          code: "MOVEMENT_TEST_CUSTOM_NOTE",
+          code: "X_MOVEMENT_TEST_CUSTOM_NOTE",
           message: "Custom rule matched arm-raise.",
           target: "arm-raise"
         }
@@ -168,7 +170,7 @@ describe("runMovementTest", () => {
           diagnostics: [
             {
               severity: "warning",
-              code: "MOVEMENT_TEST_CUSTOM_NOTE",
+              code: "X_MOVEMENT_TEST_CUSTOM_NOTE",
               message: "Custom rule matched arm-raise.",
               target: "arm-raise"
             }

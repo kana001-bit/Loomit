@@ -1,9 +1,10 @@
+import type { RegisteredDiagnosticCode } from "../diagnostics/codes.js";
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
-import type { Diagnostic } from "../diagnostics/diagnostic.js";
+import type { RegisteredDiagnostic } from "../diagnostics/diagnostic.js";
 
 export interface FsErrorContext {
-  /** 操作に対する安定した diagnostic code(例: "PROJECT_CREATE_FAILED")。 */
-  readonly code: string;
+  /** 操作に対する安定した diagnostic code(例: "PROJECT_CREATE_FAILED")。語彙の正本は codes.ts。 */
+  readonly code: RegisteredDiagnosticCode;
   /** 失敗した操作を説明する日英併記のベースメッセージ。 */
   readonly message: string;
   readonly target: string;
@@ -67,7 +68,11 @@ function errnoDetail(errno: string | undefined): ErrnoDetail | undefined {
 
 // 捕捉したファイルシステムエラーを、説明可能な Diagnostic に変換する。権限・容量不足・既存・不在を
 // それぞれ別の理由と suggestion にし、汎用的な「失敗しました」1つに潰さない。
-export function describeFsError(error: unknown, context: FsErrorContext): Diagnostic {
+//
+// 戻りを RegisteredDiagnostic にしているのは、入力の code が既に登録済み語彙だから。呼び出し側が
+// この結果を spread して createDiagnostic に渡す使い方(severity の差し替え等)をしても、code が
+// 広い DiagnosticCode に緩まず「本体は登録済みコードしか出さない」保証が伝播する。
+export function describeFsError(error: unknown, context: FsErrorContext): RegisteredDiagnostic {
   const detail = errnoDetail(getErrno(error));
 
   return createDiagnostic({

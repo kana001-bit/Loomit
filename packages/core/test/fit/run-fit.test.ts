@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { loadProfileFile } from "../../src/profile/loadProfile.js";
 import { getStatusForDiagnostics, loadProject, resolveParts } from "../../src/index.js";
 import { runFit } from "../../src/fit/runFit.js";
-import type { FitRule, ResolvedProject, ResolvedProjectPart } from "../../src/index.js";
+import type { Diagnostic, FitRule, ResolvedProject, ResolvedProjectPart } from "../../src/index.js";
 
 const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../fixtures");
 
@@ -146,16 +146,17 @@ describe("runFit", () => {
 
   it("can run supplied fit rules instead of the default ease rule", async () => {
     // 守る仕様: rules を渡すと既定の ease ルールの代わりにその fit ルールで検査できる(ルール差し替えの拡張点)。
+    // 守る仕様: 注入した rule は Loomit の語彙に無い診断コードを X_ 接頭辞で出せる(拡張点は code まで開いている)。
     const resolvedProject = await loadResolvedFixture("valid-blouse");
     const profile = await loadProfileFixture("my-size.yml");
     const customRule: FitRule = {
       id: "custom-neck-to-wrist",
       description: "Checks a custom length preference.",
       check: () => {
-        const diagnostics = [
+        const diagnostics: readonly Diagnostic[] = [
           {
-            severity: "warning" as const,
-            code: "FIT_CUSTOM_LENGTH_NOTE",
+            severity: "warning",
+            code: "X_FIT_CUSTOM_LENGTH_NOTE",
             message: "Custom length preference should be reviewed.",
             target: "profile.preferences.length"
           }
@@ -198,7 +199,7 @@ describe("runFit", () => {
           diagnostics: [
             {
               severity: "warning",
-              code: "FIT_CUSTOM_LENGTH_NOTE",
+              code: "X_FIT_CUSTOM_LENGTH_NOTE",
               message: "Custom length preference should be reviewed.",
               target: "profile.preferences.length"
             }
