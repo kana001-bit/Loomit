@@ -291,6 +291,14 @@ loom diff <rev> --part <role> [--format text|json]
 
 - raw file diff ではなく、ドメインを踏まえた変更として読む。
 - connector や requirement について recheck のヒントを含める。
+- **`.val` の製図式が動いたら `same` で終わらせない**。`loom diff` が比べるのは宣言（`part.loom`）と射影フィーチャ（darts / notches）で、製図式（`waist_circ + 2` → `+ 5` のような幾何パラメータ）は**幾何なので Loomit は計算しない**。それでも「動いた」ことは `.val` の構造から分かるので、`draftingSource`（`same` / `changed` ＋ 変わったパラメータ数）として report に載せる。
+  - `status` は `same` のまま（宣言と射影フィーチャとしては本当に同一）。`status` に混ぜると `changed` の意味が薄まり、それを見ている消費者が壊れるため、**additive な別フィールド**にしてある。
+  - **何を見ているか**: `<draw>` の中の**全要素の全属性**（`<calculation>` の `length` / `angle` / `x` / `y` / `type`、`<arc>` の `radius`、`<spline>` のハンドル、`<operation>` の変換、`<modeling>` の参照、`<detail>` の `width`＝縫い代や `<node idObject>`＝型紙輪郭の構成）＋ `<unit>`（cm↔mm）＋ `<increments>` の式。式は評価しない（`a + 2` と `a+2` は別物として数える）。
+  - **無視するのは装飾だけ**: `id` / `uuid` / `mx` / `my` / `name` / `showLabel` / `visible` / `enabled` / `inUse` / `color` / `lineColor` / `penStyle` / `typeLine`。拾う属性を列挙する方式にすると `.val` に新しい幾何属性が出たとき黙って取りこぼすので、**除外側を列挙**している。Valentina 側で綴りが直った属性（`firstToCountour`→`firstToContour` など）は新しい綴りへ正規化してから比べる（値は同じなのに「消えて生えた」と数えないため）。
+  - `changes` と**重なることがある**。合印を1つ足すと `[added] notch …` と `draftingSource: changed` の両方が動く。二重計上より「どちらかが黙る」ほうが害が大きいという判断（説明文が出るのは `changes` が空のときだけ）。
+  - **どの part の製図が動いたかは言わない**。1つの `.val` を複数 part が共有し、calculation の点を piece に帰属させられない（[C6]）ため、`.val` を共有する全 part に同じ信号が出る。幾何の影響量は `loom slnt check`（Seamlint）で測る。
+  - `status` は `same` / `changed`（＋変わった件数）のほか、**片側にしか `.val` が無いときは `added` / `removed`**（比較そのものが成立しないので件数は持たない）。`.val` がその版に未コミット、というだけの状況を「製図が動いた」と混同しないため。
+  - **片側でも `.val` が読めなかったとき（権限エラー等）は `draftingSource` を出さない**。読めなかった事実は `PART_SOURCE_VAL_READ_FAILED`（warning）が伝えるので、diff は推測しない。両側とも `.val` が無いときも**フィールドごと省略**する（JSON の消費側は不在を扱うこと）。
 - **`part.loom` が書いていない darts / notches は `files.source`（`.val`）から read-only に射影して比べる**。1つの `.val` は1着ぶん（1 draw ＋ N detail）なので、射影は **`files.piece` の detail に属するものだけ**に絞る（合印は detail 直下の node、ダーツは detail の `<iPaths>` が id で名指しする内部パス）。`files.piece` が無く detail が2枚以上ある `.val` では絞れないため、全ピース分を射影したうえで `PART_SOURCE_VAL_PIECE_UNDECLARED`（warning）を出す ── 他ピースのフィーチャが混ざった差分になりうる、という意味。逆に**宣言した `files.piece` が `.val` に無い**ときは `PART_SOURCE_VAL_PIECE_NOT_FOUND`（warning）を出して射影は空のままにする（全ピースへは広げない）── 綴り違いや Valentina 側の detail リネームで、差分からダーツ・合印が丸ごと消えたまま正常に見えるのを防ぐ。`part.loom` に inline で書いてあるフィーチャは射影せずそのまま使う。
 - **各 revision は project の snapshot**であり、`loom diff` は2つの snapshot を意味的に比較する。snapshot の保存・履歴・branch は Git に委譲し、Loomit は独自の `snapshot` / `commit` コマンドを持たない（用語は [glossary.md](glossary.md) の Snapshot / Revision 参照）。
 - **revision 形式**は現在の一着（cwd の project）を Git 履歴の版と比較する。history は Git に委譲する方針（[design-history.md](design-history.md) 参照）で、Loomit は各 revision を一時 worktree に展開してから既存の意味差分に流す。git shell は CLI 層に閉じ、core の diff は pure なまま。

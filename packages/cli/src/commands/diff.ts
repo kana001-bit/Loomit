@@ -1,12 +1,15 @@
 import {
   createDiagnostic,
   diffParts,
+  diffValSources,
   getErrno,
   loadProject,
-  loadProjectedPart,
+  loadProjectedPartWithSource,
   loadPrototypeNotesFile,
   type Diagnostic,
-  type PrototypeNotes
+  type ProjectedPartSource,
+  type PrototypeNotes,
+  type ValSourceDiffSummary
 } from "@loomit/core";
 import { access } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -55,7 +58,7 @@ type ParsedDiffArgs =
 interface ResolvedDiffPaths {
   readonly fromPath: string;
   readonly toPath: string;
-  // 各辺の project root。loadProjectedPart は files.source を project root 相対優先で解決するので、
+  // 各辺の project root。loadProjectedPartWithSource は files.source を project root 相対優先で解決するので、
   // 既に project を読んでいる経路(--part / revision)ではその root をそのまま渡し、part.loom から
   // loomit.yml を探して登り直させない。パス指定モード(project を読まない)では undefined。
   readonly fromProjectRoot?: string;
@@ -215,7 +218,7 @@ async function diffResolvedParts(
   parsedArgs: ParsedDiffArgs,
   options: DiffCommandOptions
 ): Promise<number> {
-  const fromResult = await loadProjectedPart(
+  const fromResult = await loadProjectedPartWithSource(
     value.fromPath,
     value.fromProjectRoot === undefined ? undefined : { projectRoot: value.fromProjectRoot }
   );
@@ -229,7 +232,7 @@ async function diffResolvedParts(
     return 1;
   }
 
-  const toResult = await loadProjectedPart(
+  const toResult = await loadProjectedPartWithSource(
     value.toPath,
     value.toProjectRoot === undefined ? undefined : { projectRoot: value.toProjectRoot }
   );
@@ -251,13 +254,51 @@ async function diffResolvedParts(
     ...toResult.diagnostics
   ];
 
-  const report = diffParts(fromResult.value, toResult.value, {
+  // 射影に出ないもの(製図式・増分・型紙輪郭の構成)が動いたかは Part からは分からないので、両版の .val 本文を
+  // ここで比べる。片側にしか .val が無ければ added / removed、両方無い・読めない側があるなら語らない(undefined)。
+  const draftingSource = summarizeDraftingSource(fromResult.value.source, toResult.value.source);
+
+  const report = diffParts(fromResult.value.part, toResult.value.part, {
     ...(value.prototypeNotes === undefined ? {} : { prototypeNotes: value.prototypeNotes }),
-    ...(inputDiagnostics.length === 0 ? {} : { inputDiagnostics })
+    ...(inputDiagnostics.length === 0 ? {} : { inputDiagnostics }),
+    ...(draftingSource === undefined ? {} : { draftingSource })
   });
   writeReport(report, parsedArgs, options);
 
   return report.status === "error" ? 1 : 0;
+}
+
+// 両版の .val から製図構造の差分を要約する。
+//
+// **読めなかった側があるときは何も言わない。** 「読めない」は「無い」ではないので、片側が unreadable のときに
+// 「製図ソースが外れた = removed」と報告すると、読み取り失敗の warning と同時に「.val が片側に無い」と誤報する
+// ことになる(実際にはこちらは何も知らない)。読めなかった事実は PART_SOURCE_VAL_READ_FAILED が既に伝えている
+// ので、こちらは黙る。
+//
+// 片側だけに .val が**在る**(もう片側は absent)なら added / removed。製図の中身は比べようがない。
+function summarizeDraftingSource(
+  fromSource: ProjectedPartSource | undefined,
+  toSource: ProjectedPartSource | undefined
+): ValSourceDiffSummary | undefined {
+  if (fromSource?.status === "unreadable" || toSource?.status === "unreadable") {
+    return undefined;
+  }
+
+  if (fromSource?.status === "read" && toSource?.status === "read") {
+    return diffValSources(fromSource.text, toSource.text);
+  }
+
+  // 片側にしか .val が無い。**「製図が動いた」とは別の status** にする ── 片側が未コミットなだけ(ENOENT=正常系で
+  // 診断も出ない)のときに「製図が動いた」と同じ文面を出すと、作者は動いていない製図を疑いに行く。
+  if (toSource?.status === "read") {
+    return { status: "added" };
+  }
+
+  if (fromSource?.status === "read") {
+    return { status: "removed" };
+  }
+
+  return undefined;
 }
 
 export function formatDiffHelp(): string {

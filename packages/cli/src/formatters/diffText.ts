@@ -17,7 +17,12 @@ export function formatDiffText(report: PartDiffReport): string {
     `  silhouette impact: ${report.decisionSummary.silhouetteImpact}`,
     `  volume change:     ${report.decisionSummary.volumeChange}`,
     `  connection risk:   ${report.decisionSummary.connectionRisk}`,
-    `  prototype notes:   ${report.decisionSummary.prototypeNoteSignal}`
+    `  prototype notes:   ${report.decisionSummary.prototypeNoteSignal}`,
+    // 製図ソースの行は Summary の中に置く。status が same でも見出し直後で目に入る位置でないと、
+    // 「.val を変えたのに Loomit は何も言わない」という読まれ方が消えない。
+    ...(report.draftingSource === undefined
+      ? []
+      : [`  drafting source:   ${formatDraftingSource(report.draftingSource)}`])
   );
 
   lines.push(
@@ -33,7 +38,19 @@ export function formatDiffText(report: PartDiffReport): string {
   }
 
   if (report.changes.length === 0) {
-    lines.push("", "No semantic changes.");
+    // 製図ソースが動いているのに "No semantic changes." だけを出すと「Loomit は何も見ていない」と読まれる。
+    // 宣言と射影フィーチャの話であることを明示し、幾何を測る次の一手(Seamlint)へ渡す。
+    const draftingNote = formatDraftingSourceNote(report.draftingSource);
+
+    if (draftingNote !== undefined) {
+      lines.push(
+        "",
+        "No changes to the declared structure (connectors, requirements, darts, notches).",
+        ...draftingNote
+      );
+    } else {
+      lines.push("", "No semantic changes.");
+    }
   } else {
     lines.push("", "Changes:");
 
@@ -75,6 +92,54 @@ export function formatDiffText(report: PartDiffReport): string {
   }
 
   return `${lines.join("\n")}\n`;
+}
+
+function formatDraftingSource(draftingSource: NonNullable<PartDiffReport["draftingSource"]>): string {
+  if (draftingSource.status === "added" || draftingSource.status === "removed") {
+    return draftingSource.status;
+  }
+
+  if (draftingSource.status === "same") {
+    return "same";
+  }
+
+  const count = draftingSource.changedParameters;
+
+  return `changed (${count} ${count === 1 ? "parameter" : "parameters"})`;
+}
+
+// changes が空のときに "No semantic changes." で終わらせない説明。語ることが無ければ undefined。
+// 状態ごとに文面を分ける ── 「製図が動いた」と「.val がこの版にはまだ無い(未コミット等)」を同じ文で出すと、
+// 後者のときに作者が動いていない製図を疑いに行く。
+function formatDraftingSourceNote(
+  draftingSource: PartDiffReport["draftingSource"]
+): readonly string[] | undefined {
+  if (draftingSource === undefined || draftingSource.status === "same") {
+    return undefined;
+  }
+
+  if (draftingSource.status === "added" || draftingSource.status === "removed") {
+    // どちらの版に在るかは、出力冒頭の見出し(From: / To:)と同じ語で指す。"here" / "the other version" では
+    // 読み手がどちらを見ればいいか決まらず、「.val が両方の版にあるか確認しろ」という次の行動に繋がらない。
+    const direction =
+      draftingSource.status === "added"
+        ? "is present in the To version but not in the From version"
+        : "is present in the From version but not in the To version";
+
+    return [
+      `The .val this part is drafted from ${direction}, so the drafting could not be compared.`,
+      "Check files.source, or whether the .val is committed in both versions."
+    ];
+  }
+
+  const count = draftingSource.changedParameters;
+
+  // 「この part が変わった」とは書かない ── 1 つの .val を複数 part が共有するのが実データの形で、
+  // どの part の製図が動いたかは Loomit には辿れない([C6])。言えるのは「下敷きの .val が動いた」まで。
+  return [
+    `The .val this part is drafted from moved (${count} ${count === 1 ? "parameter" : "parameters"}). Drafting formulas are geometry, which Loomit does not compute, and one .val is shared by several parts — this does not say the change landed on this part.`,
+    "Run `loom slnt check` to measure what it did to the seams."
+  ];
 }
 
 function formatNoteReasons(reasons: PartDiffReport["relatedNotes"][number]["reasons"]): string {

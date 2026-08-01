@@ -1,5 +1,6 @@
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
+import type { ValSourceDiffSummary } from "./valSourceDiff.js";
 import { indexConnectorRanges } from "../schema/connectorRanges.js";
 import type { PrototypeNotes } from "../schema/prototype-notes.schema.js";
 import type { Connector, Dart, Notch, Part, Requirement } from "../schema/part.schema.js";
@@ -144,6 +145,17 @@ export type PartDiffChange =
 export interface PartDiffReport {
   readonly status: PartDiffStatus;
   readonly decisionSummary: PartDiffDecisionSummary;
+  // 設計判断: `.val` の製図構造(製図式・増分)が動いたかを、`status` とは**別の次元**として持つ。
+  //
+  // status / changes は「宣言(part.loom)と射影フィーチャ(darts/notches)の差分」で、製図式を変えても本当に
+  // 同一なので `same` が正しい。ここを `changed` に倒すと `changed` の意味が「意味的フィーチャが変わった」から
+  // 「何か変わった」に薄まり、status を見て判断している消費者(Studio / 拡張 / CI)が壊れる。
+  //
+  // 一方で `same` としか言わないのは嘘に近い ── 製図式を変えた作者には「Loomit は何も見ていない」と映る。
+  // よって **additive な別フィールド**で事実だけ持ち、見せ方(text の見出し付近に必ず出す)で解く。
+  // 幾何の影響量は Loomit では出せないので、測るのは `loom slnt check`(Seamlint)。
+  // 両版に `.val` が無ければフィールドごと省く(比べる相手がいないので語らない)。
+  readonly draftingSource?: ValSourceDiffSummary;
   readonly recheckHints: PartDiffRecheckHints;
   readonly diagnostics: readonly Diagnostic[];
   readonly from: Pick<Part, "name" | "variant" | "type">;
@@ -201,6 +213,9 @@ export function diffParts(
     readonly prototypeNotes?: PrototypeNotes;
     // part load / darts 射影など、diff の前段で出た診断。status にも反映させるため取り込む。
     readonly inputDiagnostics?: readonly Diagnostic[];
+    // .val の製図構造が動いたか(呼び手が両版の本文を比べて渡す)。diff は幾何を持たないので判定はできず、
+    // 事実として受け取って report に載せるだけ。
+    readonly draftingSource?: ValSourceDiffSummary;
   } = {}
 ): PartDiffReport {
   const diagnostics = [
@@ -221,6 +236,8 @@ export function diffParts(
     status: getPartDiffStatus(diagnostics, changes),
     // 判断に効く要約を status の直後・詳細より前に置く。JSON でも後続ツールが最初に読める順にする。
     decisionSummary,
+    // status に混ぜない(理由は PartDiffReport.draftingSource のコメント)。
+    ...(options.draftingSource === undefined ? {} : { draftingSource: options.draftingSource }),
     recheckHints,
     diagnostics,
     from: {

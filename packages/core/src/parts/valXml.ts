@@ -99,6 +99,44 @@ export function collectSelfClosingTags(source: string, tagName: string): readonl
   return tags;
 }
 
+export interface XmlTagOccurrence {
+  readonly name: string;
+  readonly attrs: Readonly<Record<string, string>>;
+}
+
+// タグ名を指定せず、開始タグ / self-closing タグを**出現順に全部**返す(閉じタグは含まない)。
+// 「どのタグかは事前に分からないが、中身が動いたかを知りたい」用途(製図構造のフィンガープリント)向け。
+// 名前を列挙して collectSelfClosingTags を並べる方式だと、.val に新しい要素が増えたときに黙って
+// 取りこぼす ── この走査は「知らないものも数える」ことが目的なので、名前で絞らない。
+export function collectAllTags(source: string): readonly XmlTagOccurrence[] {
+  const tags: XmlTagOccurrence[] = [];
+  let i = 0;
+
+  while (i < source.length) {
+    const lt = source.indexOf("<", i);
+    if (lt === -1) {
+      break;
+    }
+
+    const skipped = skipMarkup(source, lt);
+    if (skipped !== undefined) {
+      i = skipped;
+      continue;
+    }
+
+    const tag = readStartTag(source, lt);
+    if (tag === undefined) {
+      i = lt + 1;
+      continue;
+    }
+
+    tags.push({ name: tag.name, attrs: parseAttributes(tag.attrs) });
+    i = tag.end;
+  }
+
+  return tags;
+}
+
 // 属性値は `"` と `'` の両方を読む(readStartTag もタグ終端判定で `'` を尊重するのと揃える)。`"` しか読まないと、
 // single-quote の正当な XML で属性が丸ごと落ちる(タグは見つかるのに attrs 空 → increment 黙殺・detail#N フォールバック
 // 等の誤射影を招く)。実 Valentina は `"` だが XML としては両方正当。
