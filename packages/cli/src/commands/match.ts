@@ -15,6 +15,7 @@ import {
   createSubprocessSeamlintRunner,
   resolveSlntBin,
   type SeamlintCheckOutcome,
+  type SeamlintRunFailureCode,
   type SeamlintRunner
 } from "./seamlintCheck.js";
 import {
@@ -297,7 +298,7 @@ function earlyErrorReport(
 }
 
 function seamlintRunnerErrorDiagnostic(runResult: {
-  readonly code: string;
+  readonly code: SeamlintRunFailureCode;
   readonly message: string;
 }): Diagnostic {
   const notFound = runResult.code === "SEAMLINT_NOT_FOUND";

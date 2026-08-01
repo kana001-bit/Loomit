@@ -429,13 +429,8 @@ async function resolveProjectPartPaths(
     }
   | {
       readonly ok: false;
-      readonly diagnostics: readonly {
-        readonly severity: "info" | "warning" | "error";
-        readonly code: string;
-        readonly message: string;
-        readonly target?: string;
-        readonly suggestion?: readonly string[];
-      }[];
+      // 形が drift しないよう core の Diagnostic をそのまま使う(以前はここに同じ形を重複定義していた)。
+      readonly diagnostics: readonly Diagnostic[];
     }
 > {
   // diff --part に渡すプロジェクトパスは実在必須にする。存在しないと findProjectRoot が上位ディレクトリへ
@@ -612,13 +607,8 @@ function mergePrototypeNotes(
 function createPartLoadFailureReport(
   fromPath: string,
   toPath: string,
-  diagnostics: readonly {
-    readonly severity: "info" | "warning" | "error";
-    readonly code: string;
-    readonly message: string;
-    readonly target?: string;
-    readonly suggestion?: readonly string[];
-  }[]
+  // 形が drift しないよう core の Diagnostic をそのまま使う(以前はここに同じ形を重複定義していた)。
+  diagnostics: readonly Diagnostic[]
 ): Parameters<typeof formatDiffText>[0] {
   return {
     status: "error",

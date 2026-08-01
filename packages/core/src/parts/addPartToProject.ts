@@ -3,6 +3,7 @@ import { copyFile, mkdir, readFile, realpath, rm, stat } from "node:fs/promises"
 import { basename, join, relative, resolve } from "node:path";
 import { stringify } from "yaml";
 
+import type { RegisteredDiagnosticCode } from "../diagnostics/codes.js";
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import { describeFsError } from "../filesystem/fsError.js";
@@ -454,7 +455,7 @@ async function planValSource(
 // realpath の失敗は握りつぶさない(R3)。判定できないまま進むと、外を指す symlink を内側と誤認しうる。
 async function resolveRealPath(
   path: string,
-  context: { readonly code: string; readonly message: string }
+  context: { readonly code: RegisteredDiagnosticCode; readonly message: string }
 ): Promise<
   | { readonly ok: true; readonly value: string }
   | { readonly ok: false; readonly diagnostics: readonly Diagnostic[] }

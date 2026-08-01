@@ -14,11 +14,15 @@ import {
 
 import { spawnResolvedProcess } from "./subprocess.js";
 
+// Truer 実行が失敗しうる理由。string に広げず列挙するのは、これが診断コードとして report JSON に出る
+// 契約値だから(語彙の正本は core の diagnostics/codes.ts)。
+export type TruerRunFailureCode = "TRUER_NOT_FOUND" | "TRUER_SPAWN_FAILED" | "TRUER_FAILED";
+
 // Truer 実行の結果。ok なら exit 0、失敗は理由コード(未検出/spawn失敗/非0終了)。Seamlint runner と違い
 // stdout の parse はしない ── Truer は proposal を --out のファイルに書き、loom は exit code だけ見る。
 export type TruerRunResult =
   | { readonly ok: true; readonly exitCode: number }
-  | { readonly ok: false; readonly code: string; readonly message: string };
+  | { readonly ok: false; readonly code: TruerRunFailureCode; readonly message: string };
 
 // Truer を実際に走らせる境界。既定は subprocess アダプタだが、テストは fake を注入して実 Truer 無しで
 // spawn 引数・整形・分岐を検証する。
@@ -31,7 +35,7 @@ export interface TruerRunner {
 export type TruerProposeOutcome =
   | { readonly kind: "proposed"; readonly proposalPath: string }
   | { readonly kind: "skipped"; readonly reason: string }
-  | { readonly kind: "unavailable"; readonly code: string; readonly message: string };
+  | { readonly kind: "unavailable"; readonly code: TruerRunFailureCode; readonly message: string };
 
 export interface TruerProposeResult {
   readonly outcome: TruerProposeOutcome;

@@ -36,17 +36,20 @@ describe("diagnostics", () => {
 
   it("returns the highest severity status", () => {
     // 守る仕様: warning と error が混在する場合、report status は最も重い error になる。
+    // ここで検証するのは severity の集約だけなので、code は実在するものであれば何でもよい
+    // (severity と code の組み合わせは production の発行箇所とは対応しない)。
     const diagnostics: readonly Diagnostic[] = [
       {
         severity: "info",
-        code: "PROJECT_LOADED",
-        message: "プロジェクトを読み込みました。 / Loaded the project."
+        code: "UNREGISTERED_VAL_SOURCE",
+        message: "未登録の .val があります。 / A .val is not registered as a part.",
+        target: "parts/sleeve.val"
       },
       {
         severity: "warning",
-        code: "PART_DEPRECATED",
-        message: "非推奨のパーツが使われています。 / A deprecated part is used.",
-        target: "sleeve"
+        code: "PART_GEOMETRY_STALE",
+        message: "DXF が .val より古いままです。 / The DXF is older than the .val.",
+        target: "parts/sleeve.dxf"
       },
       {
         severity: "error",
@@ -65,9 +68,9 @@ describe("diagnostics", () => {
     const report = createDiagnosticReport([
       {
         severity: "warning",
-        code: "PART_DEPRECATED",
-        message: "非推奨のパーツが使われています。 / A deprecated part is used.",
-        target: "sleeve"
+        code: "PART_GEOMETRY_STALE",
+        message: "DXF が .val より古いままです。 / The DXF is older than the .val.",
+        target: "parts/sleeve.dxf"
       }
     ]);
 
@@ -76,9 +79,9 @@ describe("diagnostics", () => {
       diagnostics: [
         {
           severity: "warning",
-          code: "PART_DEPRECATED",
-          message: "非推奨のパーツが使われています。 / A deprecated part is used.",
-          target: "sleeve"
+          code: "PART_GEOMETRY_STALE",
+          message: "DXF が .val より古いままです。 / The DXF is older than the .val.",
+          target: "parts/sleeve.dxf"
         }
       ]
     });

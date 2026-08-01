@@ -41,6 +41,28 @@ function fakeRunner(result: SeamlintRunResult): { runner: SeamlintRunner; calls:
   };
 }
 
+// 「Seamlint を呼ばずに終わる」ことを守るテスト用の runner。以前は code: "SHOULD_NOT_RUN" という
+// 実在しない診断コードを返すダミーだったが、返り値は誰も検査しないので呼ばれても静かに素通りしていた。
+//
+// 呼ばれたら「calls に記録してから throw」する。二重にしているのは役割が違うため:
+// - throw: 呼び出しが握り潰されない限り、その場でテストを落とす。
+// - calls への記録: 呼び出し側が try/catch で throw を飲んだ場合でも、後段の
+//   `expect(calls).toEqual([])` が実際の呼び出しを捉える。記録しない実装だと calls が常に空になり、
+//   このアサーションが無条件に通る恒真検査に化ける(= 仕様が壊れても green になる)。
+// 失敗時に「何を渡して呼ばれたか」が読めるのも、記録しておく利点。
+function neverCalledRunner(): { runner: SeamlintRunner; calls: string[] } {
+  const calls: string[] = [];
+  return {
+    calls,
+    runner: {
+      run: async (requestJson: string): Promise<SeamlintRunResult> => {
+        calls.push(requestJson);
+        throw new Error("Seamlint runner must not be called in this scenario");
+      }
+    }
+  };
+}
+
 function collect() {
   const stdout: string[] = [];
   const stderr: string[] = [];
@@ -133,7 +155,7 @@ describe("runMatchCommand", () => {
 
   it("fails with MATCH_ROLE_NOT_FOUND without calling Seamlint when a part is unknown", async () => {
     // 守る仕様: 登録されていない role を指すと、Seamlint を呼ばず MATCH_ROLE_NOT_FOUND / exit 1 で返す。
-    const { runner, calls } = fakeRunner({ ok: false, code: "SHOULD_NOT_RUN", message: "must not run" });
+    const { runner, calls } = neverCalledRunner();
     const out = collect();
 
     const exitCode = await runMatchCommand(["body", "collar", "--format", "json"], {
@@ -156,7 +178,7 @@ describe("runMatchCommand", () => {
 
   it("rejects matching a part to itself without calling Seamlint", async () => {
     // 守る仕様: 同じ role 同士の match は MATCH_SAME_ROLE / exit 1 で弾き、Seamlint を呼ばない(縫い目は異なる2パーツ)。
-    const { runner, calls } = fakeRunner({ ok: false, code: "SHOULD_NOT_RUN", message: "must not run" });
+    const { runner, calls } = neverCalledRunner();
     const out = collect();
 
     const exitCode = await runMatchCommand(["body", "body", "--format", "json"], {
@@ -215,7 +237,7 @@ describe("runMatchCommand", () => {
         );
       }
 
-      const { runner, calls } = fakeRunner({ ok: false, code: "SHOULD_NOT_RUN", message: "must not run" });
+      const { runner, calls } = neverCalledRunner();
       const out = collect();
 
       const exitCode = await runMatchCommand(["front", "back", "--format", "json"], {
@@ -314,7 +336,7 @@ describe("runMatchCommand", () => {
     ]);
 
     try {
-      const { runner, calls } = fakeRunner({ ok: false, code: "SHOULD_NOT_RUN", message: "must not run" });
+      const { runner, calls } = neverCalledRunner();
       const out = collect();
 
       const exitCode = await runMatchCommand(["body", "sleeve", "--format", "json"], {
@@ -469,7 +491,7 @@ describe("runMatchCommand", () => {
 
   it("rejects --reference that is not one of the two parts", async () => {
     // 守る仕様: --reference は名指しした2パーツのどちらかでなければ usage エラー(exit 2)で弾く。
-    const { runner } = fakeRunner({ ok: false, code: "SHOULD_NOT_RUN", message: "must not run" });
+    const { runner } = neverCalledRunner();
     const out = collect();
 
     const exitCode = await runMatchCommand(["body", "sleeve", "--reference", "collar"], {

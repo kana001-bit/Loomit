@@ -2,6 +2,7 @@ import { spawnResolvedProcess } from "./subprocess.js";
 
 import {
   collectProjectReadinessDiagnostics,
+  createDiagnostic,
   createSeamlintGeometryRequest,
   getStatusForDiagnostics,
   loadProject,
@@ -18,10 +19,18 @@ import { formatSeamlintCheckText } from "../formatters/seamlintCheckText.js";
 
 export type SeamlintCheckOutputFormat = "text" | "json";
 
+// Seamlint 実行が失敗しうる理由。string に広げず列挙するのは、これが診断コードとして report JSON に出る
+// 契約値だから(語彙の正本は core の diagnostics/codes.ts)。呼び出し側の `code === "SEAMLINT_NOT_FOUND"`
+// のような分岐も、綴りを間違えれば TS2367 で落ちる。
+export type SeamlintRunFailureCode =
+  | "SEAMLINT_NOT_FOUND"
+  | "SEAMLINT_SPAWN_FAILED"
+  | "SEAMLINT_BAD_OUTPUT";
+
 // Seamlint 実行の結果。ok なら parse 済み report、失敗なら理由コード(未検出/spawn失敗/不正出力)。
 export type SeamlintRunResult =
   | { readonly ok: true; readonly report: SeamlintGeometryRequestReport; readonly exitCode: number }
-  | { readonly ok: false; readonly code: string; readonly message: string };
+  | { readonly ok: false; readonly code: SeamlintRunFailureCode; readonly message: string };
 
 // Seamlint を実際に走らせる境界。既定は subprocess アダプタだが、テストは fake を注入して
 // 実 Seamlint 無しで組み立て・整形・exit code を検証する(transport 差し替え可能にする狙い)。
@@ -34,7 +43,11 @@ export interface SeamlintRunner {
 export type SeamlintCheckOutcome =
   | { readonly kind: "ran"; readonly report: SeamlintGeometryRequestReport }
   | { readonly kind: "skipped"; readonly reason: string }
-  | { readonly kind: "unavailable"; readonly code: string; readonly message: string };
+  | {
+      readonly kind: "unavailable";
+      readonly code: SeamlintRunFailureCode;
+      readonly message: string;
+    };
 
 export interface SeamlintCheckReport {
   readonly status: ReportStatus;
@@ -240,9 +253,14 @@ export function resolveSlntBin(flagValue: string | undefined): string {
 // 元(テスト含む)を変えずに済むよう、seamlintCheck からも従来どおり再 export する。
 export { quoteForCmd, resolveExecutable } from "./subprocess.js";
 
-function runnerErrorDiagnostic(runResult: { readonly code: string; readonly message: string }): Diagnostic {
+function runnerErrorDiagnostic(runResult: {
+  readonly code: SeamlintRunFailureCode;
+  readonly message: string;
+}): Diagnostic {
   const notFound = runResult.code === "SEAMLINT_NOT_FOUND";
-  return {
+  // Diagnostic を直接組み立てず createDiagnostic を通す。Loomit 本体の発行口をここに揃えることで、
+  // 未登録コード(X_ 拡張コード)を本体から出せないという型の保証が、この関数にも効く。
+  return createDiagnostic({
     severity: "error",
     code: runResult.code,
     message: notFound
@@ -252,7 +270,7 @@ function runnerErrorDiagnostic(runResult: { readonly code: string; readonly mess
     suggestion: notFound
       ? ["Install Seamlint so \"slnt\" is on PATH, or pass --slnt <path> to point at the executable."]
       : ["Check that the Seamlint executable runs and accepts \"slnt check-request --json\"."]
-  };
+  });
 }
 
 const statusRank: Record<ReportStatus, number> = { ok: 0, warning: 1, error: 2 };

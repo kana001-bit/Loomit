@@ -1,10 +1,11 @@
 import type { z, ZodIssue } from "zod";
 
+import type { RegisteredDiagnosticCode } from "../diagnostics/codes.js";
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { LoadFileResult } from "../filesystem/loadFileResult.js";
 
 interface ValidateSchemaOptions {
-  readonly invalidCode: string;
+  readonly invalidCode: RegisteredDiagnosticCode;
   readonly invalidMessage: string;
   readonly target: string;
 }

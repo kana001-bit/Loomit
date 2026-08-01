@@ -2,6 +2,7 @@ import { stat } from "node:fs/promises";
 
 import { stringify } from "yaml";
 
+import type { RegisteredDiagnosticCode } from "../diagnostics/codes.js";
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import { describeFsError } from "../filesystem/fsError.js";
@@ -506,7 +507,7 @@ export async function connectBand(
 
 // band の入口検証で使う error 結果(false ブランチ)を1行で作る。
 function connectBandError(
-  code: string,
+  code: RegisteredDiagnosticCode,
   message: string,
   target: string,
   suggestion: readonly string[]

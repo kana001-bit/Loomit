@@ -51,6 +51,40 @@ CONNECTOR_MISSING
 PROJECT_SCHEMA_INVALID
 ```
 
+### Code registry
+
+Every code **Loomit itself emits** lives in `packages/core/src/diagnostics/codes.ts`, and
+`Diagnostic.code` is the union derived from it — not `string`. **A new Loomit diagnostic will not
+compile until its code is registered there.** Add it to the group matching the producing module.
+
+Two registered groups exist. `coreDiagnosticCodes` is what core emits. `cliDiagnosticCodes` is what
+the CLI layer emits for concerns core cannot structurally have (spawning `slnt` / `tru`, resolving
+paths handed in as CLI arguments). Both live in core because `--format json` consumers see one
+vocabulary; core does not depend on the CLI, only the names sit together.
+
+The union is what links a code to the code that reads it. `doctorReport.ts` matches codes by
+equality to attach explanations, so renaming a code in its producing module makes that comparison a
+`TS2367` error instead of a silent loss of the explanation.
+
+Codes are a stable contract: treat a rename as a breaking change for anyone branching on the JSON
+report, and do not rename purely for spelling taste.
+
+The registry is **not** every code that can appear in report JSON. Two kinds pass through unregistered:
+
+- **Seamlint-origin diagnostics.** `SeamlintGeometryDiagnostic.code` is `string` and stays Seamlint's
+  vocabulary; `loom slnt check --format json` emits it verbatim. Loomit does not pin another tool's codes.
+- **Codes from injected rules.** Rule injection (`runFit(project, profile, { rules })` and the
+  exported `FitRule` / `MovementTestRule` / `CompatibilityRule`) is a public extension point, so a
+  caller's rule can emit `CustomDiagnosticCode` — any code prefixed `X_`. (`TestSuggestionRule` is
+  not in that list: `TestSuggestion` has no `diagnostics`, so suggestion rules emit no codes.)
+  The prefix keeps the guard working (a typo of a known code does not start with `X_`, so it still
+  fails to compile) and lets a report reader tell Loomit's vocabulary from a caller's.
+
+Loomit itself must never emit an `X_` code. That is enforced two ways: `createDiagnostic` takes
+`RegisteredDiagnostic`, so every Loomit emission site is typed to registered codes only; and a test
+scans `packages/*/src` for `code: "X_…"` literals to catch a hand-built `Diagnostic` that bypasses
+the helper.
+
 `Diagnostic.message` is user-facing. In early v0, write Japanese and English together while the wording is still being learned through real use. Put Japanese first, then English, so the message remains comfortable for the primary user and readable for future OSS users.
 
 ```ts
