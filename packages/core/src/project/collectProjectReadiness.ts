@@ -1,5 +1,6 @@
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
+import { describeStaleAge, findStaleGeometryExports } from "./findStaleGeometryExports.js";
 import { findStalePartFileCopies } from "./findStalePartFileCopies.js";
 import { findUnregisteredValSources } from "./findUnregisteredValSources.js";
 import type { ResolvedProject } from "./resolveParts.js";
@@ -9,6 +10,7 @@ import type { ResolvedProject } from "./resolveParts.js";
 // - part が1つも無い → error: 先に loom add する
 // - parts/ 配下に、どの part の files.source にも該当しない .val がある → warning: loom add で登録する
 // - part 内の files.* が project root の同名ファイルと食い違う → warning: コピーが取り残されている
+// - files.geometry(DXF)が files.source(.val)より古い → warning: 書き出し直していない可能性がある
 //
 // 「まだ取り込まれていない .val」の定義(走査・登録済み判定・残骸判定)は findUnregisteredValSources に
 // 一本化してあり、loom add の引数省略(自動発見)と同じ実装を使う(check が案内した .val を add が
@@ -97,6 +99,36 @@ export async function collectProjectReadinessDiagnostics(
           `If ${copy.originRelativePath} is the original, delete the unused copy at ${copy.copyRelativePath}.`,
           `If the copy holds the version you want, update ${copy.originRelativePath} instead — edits to the copy have no effect.`,
           `If they are unrelated files that happen to share a name, rename one — otherwise Loomit silently reads ${copy.originRelativePath}.`
+        ]
+      })
+    );
+  }
+
+  // `.val` を直したのに DXF を書き出し直していない状態を知らせる。放置すると `loom slnt check` が古い幾何を
+  // 測って古い数値を返し、しかも失敗として表に出ない(実際に踏んだ)。
+  //
+  // 断定はしない: `.val` の編集が必ず幾何を動かすとは限らない(点の改名・ラベル移動なら書き出し直しても DXF は
+  // 変わらない)。事実(DXF のほうが古い)と2通りの読みだけを渡す。
+  const staleGeometry = await findStaleGeometryExports(resolvedProject);
+
+  // 判定できなかった事実(権限エラー等)も落とさず見せる。
+  diagnostics.push(...staleGeometry.diagnostics);
+
+  for (const stale of staleGeometry.value) {
+    const age = describeStaleAge(stale.staleByMs);
+    const pair = `${stale.geometryRelativePath} < ${stale.sourceRelativePath}`;
+
+    diagnostics.push(
+      createDiagnostic({
+        severity: "warning",
+        code: "PART_GEOMETRY_STALE",
+        message:
+          `幾何ファイル(DXF)が .val より ${age} 古いままです。測定は書き出し済みの幾何に対して行われます: ${pair}` +
+          ` / The geometry file (DXF) is ${age} older than the .val it is exported from. Measurements run against the exported geometry, not the .val: ${pair}`,
+        target: stale.geometryPath,
+        suggestion: [
+          `If you changed the drafting, re-export ${stale.geometryRelativePath} from Valentina before measuring — otherwise loom slnt check reports the old geometry.`,
+          `If the .val edit does not move any geometry (renaming a point, moving a label), this is expected and can be ignored.`
         ]
       })
     );
