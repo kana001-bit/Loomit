@@ -27,7 +27,7 @@ describe("diffValSources", () => {
     const after = before.replace("waist_circ + 2", "waist_circ + 5");
 
     expect(after).not.toBe(before);
-    expect(diffValSources(before, after)).toEqual({ status: "changed", changedParameters: 1 });
+    expect(diffValSources(before, after)).toMatchObject({ status: "changed", changedParameters: 1 });
   });
 
   it("detects an increment formula change", () => {
@@ -39,7 +39,7 @@ describe("diffValSources", () => {
 </pattern>`;
     const after = before.replace('formula="10"', 'formula="12"');
 
-    expect(diffValSources(before, after)).toEqual({ status: "changed", changedParameters: 1 });
+    expect(diffValSources(before, after)).toMatchObject({ status: "changed", changedParameters: 1 });
   });
 
   it("counts an added and a removed parameter", () => {
@@ -61,7 +61,7 @@ describe("diffValSources", () => {
   </draw>
 </pattern>`;
 
-    expect(diffValSources(before, after)).toEqual({ status: "changed", changedParameters: 2 });
+    expect(diffValSources(before, after)).toMatchObject({ status: "changed", changedParameters: 2 });
   });
 
   it("stays silent through Valentina's save-only churn", async () => {
@@ -84,6 +84,183 @@ describe("diffValSources", () => {
     expect(diffValSources(before, churned)).toEqual({ status: "same", changedParameters: 0 });
   });
 
+  it("reports which element changed, with the old and new expression", async () => {
+    // 守る仕様: 内訳は「どの要素の・どの属性が・何から何へ」を持つ。実データの編集(loomitest4 の
+    //           waist band `waist_circ + 2` → `+ 5`)で、point 119 の length 1件だけが出る。
+    const before = await readFile(realValPath, "utf8");
+    const after = before.replace("waist_circ + 2", "waist_circ + 5");
+
+    const result = diffValSources(before, after);
+
+    expect(result).toEqual({
+      status: "changed",
+      changedParameters: 1,
+      changes: [
+        {
+          kind: "modified",
+          tag: "point",
+          id: "119",
+          // Valentina 上の表示名。比較には使わないが、内訳の見出しに使う。
+          name: "wb1",
+          fields: [{ attribute: "length", before: "waist_circ + 2", after: "waist_circ + 5" }]
+        }
+      ]
+    });
+  });
+
+  it("reports added and removed elements without listing every attribute", () => {
+    // 守る仕様: 追加・削除は「増えた/消えた」の事実だけを持つ(fields は空)。追加された点の全属性を並べても
+    //           読めないため。属性の内訳は modified のときだけ意味がある。
+    const before = `<pattern>
+  <draw name="d">
+    <calculation>
+      <point id="1" length="10" name="A" type="endLine"/>
+      <point id="2" length="20" name="B" type="endLine"/>
+    </calculation>
+  </draw>
+</pattern>`;
+    const after = `<pattern>
+  <draw name="d">
+    <calculation>
+      <point id="1" length="10" name="A" type="endLine"/>
+      <point id="3" length="30" name="C" type="endLine"/>
+    </calculation>
+  </draw>
+</pattern>`;
+
+    const result = diffValSources(before, after);
+
+    expect(result.status).toBe("changed");
+    expect(result.status === "changed" ? result.changes : []).toEqual([
+      { kind: "added", tag: "point", id: "3", name: "C", fields: [] },
+      { kind: "removed", tag: "point", id: "2", name: "B", fields: [] }
+    ]);
+  });
+
+  it("lists an increment change under its own name", () => {
+    // 守る仕様: 増分は id を持たない名前付きのツマミ。名前で指せるようにする。
+    const before = `<pattern>
+  <increments>
+    <increment description="" formula="5" name="waistband_height"/>
+  </increments>
+</pattern>`;
+
+    const result = diffValSources(before, before.replace('formula="5"', 'formula="7"'));
+
+    expect(result.status === "changed" ? result.changes : []).toEqual([
+      {
+        kind: "modified",
+        tag: "increment",
+        name: "waistband_height",
+        fields: [{ attribute: "formula", before: "5", after: "7" }]
+      }
+    ]);
+  });
+
+  it("lists every attribute that moved on one element", () => {
+    // 守る仕様: 1要素で複数の属性が動いたらすべて出す(並びは属性名順で決定的)。
+    const before =
+      '<pattern><draw name="d"><calculation><point angle="0" id="1" length="10" type="endLine"/></calculation></draw></pattern>';
+    const after =
+      '<pattern><draw name="d"><calculation><point angle="90" id="1" length="12" type="endLine"/></calculation></draw></pattern>';
+
+    const result = diffValSources(before, after);
+
+    expect(result.status === "changed" ? result.changes[0]?.fields : []).toEqual([
+      { attribute: "angle", before: "0", after: "90" },
+      { attribute: "length", before: "10", after: "12" }
+    ]);
+  });
+
+  it("attributes an anonymous element to its XML parent, not to the previous element", () => {
+    // 守る仕様(must-not-fire): 所有者は XML 上の**祖先**でなければならない。平坦な走査(直前の id 持ち要素を
+    //           所有者とみなす方式)は、閉じタグが見えないので要素を抜けても所有者が親へ戻らない ──
+    //           `<calculation>` 末尾の点の後に `<modeling>` が始まると、modeling 側の変更が**その点の変更**
+    //           として報告される。ここでは modeling の path の中身だけを変え、calculation の最後の点
+    //           (id=2)が名指しされないことを固定する。
+    const before = `<pattern>
+  <draw name="d">
+    <calculation>
+      <point id="1" length="10" name="A" type="endLine"/>
+      <point id="2" length="20" name="B" type="endLine"/>
+    </calculation>
+    <modeling>
+      <path id="40" name="seam" type="1">
+        <nodes>
+          <node idObject="1" type="NodePoint"/>
+        </nodes>
+      </path>
+    </modeling>
+  </draw>
+</pattern>`;
+    const after = before.replace('<node idObject="1"', '<node idObject="2"');
+
+    const result = diffValSources(before, after);
+    const changes = result.status === "changed" ? result.changes : [];
+
+    // 変更は modeling の path 40 に閉じる。calculation の点は1つも出ない。
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toMatchObject({ kind: "modified", tag: "path", id: "40" });
+    expect(changes.some((change) => change.tag === "point")).toBe(false);
+  });
+
+  it("does not report untouched contour nodes as changed when one is inserted", () => {
+    // 守る仕様(must-not-fire): id を持たない要素を出現順で対応付けると、先頭に1件挿入しただけで後続のキーが
+    //           全部ずれ、**中身が変わっていない node まで modified として名指しする**(1→0 / 2→1 が
+    //           modified、末尾に added、で3件)。所有者(detail)に畳むことで、挿入は所有者の変更1件になる。
+    const before = `<pattern>
+  <draw name="d">
+    <details>
+      <detail id="106" name="front" width="2">
+        <nodes>
+          <node idObject="1" type="NodePoint"/>
+          <node idObject="2" type="NodePoint"/>
+        </nodes>
+      </detail>
+    </details>
+  </draw>
+</pattern>`;
+    const after = before.replace(
+      '<node idObject="1" type="NodePoint"/>',
+      '<node idObject="0" type="NodePoint"/>\n          <node idObject="1" type="NodePoint"/>'
+    );
+
+    const result = diffValSources(before, after);
+    const change = result.status === "changed" ? result.changes[0] : undefined;
+
+    expect(result.status === "changed" ? result.changedParameters : undefined).toBe(1);
+    expect(change).toMatchObject({ kind: "modified", tag: "detail", id: "106", name: "front" });
+    // 値は比較用のダイジェスト(中身は実装詳細)。「その擬似属性が動いた」ことだけを固定する。
+    expect(change?.fields).toHaveLength(1);
+    expect(change?.fields[0]?.attribute).toBe("#contents");
+    expect(change?.fields[0]?.before).not.toBe(change?.fields[0]?.after);
+  });
+
+  it("detects a reordered contour without inventing per-node changes", () => {
+    // 守る仕様: 輪郭は順序が意味を持つ(多角形の形が変わる)。並べ替えは所有者の変更として1件で出す。
+    const before = `<pattern>
+  <draw name="d">
+    <details>
+      <detail id="106" name="front">
+        <nodes>
+          <node idObject="1" type="NodePoint"/>
+          <node idObject="2" type="NodePoint"/>
+        </nodes>
+      </detail>
+    </details>
+  </draw>
+</pattern>`;
+    const after = before.replace(
+      '<node idObject="1" type="NodePoint"/>\n          <node idObject="2" type="NodePoint"/>',
+      '<node idObject="2" type="NodePoint"/>\n          <node idObject="1" type="NodePoint"/>'
+    );
+
+    const result = diffValSources(before, after);
+
+    expect(result.status === "changed" ? result.changedParameters : undefined).toBe(1);
+    expect(result.status === "changed" ? result.changes[0]?.id : undefined).toBe("106");
+  });
+
   it("detects a changed piece contour node", () => {
     // 守る仕様(should-fire): detail の <node idObject> は型紙の輪郭の構成。`diffParts` が比べるのは
     //           darts / notches / connectors / requires だけで**輪郭は誰も比べていない**ので、ここが見ないと
@@ -101,12 +278,12 @@ describe("diffValSources", () => {
   </draw>
 </pattern>`;
 
-    expect(diffValSources(before, before.replace('idObject="2"', 'idObject="3"'))).toEqual({
+    expect(diffValSources(before, before.replace('idObject="2"', 'idObject="3"'))).toMatchObject({
       status: "changed",
       changedParameters: 1
     });
     // 縫い代幅(detail の width)も幾何。
-    expect(diffValSources(before, before.replace('width="2"', 'width="7"'))).toEqual({
+    expect(diffValSources(before, before.replace('width="2"', 'width="7"'))).toMatchObject({
       status: "changed",
       changedParameters: 1
     });
@@ -125,7 +302,7 @@ describe("diffValSources", () => {
 </pattern>`;
 
     // draw0 から消えて draw1 に生えた = 2 件。
-    expect(diffValSources(before, after)).toEqual({ status: "changed", changedParameters: 2 });
+    expect(diffValSources(before, after)).toMatchObject({ status: "changed", changedParameters: 2 });
   });
 
   it("ignores a renamed draw", async () => {
@@ -149,7 +326,7 @@ describe("diffValSources", () => {
 </pattern>`;
     const after = before.replace('<item idObject="2"/>', '<item idObject="3"/>');
 
-    expect(diffValSources(before, after)).toEqual({ status: "changed", changedParameters: 1 });
+    expect(diffValSources(before, after)).toMatchObject({ status: "changed", changedParameters: 1 });
   });
 
   it("detects a changed point angle", async () => {
@@ -160,7 +337,7 @@ describe("diffValSources", () => {
     const after = before.replace('angle="270"', 'angle="271"');
 
     expect(after).not.toBe(before);
-    expect(diffValSources(before, after)).toEqual({ status: "changed", changedParameters: 1 });
+    expect(diffValSources(before, after)).toMatchObject({ status: "changed", changedParameters: 1 });
   });
 
   it("detects a changed arc radius", () => {
@@ -174,7 +351,7 @@ describe("diffValSources", () => {
 </pattern>`;
     const after = before.replace("waist_circ / 2 + 10", "waist_circ / 2 + 12");
 
-    expect(diffValSources(before, after)).toEqual({ status: "changed", changedParameters: 1 });
+    expect(diffValSources(before, after)).toMatchObject({ status: "changed", changedParameters: 1 });
   });
 
   it("detects a changed point type and a moved single point", () => {
@@ -189,11 +366,11 @@ describe("diffValSources", () => {
   </draw>
 </pattern>`;
 
-    expect(diffValSources(before, before.replace('x="0.79"', 'x="2.50"'))).toEqual({
+    expect(diffValSources(before, before.replace('x="0.79"', 'x="2.50"'))).toMatchObject({
       status: "changed",
       changedParameters: 1
     });
-    expect(diffValSources(before, before.replace('type="endLine"', 'type="alongLine"'))).toEqual({
+    expect(diffValSources(before, before.replace('type="endLine"', 'type="alongLine"'))).toMatchObject({
       status: "changed",
       changedParameters: 1
     });
@@ -203,7 +380,7 @@ describe("diffValSources", () => {
     // 守る仕様(should-fire): 単位が変われば全寸法の意味が変わる。`<unit>` は draw の外なので個別に見る。
     const before = "<pattern><unit>cm</unit><draw name=\"d\"><calculation></calculation></draw></pattern>";
 
-    expect(diffValSources(before, before.replace("cm", "mm"))).toEqual({
+    expect(diffValSources(before, before.replace("cm", "mm"))).toMatchObject({
       status: "changed",
       changedParameters: 1
     });
@@ -233,6 +410,6 @@ describe("diffValSources", () => {
     const before = '<pattern><draw name="d"><calculation><point id="1" length="a + 2" type="endLine"/></calculation></draw></pattern>';
     const after = before.replace("a + 2", "a+2");
 
-    expect(diffValSources(before, after)).toEqual({ status: "changed", changedParameters: 1 });
+    expect(diffValSources(before, after)).toMatchObject({ status: "changed", changedParameters: 1 });
   });
 });

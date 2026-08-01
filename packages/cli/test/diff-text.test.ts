@@ -139,7 +139,21 @@ describe("formatDiffText", () => {
     // 守る仕様: 宣言も射影フィーチャも同一(changes 空)でも、.val の製図式が動いていれば「変更なし」で終わらせない。
     //           これを黙ると、製図式を変えた作者に「Loomit は何も見ていない」と映る(実際に踏まれた)。幾何は
     //           Loomit では出せないので、測る次の一手(loom slnt check)まで案内する。
-    const output = formatDiffText(reportWithDraftingSource({ status: "changed", changedParameters: 1 }));
+    const output = formatDiffText(
+      reportWithDraftingSource({
+        status: "changed",
+        changedParameters: 1,
+        changes: [
+          {
+            kind: "modified",
+            tag: "point",
+            id: "119",
+            name: "wb1",
+            fields: [{ attribute: "length", before: "waist_circ + 2", after: "waist_circ + 5" }]
+          }
+        ]
+      })
+    );
 
     expect(output).toContain("drafting source:   changed (1 parameter)");
     expect(output).toContain("No changes to the declared structure");
@@ -147,6 +161,126 @@ describe("formatDiffText", () => {
     expect(output).not.toContain("No semantic changes.");
     // 1つの .val を複数 part が共有するので、「この part の製図が動いた」と断定してはいけない([C6])。
     expect(output).toContain("does not say the change landed on this part");
+  });
+
+  it("lists which drafting parameters moved, labelled the way Valentina shows them", () => {
+    // 守る仕様: 件数だけだと「何が動いたか」を知るのに結局 git diff を見に行くことになる。要素単位で
+    //           「旧式 -> 新式」まで出す。表示名(点なら "wb1")を先に置く ── `point 119` だけでは作者に
+    //           伝わらない。name は比較には使わない(改名は幾何を動かさない)が、説明には使う。
+    const output = formatDiffText(
+      reportWithDraftingSource({
+        status: "changed",
+        changedParameters: 3,
+        changes: [
+          {
+            kind: "modified",
+            tag: "point",
+            id: "119",
+            name: "wb1",
+            fields: [{ attribute: "length", before: "waist_circ + 2", after: "waist_circ + 5" }]
+          },
+          { kind: "added", tag: "spline", id: "205", fields: [] },
+          {
+            kind: "modified",
+            tag: "increment",
+            name: "waistband_height",
+            fields: [{ attribute: "formula", before: "5", after: "7" }]
+          }
+        ]
+      })
+    );
+
+    expect(output).toContain("Drafting changes:");
+    expect(output).toContain("wb1 (point 119)  length: waist_circ + 2 -> waist_circ + 5");
+    // 名前を持たない要素はタグと id で指す。
+    expect(output).toContain("[added] spline 205");
+    // 増分は id を持たない。
+    expect(output).toContain("waistband_height (increment)  formula: 5 -> 7");
+  });
+
+  it("still lists drafting changes when the declared structure also changed", () => {
+    // 守る仕様: connector を直しつつ `.val` の式も直すのは普通の作業。「構造も変わっているときは製図の内訳を
+    //           出さない」にすると、その普通のケースで内訳が消える(件数だけ残って before/after が見えない)。
+    //           重なりを許容してでも両方出す ── どちらかが黙るほうが害が大きい、がこのフィールドの方針。
+    const report: PartDiffReport = {
+      ...reportWithDraftingSource({
+        status: "changed",
+        changedParameters: 1,
+        changes: [
+          {
+            kind: "modified",
+            tag: "point",
+            id: "119",
+            name: "wb1",
+            fields: [{ attribute: "length", before: "waist_circ + 2", after: "waist_circ + 5" }]
+          }
+        ]
+      }),
+      status: "changed",
+      changes: [
+        {
+          feature: "connector",
+          kind: "modified",
+          id: "waist",
+          before: { type: "waist", length_mm: 680 },
+          after: { type: "waist", length_mm: 710 },
+          changes: [{ field: "length_mm", before: 680, after: 710 }]
+        }
+      ]
+    };
+
+    const output = formatDiffText(report);
+
+    // 構造の差分はこれまでどおり出る。
+    expect(output).toContain("[modified] connector waist");
+    // 製図の内訳も消えない。
+    expect(output).toContain("Drafting changes:");
+    expect(output).toContain("wb1 (point 119)  length: waist_circ + 2 -> waist_circ + 5");
+    // 測る次の一手も、構造差分の有無に関係なく案内する。
+    expect(output).toContain("loom slnt check");
+  });
+
+  it("says only that the contents changed for a digest pseudo-attribute", () => {
+    // 守る仕様: id を持たない子要素の束(#contents)の値は比較用のダイジェストで、人に見せても意味が取れない。
+    //           「中身が変わった」とだけ言い、どこを見るかは所有者のラベルで示す。
+    const output = formatDiffText(
+      reportWithDraftingSource({
+        status: "changed",
+        changedParameters: 1,
+        changes: [
+          {
+            kind: "modified",
+            tag: "detail",
+            id: "106",
+            name: "front",
+            fields: [{ attribute: "#contents", before: "12:aaaaaaaaaaaa", after: "13:bbbbbbbbbbbb" }]
+          }
+        ]
+      })
+    );
+
+    expect(output).toContain("front (detail 106)  contents changed");
+    expect(output).not.toContain("aaaaaaaaaaaa");
+  });
+
+  it("truncates a very large drafting change list instead of dumping it", () => {
+    // 守る仕様: 製図を作り直すような編集では数百件になる。全部並べても読めないし、その規模なら件数のほうが
+    //           判断材料になる。打ち切った事実は必ず書く(全部だと誤解させない)。JSON には全件入る。
+    const changes = Array.from({ length: 14 }, (_, index) => ({
+      kind: "modified" as const,
+      tag: "point",
+      id: String(index),
+      fields: [{ attribute: "length", before: "1", after: "2" }]
+    }));
+
+    const output = formatDiffText(
+      reportWithDraftingSource({ status: "changed", changedParameters: changes.length, changes })
+    );
+
+    expect(output).toContain("point 0  length: 1 -> 2");
+    expect(output).toContain("point 9  length: 1 -> 2");
+    expect(output).not.toContain("point 10  length");
+    expect(output).toContain("… and 4 more");
   });
 
   it("keeps the plain wording when the drafting source did not move", () => {
