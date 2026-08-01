@@ -300,6 +300,12 @@ loom diff <rev> --part <role> [--format text|json]
   - **何を見ているか**: `<draw>` の中の**全要素の全属性**（`<calculation>` の `length` / `angle` / `x` / `y` / `type`、`<arc>` の `radius`、`<spline>` のハンドル、`<operation>` の変換、`<modeling>` の参照、`<detail>` の `width`＝縫い代や `<node idObject>`＝型紙輪郭の構成）＋ `<unit>`（cm↔mm）＋ `<increments>` の式。式は評価しない（`a + 2` と `a+2` は別物として数える）。
   - **無視するのは装飾だけ**: `id` / `uuid` / `mx` / `my` / `name` / `showLabel` / `visible` / `enabled` / `inUse` / `color` / `lineColor` / `penStyle` / `typeLine`。拾う属性を列挙する方式にすると `.val` に新しい幾何属性が出たとき黙って取りこぼすので、**除外側を列挙**している。Valentina 側で綴りが直った属性（`firstToCountour`→`firstToContour` など）は新しい綴りへ正規化してから比べる（値は同じなのに「消えて生えた」と数えないため）。
   - `changes` と**重なることがある**。合印を1つ足すと `[added] notch …` と `draftingSource: changed` の両方が動く。二重計上より「どちらかが黙る」ほうが害が大きいという判断（説明文が出るのは `changes` が空のときだけ）。
+  - **内訳を持つ**（`draftingSource.changes[]`）。要素ごとに `kind`（added / removed / modified）、`tag`（point / spline / detail / increment …）、`id`、`name`、そして modified なら変わった属性の `before` / `after`。text 出力では `wb1 (point 119)  length: waist_circ + 2 -> waist_circ + 5` のように出す。
+    - **見出しには表示名（`name`）を使う**。`point 119` だけでは作者に伝わらないため。`name` は**比較には使わない**（改名は幾何を動かさないので無視属性）が、説明には使う ── 同一性の判定と人への説明は別の仕事。
+    - added / removed は `fields` を空にする。追加された点の全属性を並べても読めないので、増えた／消えたの事実だけを渡す。
+    - text 出力は先頭 10 件まで（超えたら `… and N more`）。製図を作り直すような編集では数百件になり、その規模では件数のほうが判断材料になるため。**JSON には全件入る**ので、ツール側は制限を受けない。
+    - 内訳は**構造の差分があっても出す**。connector を直しつつ `.val` の式も直すのは普通の作業なので、そこで内訳が消えると件数だけが残る。
+    - **`id` を持たない要素（detail の `<node>` など）は個別に報告しない**。それ単体では指せない構成要素で、位置（何番目か）を identity にすると先頭に1件挿入しただけで後続が全部ずれ、**動いていない要素まで changed と名指しする**。報告できる単位は **XML 上の最も近い `id` 持ち祖先**（`<detail id>` / `<path id>` / `<operation id>`）なので、順序込みで畳んだ擬似属性 `#contents` の変更として1件で出す（text は `front (detail 106)  contents changed`）。値は比較用のダイジェストで、人に見せる意味は無い。
   - **どの part の製図が動いたかは言わない**。1つの `.val` を複数 part が共有し、calculation の点を piece に帰属させられない（[C6]）ため、`.val` を共有する全 part に同じ信号が出る。幾何の影響量は `loom slnt check`（Seamlint）で測る。
   - `status` は `same` / `changed`（＋変わった件数）のほか、**片側にしか `.val` が無いときは `added` / `removed`**（比較そのものが成立しないので件数は持たない）。`.val` がその版に未コミット、というだけの状況を「製図が動いた」と混同しないため。
   - **片側でも `.val` が読めなかったとき（権限エラー等）は `draftingSource` を出さない**。読めなかった事実は `PART_SOURCE_VAL_READ_FAILED`（warning）が伝えるので、diff は推測しない。両側とも `.val` が無いときも**フィールドごと省略**する（JSON の消費側は不在を扱うこと）。

@@ -39,8 +39,12 @@ export type {
   SilhouetteImpact,
   VolumeChange
 } from "./diff/partDiff.js";
-export { diffValSources } from "./diff/valSourceDiff.js";
-export type { ValSourceDiffSummary } from "./diff/valSourceDiff.js";
+export { CONTENTS_ATTRIBUTE, diffValSources } from "./diff/valSourceDiff.js";
+export type {
+  ValSourceChange,
+  ValSourceChangedField,
+  ValSourceDiffSummary
+} from "./diff/valSourceDiff.js";
 export { createDoctorReport } from "./diagnostics/doctorReport.js";
 export type { DoctorFinding, DoctorReport } from "./diagnostics/doctorReport.js";
 export { createDiagnosticReport, getStatusForDiagnostics } from "./diagnostics/report.js";

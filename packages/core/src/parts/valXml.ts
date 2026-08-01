@@ -99,17 +99,21 @@ export function collectSelfClosingTags(source: string, tagName: string): readonl
   return tags;
 }
 
-export interface XmlTagOccurrence {
+export interface XmlChildElement {
   readonly name: string;
   readonly attrs: Readonly<Record<string, string>>;
+  // 開始タグと閉じタグの間の生の文字列。self-closing なら空。
+  readonly content: string;
 }
 
-// タグ名を指定せず、開始タグ / self-closing タグを**出現順に全部**返す(閉じタグは含まない)。
-// 「どのタグかは事前に分からないが、中身が動いたかを知りたい」用途(製図構造のフィンガープリント)向け。
-// 名前を列挙して collectSelfClosingTags を並べる方式だと、.val に新しい要素が増えたときに黙って
-// 取りこぼす ── この走査は「知らないものも数える」ことが目的なので、名前で絞らない。
-export function collectAllTags(source: string): readonly XmlTagOccurrence[] {
-  const tags: XmlTagOccurrence[] = [];
+// タグ名を指定せず、**直下の子要素だけ**を宣言順に返す(孫は content に残る)。
+//
+// 名前を列挙して collectBlocks / collectSelfClosingTags を並べる方式だと、.val に新しい要素が増えたときに
+// 黙って取りこぼす ── 「知らないものも数える」ことが目的の走査なので、名前で絞らない。
+// **深さを保つ**のが要点: 平坦に全タグを返すと、閉じタグが見えないために「今どの要素の中にいるか」を
+// 呼び出し側が復元できず、文書順で直前の要素を親と誤認する(製図フィンガープリントで実際に誤報を出した)。
+export function collectChildElements(source: string): readonly XmlChildElement[] {
+  const children: XmlChildElement[] = [];
   let i = 0;
 
   while (i < source.length) {
@@ -126,15 +130,35 @@ export function collectAllTags(source: string): readonly XmlTagOccurrence[] {
 
     const tag = readStartTag(source, lt);
     if (tag === undefined) {
+      // 閉じタグや不正な `<`。1 文字進める。
       i = lt + 1;
       continue;
     }
 
-    tags.push({ name: tag.name, attrs: parseAttributes(tag.attrs) });
-    i = tag.end;
+    if (tag.selfClosing) {
+      children.push({ name: tag.name, attrs: parseAttributes(tag.attrs), content: "" });
+      i = tag.end;
+      continue;
+    }
+
+    const closeAt = findMatchingClose(source, tag.name, tag.end);
+
+    if (closeAt === undefined) {
+      // 閉じないまま末尾。中身を持たない子として扱い、走査を進める(collectBlocks と同じく黙って捨てない)。
+      children.push({ name: tag.name, attrs: parseAttributes(tag.attrs), content: "" });
+      i = tag.end;
+      continue;
+    }
+
+    children.push({
+      name: tag.name,
+      attrs: parseAttributes(tag.attrs),
+      content: source.slice(tag.end, closeAt.start)
+    });
+    i = closeAt.end;
   }
 
-  return tags;
+  return children;
 }
 
 // 属性値は `"` と `'` の両方を読む(readStartTag もタグ終端判定で `'` を尊重するのと揃える)。`"` しか読まないと、

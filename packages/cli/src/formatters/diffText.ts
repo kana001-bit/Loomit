@@ -1,4 +1,4 @@
-import type { PartDiffReport } from "@loomit/core";
+import { CONTENTS_ATTRIBUTE, type PartDiffReport, type ValSourceChange } from "@loomit/core";
 
 import { formatDiagnosticsText } from "./diagnosticsText.js";
 
@@ -75,6 +75,12 @@ export function formatDiffText(report: PartDiffReport): string {
     }
   }
 
+  // 製図の内訳は**構造差分の有無に関係なく**出す。connector と `.val` の式を同時に直すのは普通の作業で、
+  // 「構造も変わっているときは製図の内訳を出さない」にすると、その普通のケースで内訳が消える。
+  // 重なり(合印を足すと Changes と両方に出る)は許容する ── どちらかが黙るほうが害が大きい、というのが
+  // このフィールドの方針(valSourceDiff のコメント参照)。
+  lines.push(...formatDraftingChanges(report.draftingSource));
+
   if (report.relatedNotes.length > 0) {
     lines.push("", "Related Prototype Notes:");
 
@@ -136,10 +142,64 @@ function formatDraftingSourceNote(
 
   // 「この part が変わった」とは書かない ── 1 つの .val を複数 part が共有するのが実データの形で、
   // どの part の製図が動いたかは Loomit には辿れない([C6])。言えるのは「下敷きの .val が動いた」まで。
+  // 測る次の一手(loom slnt check)は内訳セクションの末尾で案内する ── 内訳は構造差分があっても出すので、
+  // ここに置くと構造も変わったときだけ案内が消える。
   return [
-    `The .val this part is drafted from moved (${count} ${count === 1 ? "parameter" : "parameters"}). Drafting formulas are geometry, which Loomit does not compute, and one .val is shared by several parts — this does not say the change landed on this part.`,
+    `The .val this part is drafted from moved (${count} ${count === 1 ? "parameter" : "parameters"}). Drafting formulas are geometry, which Loomit does not compute, and one .val is shared by several parts — this does not say the change landed on this part.`
+  ];
+}
+
+// 内訳をテキストに出す上限。実データでは1〜数件で収まるが、製図を作り直すような編集では数百件になる。
+// そこまで並べても読めないうえ、その規模なら「何件動いたか」のほうが判断材料になるので打ち切る。
+// 打ち切った事実は必ず書く(全部だと誤解させない)。JSON には全件入っているのでツールは制限を受けない。
+const DRAFTING_CHANGE_LIMIT = 10;
+
+// 変わった製図要素を1行ずつ出す。`point#119` だけでは作者に伝わらないので、Valentina 上の表示名
+// (点なら "wb1")を先に置く。名前を持たない要素(spline / detail の node など)はタグと id で指す。
+function formatDraftingChanges(
+  draftingSource: PartDiffReport["draftingSource"]
+): readonly string[] {
+  if (draftingSource?.status !== "changed" || draftingSource.changes.length === 0) {
+    return [];
+  }
+
+  const shown = draftingSource.changes.slice(0, DRAFTING_CHANGE_LIMIT);
+  const remaining = draftingSource.changes.length - shown.length;
+
+  return [
+    "",
+    "Drafting changes:",
+    ...shown.map((change) => `  ${formatDraftingChange(change)}`),
+    ...(remaining === 0 ? [] : [`  … and ${remaining} more`]),
+    "",
     "Run `loom slnt check` to measure what it did to the seams."
   ];
+}
+
+function formatDraftingChange(change: ValSourceChange): string {
+  const label = formatDraftingLabel(change);
+
+  if (change.kind !== "modified") {
+    return `[${change.kind}] ${label}`;
+  }
+
+  const fields = change.fields
+    .map((field) =>
+      // 擬似属性(id を持たない子要素の束)の値は比較用のダイジェストなので、そのまま見せても読めない。
+      // 「中身が変わった」とだけ言い、どこを見ればよいかは所有者のラベルが示す。
+      field.attribute === CONTENTS_ATTRIBUTE
+        ? "contents changed"
+        : `${field.attribute}: ${field.before ?? "<missing>"} -> ${field.after ?? "<missing>"}`
+    )
+    .join(", ");
+
+  return `${label}  ${fields}`;
+}
+
+function formatDraftingLabel(change: ValSourceChange): string {
+  const address = change.id === undefined ? change.tag : `${change.tag} ${change.id}`;
+
+  return change.name === undefined ? address : `${change.name} (${address})`;
 }
 
 function formatNoteReasons(reasons: PartDiffReport["relatedNotes"][number]["reasons"]): string {
