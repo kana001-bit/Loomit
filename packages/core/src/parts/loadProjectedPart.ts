@@ -10,6 +10,24 @@ import type { LoadFileResult } from "../filesystem/loadFileResult.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import type { Part } from "../schema/part.schema.js";
 
+// 射影に使った source.val の状態。呼び手が製図構造の差分(diffValSources)を取るために返す ── 射影に出ない
+// フィーチャ(製図式)が動いたかは Part からは分からないので、本文そのものを渡すしかない。
+//
+// 設計判断: **「無い」と「読めない」を潰さない。** 本文が undefined なだけだと、正常系(files.source 未宣言・
+// .val がまだ無い)と異常系(権限等で読めない)が同じ形になる。`loom diff` は片側にだけ .val がある状態を
+// 「製図ソースを付けた/外した」= changed と読むので、両者を潰すと**読めなかっただけの側を「変わった」と誤報**する
+// (警告と同時に "moved" が出る)。呼び手が区別できる形で返す。
+export type ProjectedPartSource =
+  | { readonly status: "read"; readonly text: string }
+  | { readonly status: "absent" }
+  | { readonly status: "unreadable" };
+
+export interface ProjectedPartLoad {
+  readonly part: Part;
+  // 本文を要求した呼び手(loadProjectedPartWithSource)にだけ付く。
+  readonly source?: ProjectedPartSource;
+}
+
 // diff など編集フィーチャを消費する経路向けの loader。part.loom を純粋に読んだうえで、part.loom が
 // 未記載のフィーチャ(darts / notches)だけを source.val から read-only に射影する。inline で書いてあれば
 // 射影しない(案A: 消費経路でも不要な .val I/O を負わない)。darts / notches は同じ source.val を消費するため
@@ -21,6 +39,35 @@ export async function loadProjectedPart(
   // project を既に読んでいる呼び手は projectRoot を渡す。省略時はこの関数が part.loom から登って探す。
   options?: { readonly projectRoot?: string }
 ): Promise<LoadFileResult<Part>> {
+  const result = await loadProjected(filePath, {
+    ...(options?.projectRoot === undefined ? {} : { projectRoot: options.projectRoot }),
+    includeSource: false
+  });
+
+  if (!result.ok) {
+    return result;
+  }
+
+  return { ok: true, value: result.value.part, diagnostics: result.diagnostics };
+}
+
+// loadProjectedPart に加えて source.val の**本文**も返す版。射影が不要(darts/notches とも inline)でも
+// .val を読む点だけが違う ── 本文が要る呼び手にとっては、読まないことが目的の達成を妨げるため。
+// 現在の呼び手は `loom diff`(製図構造が動いたかを言うために両版の本文を比べる)。
+export async function loadProjectedPartWithSource(
+  filePath: string,
+  options?: { readonly projectRoot?: string }
+): Promise<LoadFileResult<ProjectedPartLoad>> {
+  return loadProjected(filePath, {
+    ...(options?.projectRoot === undefined ? {} : { projectRoot: options.projectRoot }),
+    includeSource: true
+  });
+}
+
+async function loadProjected(
+  filePath: string,
+  options: { readonly projectRoot?: string; readonly includeSource: boolean }
+): Promise<LoadFileResult<ProjectedPartLoad>> {
   const loadResult = await loadPartFile(filePath);
 
   if (!loadResult.ok) {
@@ -29,27 +76,40 @@ export async function loadProjectedPart(
 
   const part = loadResult.value;
   const sourceRelative = part.files?.source;
+  // darts / notches が両方 inline なら射影は要らない。ただし本文を求められていれば読む必要がある。
+  const projectionNeeded = part.darts === undefined || part.notches === undefined;
 
-  // 射影元(source)が無い、または darts / notches が両方 inline に載っていれば射影は不要。
-  // どちらの場合も source.val I/O を負わずにそのまま返す。
-  if (sourceRelative === undefined || (part.darts !== undefined && part.notches !== undefined)) {
-    return loadResult;
+  // 射影元(source)が無い、または射影も本文も要らないなら source.val I/O を負わずにそのまま返す。
+  // files.source が宣言されていない = 射影元が「無い」ので、本文を求められていれば absent と答える
+  // (読めなかったのではない)。
+  if (sourceRelative === undefined || (!projectionNeeded && !options.includeSource)) {
+    return {
+      ok: true,
+      value: {
+        part,
+        ...(options.includeSource && sourceRelative === undefined
+          ? { source: { status: "absent" as const } }
+          : {})
+      },
+      diagnostics: loadResult.diagnostics
+    };
   }
 
   // source の解決は project root 相対を優先する(resolvePartFilePath)。root が分からないと part 内の
   // 古いコピーを読んでしまうため、呼び手が渡さない場合はここで part.loom から登って探す
   // (失敗の扱いは resolveProjectRoot のコメントを参照)。
   const rootLookup: ProjectRootLookup =
-    options?.projectRoot === undefined
+    options.projectRoot === undefined
       ? await resolveProjectRoot(filePath)
       : { projectRoot: options.projectRoot, diagnostics: [] };
 
   // darts / notches は同じ source.val を消費するので、ファイルは1回だけ読んで各フィーチャへ射影する。
-  const { sourceFilePath, source, diagnostics: readDiagnostics } = await readValSource(
-    filePath,
-    sourceRelative,
-    rootLookup.projectRoot
-  );
+  const {
+    sourceFilePath,
+    source,
+    status: readStatus,
+    diagnostics: readDiagnostics
+  } = await readValSource(filePath, sourceRelative, rootLookup.projectRoot);
   const diagnostics: Diagnostic[] = [
     ...loadResult.diagnostics,
     ...rootLookup.diagnostics,
@@ -107,7 +167,11 @@ export async function loadProjectedPart(
       }
     }
 
-    if (piece === undefined) {
+    // piece scope の診断は「射影が空で返ったこと」を説明するためのもの。射影を1件も要求していない part
+    // (darts も notches も inline)には言うことが無い ── 本文だけ欲しくて .val を読んだ(includeSource)ときに
+    // ここへ入ると、「ダーツ・合印を射影できませんでした」という**事実と違う**警告が新しく生え、
+    // report の status まで same → warning に反転する。射影を試みたときだけ説明する。
+    if (projectionNeeded && piece === undefined) {
       // files.piece が無いと絞る鍵が無い。射影を丸ごと捨てると「この part にフィーチャが無い」と嘘をつくことになる
       // ので、従来どおり全ピース分を返しつつ、他ピースのものが混ざりうることを warning で知らせる。
       // 黙る条件を2つ置く: 射影が空(混ざりようがない)と、detail が1枚以下の .val(混ざる相手がいない ── 単一ピースの
@@ -126,7 +190,7 @@ export async function loadProjectedPart(
           })
         );
       }
-    } else if (detailCount > 0 && !hasPieceNamed(pieceNames, piece)) {
+    } else if (projectionNeeded && piece !== undefined && detailCount > 0 && !hasPieceNamed(pieceNames, piece)) {
       // 宣言した piece が .val に無い(綴り違い・Valentina 側で detail をリネーム・.val の差し替え)。絞り込みは
       // 一致0件＝空を返すが、これは「このピースにはダーツも合印も無い」と見分けが付かない。黙ると diff から
       // フィーチャが丸ごと消えたまま正常に見えるので、explainable な warning を出す(collectEdgeOccurrencesFromVal
@@ -151,7 +215,18 @@ export async function loadProjectedPart(
 
   return {
     ok: true,
-    value,
+    value: {
+      part: value,
+      // 本文を求められていないときは載せない(呼び手が「読めなかった」と「要求しなかった」を取り違えない)。
+      ...(options.includeSource
+        ? {
+            source:
+              source === undefined
+                ? { status: readStatus === "unreadable" ? ("unreadable" as const) : ("absent" as const) }
+                : { status: "read" as const, text: source }
+          }
+        : {})
+    },
     diagnostics
   };
 }

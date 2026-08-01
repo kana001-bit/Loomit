@@ -4,6 +4,32 @@ import { describe, expect, it } from "vitest";
 
 import { formatDiffText } from "../src/formatters/diffText.js";
 
+// 宣言・射影フィーチャに差分の無い(changes 空)report。製図ソースの信号だけを差し替えて比べる。
+function reportWithDraftingSource(
+  draftingSource: NonNullable<PartDiffReport["draftingSource"]>
+): PartDiffReport {
+  return {
+    status: "same",
+    decisionSummary: {
+      silhouetteImpact: "none",
+      volumeChange: "none",
+      connectionRisk: "none",
+      prototypeNoteSignal: "none"
+    },
+    draftingSource,
+    recheckHints: {
+      partRole: { from: "body", to: "body", changed: false },
+      connectors: [],
+      requirements: []
+    },
+    diagnostics: [],
+    from: { name: "waistband", variant: "v1", type: "body" },
+    to: { name: "waistband", variant: "v1", type: "body" },
+    changes: [],
+    relatedNotes: []
+  };
+}
+
 describe("formatDiffText", () => {
   it("prints the decision summary before diagnostics and changes", () => {
     // 守る仕様: keep / discard 判断に効く summary を、詳細(diagnostics / changes)より先に表示する。
@@ -105,6 +131,48 @@ describe("formatDiffText", () => {
     expect(output).toContain("requirements: none");
     expect(output).toContain("silhouette impact: none");
     expect(output).toContain("No semantic changes.");
+    // 製図ソースの情報が無い report では余計な行を出さない。
+    expect(output).not.toContain("drafting source:");
+  });
+
+  it("does not report a moved drafting source as 'no semantic changes'", () => {
+    // 守る仕様: 宣言も射影フィーチャも同一(changes 空)でも、.val の製図式が動いていれば「変更なし」で終わらせない。
+    //           これを黙ると、製図式を変えた作者に「Loomit は何も見ていない」と映る(実際に踏まれた)。幾何は
+    //           Loomit では出せないので、測る次の一手(loom slnt check)まで案内する。
+    const output = formatDiffText(reportWithDraftingSource({ status: "changed", changedParameters: 1 }));
+
+    expect(output).toContain("drafting source:   changed (1 parameter)");
+    expect(output).toContain("No changes to the declared structure");
+    expect(output).toContain("loom slnt check");
+    expect(output).not.toContain("No semantic changes.");
+    // 1つの .val を複数 part が共有するので、「この part の製図が動いた」と断定してはいけない([C6])。
+    expect(output).toContain("does not say the change landed on this part");
+  });
+
+  it("keeps the plain wording when the drafting source did not move", () => {
+    // 守る仕様(must-not-fire): .val を比べたうえで同一だったときは、従来どおり簡潔に終わる。
+    const output = formatDiffText(reportWithDraftingSource({ status: "same", changedParameters: 0 }));
+
+    expect(output).toContain("drafting source:   same");
+    expect(output).toContain("No semantic changes.");
+    expect(output).not.toContain("loom slnt check");
+  });
+
+  it.each([
+    { status: "added" as const, phrase: "is present in the To version but not in the From version" },
+    { status: "removed" as const, phrase: "is present in the From version but not in the To version" }
+  ])("says the .val is only on one side ($status) instead of saying it moved", ({ status, phrase }) => {
+    // 守る仕様: 片側にしか .val が無いのは「製図が動いた」ではない。.val がその版に未コミットなだけのことがあり
+    //           (ENOENT は正常系で診断も出ない)、同じ文面にすると動いていない製図を疑わせる。
+    //           どちらの版に在るかは見出し(From: / To:)と同じ語で指す ── "here" ではどちらを見るか決まらない。
+    const output = formatDiffText(reportWithDraftingSource({ status }));
+
+    expect(output).toContain(`drafting source:   ${status}`);
+    expect(output).toContain(phrase);
+    // "removed" が "moved" を部分文字列として含むので、文面そのもので照合する。
+    expect(output).not.toContain("drafted from moved");
+    // 比べられていないので、測れば分かるかのような案内もしない。
+    expect(output).not.toContain("loom slnt check");
   });
 
   it("renders why (tags + changed features) and the note test case for related notes", () => {

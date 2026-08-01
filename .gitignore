@@ -11,6 +11,7 @@ coverage/
 # うっかり `git add .` で private ノートを追跡しないよう明示的に無視する。
 docs/work/
 docs/task-specs/
+docs/tasks/
 docs/branch/
 
 # TypeScript build output belongs in dist/, never tracked under src/

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { loadProjectedPart, partSchema } from "../../src/index.js";
+import { loadProjectedPart, loadProjectedPartWithSource, partSchema } from "../../src/index.js";
 
 const fixturesRoot = join(dirname(fileURLToPath(import.meta.url)), "../fixtures/load-files");
 
@@ -295,6 +295,151 @@ async function makeGarmentProject(pieces: {
 
   return { root };
 }
+
+describe("loadProjectedPartWithSource", () => {
+  it("returns the .val text it projected from", async () => {
+    // 守る仕様: 本文を要求した呼び手には、射影に使ったのと同じ .val 本文が返る(呼び手が読み直さない)。
+    const { root, partFilePath } = await makeTempPart(true);
+
+    try {
+      await writeFile(join(root, "body.val"), valWithPassmark("1"), "utf8");
+
+      const result = await loadProjectedPartWithSource(partFilePath);
+
+      expect(result.ok).toBe(true);
+      expect(result.ok ? result.value.source : undefined).toEqual({
+        status: "read",
+        text: valWithPassmark("1")
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("reports a missing .val as absent, not as unreadable", async () => {
+    // 守る仕様: files.source を宣言しているのにファイルが無いのは正常系(未コミット等)。診断も出さない。
+    const { root, partFilePath } = await makeTempPart(true);
+
+    try {
+      const result = await loadProjectedPartWithSource(partFilePath);
+
+      expect(result.ok).toBe(true);
+      expect(result.ok ? result.value.source : undefined).toEqual({ status: "absent" });
+      expect(result.diagnostics).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("distinguishes an unreadable .val from an absent one", async () => {
+    // 守る仕様: 「読めない」を「無い」に潰さない。潰すと呼び手(loom diff)が「片側だけ .val がある = 製図ソースを
+    //           付けた/外した = changed」と読み、読み取り失敗の warning と同時に「.val が動いた」と誤報する。
+    //           権限操作は OS 依存なので、ディレクトリを指させて EISDIR を起こす(どの OS でも ENOENT にならない)。
+    const { root, partFilePath } = await makeTempPart(true);
+
+    try {
+      await mkdir(join(root, "body.val"), { recursive: true });
+
+      const result = await loadProjectedPartWithSource(partFilePath);
+
+      expect(result.ok).toBe(true);
+      expect(result.ok ? result.value.source : undefined).toEqual({ status: "unreadable" });
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+        "PART_SOURCE_VAL_READ_FAILED"
+      ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("stays silent about piece scope when nothing is projected", async () => {
+    // 守る仕様(must-not-fire): darts も notches も inline に持つ part は射影を1件も要求していない。本文だけ欲しくて
+    //           .val を読んだときに piece scope の検証へ入ると、「ダーツ・合印を射影できませんでした」という
+    //           事実と違う警告が生え、diff report の status まで same → warning に反転する(JSON 消費側の契約)。
+    const root = await mkdtemp(join(tmpdir(), "loomit-inline-features-"));
+
+    try {
+      await mkdir(join(root, "parts/body"), { recursive: true });
+      await writeFile(
+        join(root, "loomit.yml"),
+        [
+          "schema: loomit.project.v0",
+          "name: inline",
+          "garment: blouse",
+          "parts:",
+          "  body: ./parts/body/part.loom"
+        ].join("\n"),
+        "utf8"
+      );
+      await writeFile(
+        join(root, "parts/body/part.loom"),
+        [
+          "schema: loomit.part.v0",
+          "name: body",
+          "variant: v1",
+          "type: body",
+          "files:",
+          "  source: body.val",
+          // .val の detail 名は "front" なので、これは綴り違い。射影していれば警告が出る組み合わせ。
+          "  piece: frnt",
+          "darts:",
+          "  waist:",
+          "    apex_ref: val:point#d/Apex",
+          "    legs:",
+          "      left_ref: val:point#d/Left",
+          "      right_ref: val:point#d/Right",
+          "notches: {}"
+        ].join("\n"),
+        "utf8"
+      );
+      await writeFile(
+        join(root, "body.val"),
+        [
+          "<pattern>",
+          '<draw name="d">',
+          "<details>",
+          '<detail name="front">',
+          "<nodes>",
+          '<node idObject="70" passmark="true" passmarkLine="vMark" type="NodePoint"/>',
+          "</nodes>",
+          "</detail>",
+          "</details>",
+          "</draw>",
+          "</pattern>",
+          ""
+        ].join("\n"),
+        "utf8"
+      );
+
+      const result = await loadProjectedPartWithSource(join(root, "parts/body/part.loom"));
+
+      expect(result.ok).toBe(true);
+      // 本文は返る(呼び手が求めたので)が、射影していないので piece の診断は出ない。
+      expect(result.ok ? result.value.source?.status : undefined).toBe("read");
+      expect(result.diagnostics).toEqual([]);
+      expect(result.ok ? Object.keys(result.value.part.darts ?? {}) : []).toEqual(["waist"]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("does not attach a source when the caller did not ask for one", async () => {
+    // 守る仕様(must-not-fire): 素の loadProjectedPart は本文を返さない。「読めなかった」と「要求しなかった」を
+    //           呼び手が取り違えないよう、フィールドごと付けない。
+    const { root, partFilePath } = await makeTempPart(true);
+
+    try {
+      await writeFile(join(root, "body.val"), valWithPassmark("1"), "utf8");
+
+      const result = await loadProjectedPart(partFilePath);
+
+      expect(result.ok).toBe(true);
+      expect(result.ok ? "source" in result.value : true).toBe(false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("loadProjectedPart (piece scope)", () => {
   it("projects only the features that belong to the part's piece", async () => {

@@ -7,7 +7,8 @@ const mocks = vi.hoisted(() => ({
   access: vi.fn(),
   diffParts: vi.fn(),
   loadProject: vi.fn(),
-  loadProjectedPart: vi.fn(),
+  loadProjectedPartWithSource: vi.fn(),
+  diffValSources: vi.fn(),
   loadPrototypeNotesFile: vi.fn()
 }));
 
@@ -27,7 +28,8 @@ vi.mock("@loomit/core", () => ({
     return undefined;
   },
   loadProject: mocks.loadProject,
-  loadProjectedPart: mocks.loadProjectedPart,
+  loadProjectedPartWithSource: mocks.loadProjectedPartWithSource,
+  diffValSources: mocks.diffValSources,
   loadPrototypeNotesFile: mocks.loadPrototypeNotesFile
 }));
 
@@ -38,7 +40,8 @@ describe("runDiffCommand", () => {
     mocks.access.mockReset();
     mocks.diffParts.mockReset();
     mocks.loadProject.mockReset();
-    mocks.loadProjectedPart.mockReset();
+    mocks.loadProjectedPartWithSource.mockReset();
+    mocks.diffValSources.mockReset();
     mocks.loadPrototypeNotesFile.mockReset();
   });
 
@@ -80,13 +83,15 @@ describe("runDiffCommand", () => {
         diagnostics: []
       });
 
-    mocks.loadProjectedPart.mockResolvedValue({
+    mocks.loadProjectedPartWithSource.mockResolvedValue({
       ok: true,
       value: {
-        schema: "loomit.part.v0",
-        name: "darted-body",
-        variant: "front-v1",
-        type: "body"
+        part: {
+          schema: "loomit.part.v0",
+          name: "darted-body",
+          variant: "front-v1",
+          type: "body"
+        }
       },
       diagnostics: []
     });
@@ -288,24 +293,28 @@ describe("runDiffCommand", () => {
         diagnostics: []
       });
 
-    mocks.loadProjectedPart
+    mocks.loadProjectedPartWithSource
       .mockResolvedValueOnce({
         ok: true,
         value: {
-          schema: "loomit.part.v0",
-          name: "darted-body",
-          variant: "front-v1",
-          type: "body"
+          part: {
+            schema: "loomit.part.v0",
+            name: "darted-body",
+            variant: "front-v1",
+            type: "body"
+          }
         },
         diagnostics: []
       })
       .mockResolvedValueOnce({
         ok: true,
         value: {
-          schema: "loomit.part.v0",
-          name: "darted-body",
-          variant: "front-v2",
-          type: "body"
+          part: {
+            schema: "loomit.part.v0",
+            name: "darted-body",
+            variant: "front-v2",
+            type: "body"
+          }
         },
         diagnostics: []
       });
@@ -465,4 +474,123 @@ describe("runDiffCommand", () => {
     expect(output).toContain("suggested_change: increase armhole ease");
     expect(stderr).toEqual([]);
   });
+
+  // 両側とも読めたときは core の diffValSources に委ね、その結果をそのまま report へ渡す(CLI は判定しない)。
+  it("passes the compared drafting-source summary straight through", async () => {
+    // 守る仕様(should-fire): 製図構造の比較は core の純関数が行い、CLI はその結果を素通しする。
+    const summary = { status: "changed", changedParameters: 3 };
+    mocks.diffValSources.mockReturnValue(summary);
+
+    await runDraftingSourceDiff(
+      { status: "read", text: "<pattern>before</pattern>" },
+      { status: "read", text: "<pattern>after</pattern>" }
+    );
+
+    expect(mocks.diffValSources).toHaveBeenCalledWith(
+      "<pattern>before</pattern>",
+      "<pattern>after</pattern>"
+    );
+    expect(mocks.diffParts.mock.calls[0]?.[2]).toMatchObject({ draftingSource: summary });
+  });
+
+  it.each([
+    { label: "added", fromSource: { status: "absent" as const }, expected: "added" },
+    { label: "removed", toSource: { status: "absent" as const }, expected: "removed" }
+  ])(
+    "reports a .val that exists on only one side as $label, not as a moved drafting",
+    async ({ fromSource, toSource, expected }) => {
+      // 守る仕様(should-fire): 片側にしか .val が無いのは「製図が動いた」ではない ── 未コミットなだけのことが
+      //           あり、ENOENT は正常系で診断も出ないので、同じ文面にすると動いていない製図を疑わせる。
+      //           このドメイン判断が置かれているのは CLI のここだけなので、値でピン留めしておく。
+      const read = { status: "read" as const, text: "<pattern/>" };
+
+      await runDraftingSourceDiff(fromSource ?? read, toSource ?? read);
+
+      expect(mocks.diffValSources).not.toHaveBeenCalled();
+      expect(mocks.diffParts.mock.calls[0]?.[2]).toMatchObject({
+        draftingSource: { status: expected }
+      });
+    }
+  );
+
+  // 製図ソースの信号は「両版とも読めた」ときだけ意味を持つ。読めなかった側を「無い」に潰すと、
+  // 「片側だけ .val がある = 製図ソースを付けた/外した = changed」と読んで誤報する。
+  it.each([
+    {
+      label: "one side is unreadable",
+      fromSource: { status: "unreadable" as const },
+      toSource: { status: "read" as const, text: "<pattern/>" }
+    },
+    {
+      label: "both sides are absent",
+      fromSource: { status: "absent" as const },
+      toSource: { status: "absent" as const }
+    }
+  ])("does not claim the drafting source moved when $label", async ({ fromSource, toSource }) => {
+    // 守る仕様(must-not-fire): 読めなかった/そもそも無い .val について「動いた」と言わない。読めなかった事実は
+    //           PART_SOURCE_VAL_READ_FAILED が伝えるので、diff は黙る(warning と "moved" の同時表示を防ぐ)。
+    await runDraftingSourceDiff(fromSource, toSource);
+
+    expect(mocks.diffValSources).not.toHaveBeenCalled();
+    expect(mocks.diffParts).toHaveBeenCalledTimes(1);
+    const options: unknown = mocks.diffParts.mock.calls[0]?.[2];
+    expect(options).not.toHaveProperty("draftingSource");
+  });
 });
+
+// 製図ソースの状態だけを差し替えて loom diff --part を1回走らせる。project / notes / diffParts の戻りは
+// この観点に関係しないので固定値でよい。
+async function runDraftingSourceDiff(
+  fromSource: { readonly status: string; readonly text?: string },
+  toSource: { readonly status: string; readonly text?: string }
+): Promise<void> {
+  const cwd = join(tmpdir(), "loomit-diff-drafting");
+  const part = { schema: "loomit.part.v0", name: "body", variant: "v1", type: "body" };
+
+  mocks.access.mockResolvedValue(undefined);
+  mocks.loadPrototypeNotesFile.mockResolvedValue({ ok: true, value: undefined, diagnostics: [] });
+
+  for (const side of ["from", "to"] as const) {
+    mocks.loadProject.mockResolvedValueOnce({
+      ok: true,
+      value: {
+        paths: {
+          partFilePaths: { body: join(cwd, `${side}-project`, "parts", "body", "part.loom") },
+          projectRoot: join(cwd, `${side}-project`),
+          projectFilePath: join(cwd, `${side}-project`, "loomit.yml")
+        }
+      },
+      diagnostics: []
+    });
+  }
+
+  mocks.loadProjectedPartWithSource
+    .mockResolvedValueOnce({ ok: true, value: { part, source: fromSource }, diagnostics: [] })
+    .mockResolvedValueOnce({ ok: true, value: { part, source: toSource }, diagnostics: [] });
+
+  mocks.diffParts.mockReturnValue({
+    status: "same",
+    decisionSummary: {
+      silhouetteImpact: "none",
+      volumeChange: "none",
+      connectionRisk: "none",
+      prototypeNoteSignal: "none"
+    },
+    recheckHints: {
+      partRole: { from: "body", to: "body", changed: false },
+      connectors: [],
+      requirements: []
+    },
+    diagnostics: [],
+    from: part,
+    to: part,
+    changes: [],
+    relatedNotes: []
+  });
+
+  await runDiffCommand(["from-project", "to-project", "--part", "body"], {
+    cwd,
+    stdout: () => {},
+    stderr: () => {}
+  });
+}

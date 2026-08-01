@@ -39,6 +39,8 @@ export type {
   SilhouetteImpact,
   VolumeChange
 } from "./diff/partDiff.js";
+export { diffValSources } from "./diff/valSourceDiff.js";
+export type { ValSourceDiffSummary } from "./diff/valSourceDiff.js";
 export { createDoctorReport } from "./diagnostics/doctorReport.js";
 export type { DoctorFinding, DoctorReport } from "./diagnostics/doctorReport.js";
 export { createDiagnosticReport, getStatusForDiagnostics } from "./diagnostics/report.js";
@@ -120,7 +122,8 @@ export type {
   ConnectPartsOptions
 } from "./parts/connectParts.js";
 export { loadPartFile } from "./parts/loadPartFile.js";
-export { loadProjectedPart } from "./parts/loadProjectedPart.js";
+export { loadProjectedPart, loadProjectedPartWithSource } from "./parts/loadProjectedPart.js";
+export type { ProjectedPartLoad, ProjectedPartSource } from "./parts/loadProjectedPart.js";
 export { listValDetailsFromFile, listValDetailsFromText } from "./parts/listValDetails.js";
 export type { ValDetailList, ValDrawDetails } from "./parts/listValDetails.js";
 export {
@@ -150,7 +153,7 @@ export type { EdgeNotch, EdgeOccurrenceResult } from "./parts/collectEdgeOccurre
 export { notchTypeFromPassmarkLine } from "./parts/notchType.js";
 export type { NotchType } from "./parts/notchType.js";
 export { readValSource } from "./parts/readValSource.js";
-export type { ValSourceReadResult } from "./parts/readValSource.js";
+export type { ValSourceReadResult, ValSourceReadStatus } from "./parts/readValSource.js";
 export { resolvePartFilePath } from "./parts/resolvePartFilePath.js";
 export { assembleConstraintPayload } from "./truer/assembleConstraintPayload.js";
 export type {
