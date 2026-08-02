@@ -103,7 +103,8 @@ export async function addPartToProject(
         createDiagnostic({
           severity: "error",
           code: "PART_ADD_SEGMENT_INVALID",
-          message: "Project part role must be a single path segment.",
+          message:
+            "part の role はパス区切りを含まない1つの segment にしてください。 / Project part role must be a single path segment.",
           target: role,
           suggestion: ["Use a role without path separators, \"..\", or an absolute path."]
         })
@@ -140,7 +141,8 @@ export async function addPartToProject(
         createDiagnostic({
           severity: "error",
           code: "PART_ADD_TARGET_ESCAPES_ROOT",
-          message: "The part target would write outside the project root.",
+          message:
+            "part の書き込み先が project root の外を指しています。 / The part target would write outside the project root.",
           target: partDirectory,
           suggestion: ["Use a role without path separators, \"..\", or an absolute path."]
         })
@@ -158,7 +160,7 @@ export async function addPartToProject(
         createDiagnostic({
           severity: "error",
           code: "PART_ADD_ALREADY_REGISTERED",
-          message: `Project already has a part for role "${role}".`,
+          message: `role "${role}" の part はすでに登録されています。 / Project already has a part for role "${role}".`,
           target: `parts.${role}`,
           suggestion: ["Choose another role, or edit the existing part."]
         })
@@ -192,7 +194,8 @@ export async function addPartToProject(
         createDiagnostic({
           severity: "error",
           code: "PART_ADD_DIRECTORY_EXISTS",
-          message: "A part directory already exists at the target.",
+          message:
+            "書き込み先に part ディレクトリがすでに存在します。 / A part directory already exists at the target.",
           target: partDirectory,
           suggestion: ["Choose another role, or remove the existing part directory."]
         })
@@ -254,7 +257,8 @@ export async function addPartToProject(
       diagnostics: [
         describeFsError(error, {
           code: "PART_ADD_FAILED",
-          message: "Could not add the part to the project.",
+          message:
+            "part を project に追加できませんでした。 / Could not add the part to the project.",
           target: partDirectory,
           suggestion: ["Check the .val path, project path, and filesystem permissions."]
         })
@@ -535,7 +539,8 @@ export async function checkValSourceExists(valPath: string): Promise<Diagnostic 
     return createDiagnostic({
       severity: "error",
       code: "PART_ADD_SOURCE_NOT_FOUND",
-      message: "The .val source to add was not found.",
+      message:
+        "取り込もうとした .val が見つかりませんでした。 / The .val source to add was not found.",
       target: resolved,
       suggestion: ["Check the path to the .val file."]
     });
@@ -585,7 +590,8 @@ function buildPart(
         createDiagnostic({
           severity: "error",
           code: "PART_ADD_SCHEMA_INVALID",
-          message: "The generated part.loom does not match the schema.",
+          message:
+            "生成した part.loom が schema に合っていません。 / The generated part.loom does not match the schema.",
           target: `parts.${role}`,
           suggestion: [parsed.error.issues.map((issue) => issue.message).join("; ")]
         })

@@ -61,7 +61,8 @@ export async function buildProject(
         createDiagnostic({
           severity: "error",
           code: "BUILD_OUTPUT_ESCAPES_ROOT",
-          message: "The build output directory is outside the project root.",
+          message:
+            "ビルド出力ディレクトリが project root の外を指しています。 / The build output directory is outside the project root.",
           target: outputDir,
           suggestion: ["Set outputs.dir to a project-relative path such as ./output."]
         })
@@ -112,7 +113,8 @@ export async function buildProject(
       diagnostics: [
         describeFsError(error, {
           code: "BUILD_WRITE_FAILED",
-          message: "Could not write Loomit build output.",
+          message:
+            "Loomit のビルド出力を書き込めませんでした。 / Could not write Loomit build output.",
           target: outputDir,
           suggestion: ["Check output paths and filesystem permissions."]
         })
@@ -228,7 +230,8 @@ async function validateBuildInputs(
         createDiagnostic({
           severity: "error",
           code: "BUILD_INPUT_ESCAPES_PROJECT",
-          message: "A part file referenced for build output is outside the project root.",
+          message:
+            "ビルド出力が参照する part ファイルが project root の外にあります。 / A part file referenced for build output is outside the project root.",
           target: asset.sourcePath,
           suggestion: ["Use a files path inside the project without \"..\" or an absolute path."]
         })
@@ -241,7 +244,8 @@ async function validateBuildInputs(
         createDiagnostic({
           severity: "error",
           code: "BUILD_OUTPUT_PATH_ESCAPES_ROOT",
-          message: "A build output path is outside the output directory.",
+          message:
+            "ビルド出力のパスが output ディレクトリの外を指しています。 / A build output path is outside the output directory.",
           target: asset.outputPath,
           suggestion: ["Use a project role without path separators or \"..\"."]
         })
@@ -271,7 +275,8 @@ async function validateBuildInputs(
         createDiagnostic({
           severity: "error",
           code: "BUILD_INPUT_FILE_MISSING",
-          message: "A part file referenced for build output does not exist.",
+          message:
+            "ビルド出力が参照する part ファイルが存在しません。 / A part file referenced for build output does not exist.",
           target: asset.sourcePath,
           suggestion: [`Add the ${asset.kind} file, or update part files.${asset.kind}.`]
         })

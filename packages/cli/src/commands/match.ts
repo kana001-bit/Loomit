@@ -81,14 +81,16 @@ export async function runMatchCommand(
     return 0;
   }
 
-  // 縫い目は必ず異なる2パーツを繋ぐ(connect と同じ規律)。同じ role どうしの match は弾く。
+  // 縫い目は異なるパーツ同士を繋ぐ(connect と同じ規律)。同じ role どうしの match は弾く。
+  // 「2つまで」ではない ── 1本の縫い目に3パーツ以上が参加することはある(band seam 等)。match が一度に
+  // 測るのが pair、というだけ。
   if (parsedArgs.roleA === parsedArgs.roleB) {
     return writeReport(
       earlyErrorReport(parsedArgs, [
         createDiagnostic({
           severity: "error",
           code: "MATCH_SAME_ROLE",
-          message: `同じパーツ "${parsedArgs.roleA}" 同士は match できません。縫い目は異なる2パーツを繋ぎます。 / Cannot match part "${parsedArgs.roleA}" to itself; a seam joins two different parts.`,
+          message: `同じパーツ "${parsedArgs.roleA}" 同士は match できません。縫い目は異なるパーツ同士を繋ぎます。 / Cannot match part "${parsedArgs.roleA}" to itself; a seam joins parts to each other, not a part to itself.`,
           target: parsedArgs.roleA,
           suggestion: ["異なる2つの part role を渡してください。 / Give two distinct part roles."]
         })
@@ -305,9 +307,10 @@ function seamlintRunnerErrorDiagnostic(runResult: {
   return createDiagnostic({
     severity: "error",
     code: runResult.code,
+    // 詳細は日英併記を閉じたあとに1回だけ(両側に差し込むと stderr 全文が2回出る)。
     message: notFound
-      ? `Seamlint 実行ファイルが見つからず、縫い目を測れませんでした (${runResult.message})。 / Loomit could not find the Seamlint executable to measure the seam (${runResult.message}).`
-      : `Seamlint を実行できませんでした: ${runResult.message} / Loomit could not run Seamlint: ${runResult.message}`,
+      ? `Seamlint 実行ファイルが見つからず、縫い目を測れませんでした。 / Loomit could not find the Seamlint executable to measure the seam. (${runResult.message})`
+      : `Seamlint を実行できませんでした。 / Loomit could not run Seamlint. (${runResult.message})`,
     target: "seamlint",
     suggestion: notFound
       ? ["\"slnt\" を PATH に置くか、--slnt <path> で実行ファイルを指定してください。 / Install Seamlint on PATH, or pass --slnt <path>."]

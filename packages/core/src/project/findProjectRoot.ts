@@ -28,7 +28,7 @@ export async function findProjectRoot(startPath: string): Promise<LoadFileResult
         diagnostics: [
           describeFsError(accessState.error, {
             code: "PROJECT_ROOT_ACCESS_FAILED",
-            message: "Could not access loomit.yml.",
+            message: "loomit.yml にアクセスできませんでした。 / Could not access loomit.yml.",
             target: projectFilePath,
             suggestion: ["Check read permissions for loomit.yml and its parent directory."]
           })

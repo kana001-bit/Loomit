@@ -20,6 +20,10 @@ export type TruerRunFailureCode = "TRUER_NOT_FOUND" | "TRUER_SPAWN_FAILED" | "TR
 
 // Truer 実行の結果。ok なら exit 0、失敗は理由コード(未検出/spawn失敗/非0終了)。Seamlint runner と違い
 // stdout の parse はしない ── Truer は proposal を --out のファイルに書き、loom は exit code だけ見る。
+//
+// 失敗時の `message` は SeamlintRunResult と同じ理由で**英語のまま**。診断文そのものではなく、
+// 呼び出し側が日英併記の文を閉じたあと末尾の括弧に1回だけ差し込む詳細なので、ここで併記すると
+// `日本語 / English (日本語 / English)` と入れ子になる。
 export type TruerRunResult =
   | { readonly ok: true; readonly exitCode: number }
   | { readonly ok: false; readonly code: TruerRunFailureCode; readonly message: string };
@@ -238,9 +242,10 @@ export async function runTruerPropose(input: RunTruerProposeInput): Promise<True
         createDiagnostic({
           severity: "error",
           code: runResult.code,
+          // 詳細は日英併記を閉じたあとに1回だけ(両側に差し込むと stderr 全文が2回出る)。
           message: notFound
-            ? `Truer 実行ファイルが見つからず、直し方を提案できませんでした (${runResult.message})。 / Loomit could not find the Truer executable (${runResult.message}).`
-            : `Truer を実行できませんでした: ${runResult.message} / Loomit could not run Truer: ${runResult.message}`,
+            ? `Truer 実行ファイルが見つからず、直し方を提案できませんでした。 / Loomit could not find the Truer executable. (${runResult.message})`
+            : `Truer を実行できませんでした。 / Loomit could not run Truer. (${runResult.message})`,
           target: "truer",
           suggestion: notFound
             ? ['"tru" を PATH に置くか、--tru <path> で実行ファイルを指定してください。 / Install Truer on PATH, or pass --tru <path>.']

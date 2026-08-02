@@ -82,7 +82,7 @@ describe("runFit", () => {
         {
           severity: "error",
           code: "FIT_EASE_NEGATIVE",
-          message: "Garment finished bust is smaller than the body bust measurement.",
+          message: "服の仕上がりバストが、体のバスト寸法より小さくなっています。 / Garment finished bust is smaller than the body bust measurement.",
           target: "body.measurements.finished.bust_width_mm",
           suggestion: ["Body bust is 84cm, garment bust is 82cm, ease is -2cm."]
         }
@@ -101,7 +101,7 @@ describe("runFit", () => {
       {
         severity: "warning",
         code: "FIT_EASE_LOW",
-        message: "Garment finished bust ease is low.",
+        message: "服の仕上がりバストのゆとりが少なめです。 / Garment finished bust ease is low.",
         target: "body.measurements.finished.bust_width_mm",
         suggestion: [
           "Body bust is 84cm, garment bust is 88cm, ease is 4cm; suggested minimum is 6cm."
@@ -134,7 +134,7 @@ describe("runFit", () => {
         {
           severity: "warning",
           code: "FIT_EASE_LOW",
-          message: "Garment finished waist ease is low.",
+          message: "服の仕上がりウエストのゆとりが少なめです。 / Garment finished waist ease is low.",
           target: "body.measurements.finished.waist_width_mm",
           suggestion: [
             "Body waist is 66cm, garment waist is 68cm, ease is 2cm; suggested minimum is 4cm."

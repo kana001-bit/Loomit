@@ -746,7 +746,7 @@ describe("diffParts", () => {
       {
         severity: "warning",
         code: "PART_DIFF_TYPE_CHANGED",
-        message: 'Comparing part type "body" to "sleeve".',
+        message: 'part type "body" と "sleeve" を比較しています。 / Comparing part type "body" to "sleeve".',
         suggestion: [
           "Compare parts with the same role/type when reviewing seam and silhouette changes."
         ]
@@ -754,7 +754,7 @@ describe("diffParts", () => {
       {
         severity: "warning",
         code: "PART_DIFF_NAME_CHANGED",
-        message: 'Comparing part name "darted-body" to "other-part".',
+        message: 'part name "darted-body" と "other-part" を比較しています。 / Comparing part name "darted-body" to "other-part".',
         suggestion: [
           "If this is meant to be the same evolving part, prefer keeping the base name stable and changing variant or feature fields."
         ]

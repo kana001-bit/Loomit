@@ -263,7 +263,7 @@ function createPartDiffDiagnostics(from: Part, to: Part): readonly Diagnostic[] 
       createDiagnostic({
         severity: "warning",
         code: "PART_DIFF_TYPE_CHANGED",
-        message: `Comparing part type "${from.type}" to "${to.type}".`,
+        message: `part type "${from.type}" と "${to.type}" を比較しています。 / Comparing part type "${from.type}" to "${to.type}".`,
         suggestion: [
           "Compare parts with the same role/type when reviewing seam and silhouette changes."
         ]
@@ -276,7 +276,7 @@ function createPartDiffDiagnostics(from: Part, to: Part): readonly Diagnostic[] 
       createDiagnostic({
         severity: "warning",
         code: "PART_DIFF_NAME_CHANGED",
-        message: `Comparing part name "${from.name}" to "${to.name}".`,
+        message: `part name "${from.name}" と "${to.name}" を比較しています。 / Comparing part name "${from.name}" to "${to.name}".`,
         suggestion: [
           "If this is meant to be the same evolving part, prefer keeping the base name stable and changing variant or feature fields."
         ]

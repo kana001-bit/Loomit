@@ -25,6 +25,9 @@ interface FitMeasurementRule {
   readonly finishedMeasurementKey: string;
   readonly minimumEaseCm: number;
   readonly label: string;
+  // message の日本語側で使う寸法名。label をそのまま埋めると「服の仕上がりbustが」と読めなくなるため、
+  // 日英併記の日本語側だけ別に持つ(id / target / suggestion は英語の label のままにする)。
+  readonly labelJa: string;
 }
 
 const fitMeasurementRules: readonly FitMeasurementRule[] = [
@@ -34,7 +37,8 @@ const fitMeasurementRules: readonly FitMeasurementRule[] = [
     partRole: "body",
     finishedMeasurementKey: "bust_width_mm",
     minimumEaseCm: 6,
-    label: "bust"
+    label: "bust",
+    labelJa: "バスト"
   },
   {
     id: "waist",
@@ -42,7 +46,8 @@ const fitMeasurementRules: readonly FitMeasurementRule[] = [
     partRole: "body",
     finishedMeasurementKey: "waist_width_mm",
     minimumEaseCm: 4,
-    label: "waist"
+    label: "waist",
+    labelJa: "ウエスト"
   },
   {
     id: "hip",
@@ -50,7 +55,8 @@ const fitMeasurementRules: readonly FitMeasurementRule[] = [
     partRole: "body",
     finishedMeasurementKey: "hip_width_mm",
     minimumEaseCm: 4,
-    label: "hip"
+    label: "hip",
+    labelJa: "ヒップ"
   }
 ];
 
@@ -128,7 +134,7 @@ function createEaseDiagnostics(
       createDiagnostic({
         severity: "error",
         code: "FIT_EASE_NEGATIVE",
-        message: `Garment finished ${rule.label} is smaller than the body ${rule.label} measurement.`,
+        message: `服の仕上がり${rule.labelJa}が、体の${rule.labelJa}寸法より小さくなっています。 / Garment finished ${rule.label} is smaller than the body ${rule.label} measurement.`,
         target: `${rule.partRole}.measurements.finished.${rule.finishedMeasurementKey}`,
         suggestion: [
           `Body ${rule.label} is ${context.bodyMeasurementCm}cm, garment ${rule.label} is ${context.garmentMeasurementCm}cm, ease is ${easeCm}cm.`
@@ -142,7 +148,7 @@ function createEaseDiagnostics(
       createDiagnostic({
         severity: "warning",
         code: "FIT_EASE_LOW",
-        message: `Garment finished ${rule.label} ease is low.`,
+        message: `服の仕上がり${rule.labelJa}のゆとりが少なめです。 / Garment finished ${rule.label} ease is low.`,
         target: `${rule.partRole}.measurements.finished.${rule.finishedMeasurementKey}`,
         suggestion: [
           `Body ${rule.label} is ${context.bodyMeasurementCm}cm, garment ${rule.label} is ${context.garmentMeasurementCm}cm, ease is ${easeCm}cm; suggested minimum is ${rule.minimumEaseCm}cm.`

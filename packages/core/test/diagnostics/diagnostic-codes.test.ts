@@ -65,6 +65,16 @@ describe("diagnostic code registry", () => {
 
     expect(offenders).toEqual([]);
   });
+
+  it("never interpolates the same detail into both halves of a bilingual message", async () => {
+    // 守る仕様: 日英併記メッセージに埋め込む詳細(errno / stderr / 外部ツールの失敗文)は、区切りの後に
+    // 1回だけ置く。日本語側と英語側の両方へ差し込むと、詳細が長いとき(Seamlint の stderr に traceback が
+    // 載る等)に同じ内容が2回並び、区切りの "/" が本文の途中に埋もれて日英の切れ目が読めなくなる。
+    // 短い識別子(role / id)の再掲は文として自然なので対象外にし、詳細だけを見る。
+    const offenders = await findDuplicatedDetailInterpolations(srcRoots);
+
+    expect(offenders).toEqual([]);
+  });
 });
 
 const srcRoots = [
@@ -94,6 +104,43 @@ async function findXPrefixedCodeLiterals(roots: readonly string[]): Promise<stri
       source.split("\n").forEach((line, index) => {
         if (/\bcode:\s*"X_/.test(line)) {
           offenders.push(`${relative(root, filePath)}:${index + 1}`);
+        }
+      });
+    }
+  }
+
+  return offenders;
+}
+
+// 日英併記メッセージの区切り " / " の両側に、同じ詳細の補間式が現れる行を探す。
+//
+// 対象を「詳細」に絞るのは、role や id の再掲(`"${role}" は … / Part "${role}" is …`)は両側にあって
+// 自然だから。二重に出て困るのは errno・stderr・外部ツールの失敗文のように長くなりうるもので、その判定は
+// 補間式の名前(error / message / stderr)で行う。走査は行単位なので、複数行に折れたテンプレートは
+// 見つけられない ── 一次的な担保はレビューで、これは同じ形の再発を拾う網。
+async function findDuplicatedDetailInterpolations(roots: readonly string[]): Promise<string[]> {
+  const offenders: string[] = [];
+  const interpolation = /\$\{[^}]+\}/g;
+  const detailName = /error|message|stderr/i;
+
+  for (const root of roots) {
+    for (const filePath of await collectTypeScriptFiles(root)) {
+      const source = await readFile(filePath, "utf8");
+
+      source.split("\n").forEach((line, index) => {
+        const separator = line.indexOf(" / ");
+        if (separator === -1) {
+          return;
+        }
+
+        const left = new Set(line.slice(0, separator).match(interpolation) ?? []);
+        const right = new Set(line.slice(separator).match(interpolation) ?? []);
+        const duplicated = [...left].filter(
+          (expression) => right.has(expression) && detailName.test(expression)
+        );
+
+        if (duplicated.length > 0) {
+          offenders.push(`${relative(root, filePath)}:${index + 1} ${duplicated.join(", ")}`);
         }
       });
     }

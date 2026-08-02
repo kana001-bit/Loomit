@@ -43,7 +43,8 @@ export const armRaiseFittedArmholeRule: MovementTestRule = {
       createDiagnostic({
         severity: "warning",
         code: "ARM_RAISE_FITTED_ARMHOLE_RISK",
-        message: "Fitted armholes on sleeved blouses should be checked with an arm raise test.",
+        message:
+          "袖付きで袖ぐりが fitted なブラウスは、腕を上げる動作でも確認したほうがよいです。 / Fitted armholes on sleeved blouses should be checked with an arm raise test.",
         target: "arm-raise",
         suggestion: [
           "Try raising both arms and check whether the bodice lifts or the sleeve cap restricts movement."
@@ -84,7 +85,7 @@ export const prototypeNoteMovementTestRule: MovementTestRule = {
         createDiagnostic({
           severity: "warning",
           code: "MOVEMENT_TEST_PROTOTYPE_NOTE_RISK",
-          message: `Previous prototype note "${note.id}" matched this movement test.`,
+          message: `過去の試作ノート "${note.id}" が、この動作テストに該当しています。 / Previous prototype note "${note.id}" matched this movement test.`,
           target: note.id,
           suggestion: [note.issue]
         })

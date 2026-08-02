@@ -28,6 +28,12 @@ export type SeamlintRunFailureCode =
   | "SEAMLINT_BAD_OUTPUT";
 
 // Seamlint 実行の結果。ok なら parse 済み report、失敗なら理由コード(未検出/spawn失敗/不正出力)。
+//
+// 失敗時の `message` は**英語のまま**にする。これは完成した診断文ではなく、runnerErrorDiagnostic が
+// 日英併記の文を閉じたあと、末尾の括弧に1回だけ差し込む詳細だから。ここを日英併記にすると
+// `日本語 / English (日本語 / English)` と入れ子になり、区切りの "/" が2つ現れて日英の切れ目が
+// どちらか読み手に判断できなくなる。日英併記の対象は Diagnostic.message であり、それに埋め込まれる
+// 詳細文字列ではない(規約は testing-diagnostics.md の "Messages that carry a detail")。
 export type SeamlintRunResult =
   | { readonly ok: true; readonly report: SeamlintGeometryRequestReport; readonly exitCode: number }
   | { readonly ok: false; readonly code: SeamlintRunFailureCode; readonly message: string };
@@ -263,9 +269,12 @@ function runnerErrorDiagnostic(runResult: {
   return createDiagnostic({
     severity: "error",
     code: runResult.code,
+    // 詳細(runResult.message)は日英併記の文を閉じたあとに1回だけ置く。日本語側と英語側の両方へ
+    // 差し込むと、BAD_OUTPUT のように detail が stderr 全文を含むケースで同じ traceback が2回出て、
+    // 区切りの "/" が本文の途中に埋もれて日英の切れ目が読めなくなる。
     message: notFound
-      ? `Loomit could not find the Seamlint executable to run the geometry check (${runResult.message}).`
-      : `Loomit could not run Seamlint for the geometry check: ${runResult.message}`,
+      ? `幾何チェックを実行する Seamlint の実行ファイルが見つかりませんでした。 / Loomit could not find the Seamlint executable to run the geometry check. (${runResult.message})`
+      : `幾何チェックのための Seamlint を実行できませんでした。 / Loomit could not run Seamlint for the geometry check. (${runResult.message})`,
     target: "seamlint",
     suggestion: notFound
       ? ["Install Seamlint so \"slnt\" is on PATH, or pass --slnt <path> to point at the executable."]
