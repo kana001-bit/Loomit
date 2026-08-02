@@ -42,7 +42,7 @@ export function runMovementTest(
         createDiagnostic({
           severity: "error",
           code: "MOVEMENT_TEST_UNSUPPORTED",
-          message: `Movement test scenario "${scenario}" is not supported yet.`,
+          message: `動作テストのシナリオ "${scenario}" にはまだ対応していません。 / Movement test scenario "${scenario}" is not supported yet.`,
           target: scenario,
           suggestion: ['Use a supported scenario such as "arm-raise".']
         })

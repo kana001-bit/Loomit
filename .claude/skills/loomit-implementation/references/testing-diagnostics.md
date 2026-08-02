@@ -97,6 +97,34 @@ the helper.
 
 Keep `Diagnostic.code` stable and English. Do not encode localization differences in `code`.
 
+### Messages that carry a detail
+
+The bilingual rule applies to `Diagnostic.message` — the finished sentence a user reads. A field named
+`message` is not automatically one: `SeamlintRunResult.message` and `TruerRunResult.message` are failure
+details that a diagnostic builder interpolates. Before adding Japanese to something called `message`,
+check whether it is emitted as a diagnostic or interpolated into one.
+
+Two rules apply when a message carries a detail (an errno string, a tool's stderr, an external failure):
+
+**The detail stays English.** Making it bilingual nests one `日本語 / English` pair inside another, so the
+same sentence arrives two or three times over.
+
+**The detail goes once, after the bilingual sentence closes** — not inside each half. Close the Japanese
+sentence, close the English sentence, then append the detail in parentheses.
+
+```ts
+// Good: one separator, and the Japanese/English boundary stays at the front where it is readable.
+message: `Seamlint を実行できませんでした。 / Loomit could not run Seamlint. (${runResult.message})`;
+
+// Avoid: the detail lands in both halves. A short detail merely repeats; a long one (Seamlint's stderr
+// can carry a whole traceback) buries the " / " mid-paragraph, so the boundary is no longer findable.
+message: `Seamlint を実行できませんでした: ${runResult.message} / Loomit could not run Seamlint: ${runResult.message}`;
+```
+
+The second rule is pinned by `never interpolates the same detail into both halves of a bilingual message`
+in `packages/core/test/diagnostics/diagnostic-codes.test.ts`. It scans line by line, so a template split
+across lines slips past it — review still matters.
+
 `Diagnostic.target` should use a stable reference. Current formats:
 
 ```text

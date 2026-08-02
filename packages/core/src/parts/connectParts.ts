@@ -23,7 +23,8 @@ import { loadPartFile } from "./loadPartFile.js";
 export interface ConnectPartsOptions {
   // project を探す起点(通常は cwd)。ここから loomit.yml を見つけて2パーツの part.loom を引く。
   readonly projectPath: string;
-  // 縫い合わせる2パーツの role(loomit.yml の parts キー)。connector は cross-part 専用なので相異なる必要がある。
+  // 縫い合わせるパーツの role(loomit.yml の parts キー)。connector は cross-part 専用なので相異なる必要がある。
+  // (1本の縫い目に3パーツ以上が参加することはある。connect が一度に書くのが2つ、というだけ。)
   readonly roleA: string;
   readonly roleB: string;
   // 縫い目の一意 id(record キー=join id)。両パーツに同じ id を書くことでペアが成立する。
@@ -70,7 +71,7 @@ export async function connectParts(
         createDiagnostic({
           severity: "error",
           code: "CONNECT_SAME_ROLE",
-          message: `Cannot connect part "${options.roleA}" to itself; a connector joins two different parts.`,
+          message: `パーツ "${options.roleA}" 同士は connect できません。コネクタは異なるパーツ同士を繋ぎます。 / Cannot connect part "${options.roleA}" to itself; a connector joins parts to each other, not a part to itself.`,
           target: options.roleA,
           suggestion: [
             "Give two distinct part roles. A self-seam (two edges of one piece) is measured by Seamlint, not declared as a connector."
@@ -91,7 +92,7 @@ export async function connectParts(
         createDiagnostic({
           severity: "error",
           code: "CONNECT_ID_INVALID",
-          message: `Connector id "${options.id}" is not usable: it must be a single token without "/", "\\", ":", ".", or "__" (and not "." or "..").`,
+          message: `コネクタ id "${options.id}" は使えません。"/" "\\" ":" "." "__" を含まない1つのトークンにしてください("." と ".." も不可)。 / Connector id "${options.id}" is not usable: it must be a single token without "/", "\\", ":", ".", or "__" (and not "." or "..").`,
           target: options.id,
           suggestion: [
             'Use a simple id like "outseam" or "armhole". Seamlint reserves those characters to build seam ids, so an id with them would be silently dropped by loom slnt check.'
@@ -125,7 +126,7 @@ export async function connectParts(
         createDiagnostic({
           severity: "error",
           code: "CONNECT_ROLE_NOT_FOUND",
-          message: `No part is registered for role ${missingRoles.map((role) => `"${role}"`).join(" or ")}.`,
+          message: `role ${missingRoles.map((role) => `"${role}"`).join(" / ")} の part が登録されていません。 / No part is registered for role ${missingRoles.map((role) => `"${role}"`).join(" or ")}.`,
           target: missingRoles.join(", "),
           suggestion: [
             "Check the role spelling, or add the part first with loom add. Run loom check to list registered parts."
@@ -137,7 +138,8 @@ export async function connectParts(
 
   // role 名が違っても、両 role が同じ part.loom に解決される(loomit.yml の parts で値が重複。project schema は
   // 値の一意を要求しない)なら、物理パーツは1つ。このまま進むと同じファイルを2度書くだけで「2パーツを縫った」
-  // 結果にならないのに成功扱いになる。connector は異なる2パーツを繋ぐものなので、file 同一性で明示的に弾く。
+  // 結果にならないのに成功扱いになる。connector は異なるパーツ同士を繋ぐものなので、file 同一性で明示的に弾く
+  // (弾いているのは「同一パーツか」であって参加パーツ数ではない。1本の縫い目に3パーツ以上が参加することはある)。
   // (roleA === roleB は上で弾いているが、別名で同一ファイルを指すケースはそこを通り抜ける。)判定は文字列一致
   // だけでなく dev+ino(ファイルの実 identity)で行い、case-insensitive FS(Windows/macOS の Front vs front)や
   // symlink/hardlink 跨ぎの重複も拾う。
@@ -148,10 +150,10 @@ export async function connectParts(
         createDiagnostic({
           severity: "error",
           code: "CONNECT_SAME_FILE",
-          message: `Roles "${options.roleA}" and "${options.roleB}" resolve to the same part.loom, so they are one physical part; a connector joins two distinct parts.`,
+          message: `role "${options.roleA}" と "${options.roleB}" が同じ part.loom に解決されるため、実体は1つのパーツです。コネクタは異なるパーツ同士を繋ぎます。 / Roles "${options.roleA}" and "${options.roleB}" resolve to the same part.loom, so they are one physical part; a connector joins distinct parts.`,
           target: filePathA,
           suggestion: [
-            "Point each role at its own part.loom in loomit.yml, or connect two different parts."
+            "Point each role at its own part.loom in loomit.yml, or connect two distinct parts."
           ]
         })
       ]
@@ -228,7 +230,7 @@ export async function connectParts(
           connectWriteError(writeError, filePathB),
           describeFsError(rollbackError, {
             code: "CONNECT_ROLLBACK_FAILED",
-            message: `Wrote connector "${options.id}" to "${options.roleA}" but could not write "${options.roleB}" or undo "${options.roleA}", so only one side declares the seam.`,
+            message: `コネクタ "${options.id}" を "${options.roleA}" に書きましたが、"${options.roleB}" への書き込みも "${options.roleA}" の巻き戻しもできませんでした。片側だけが縫い目を宣言した状態です。 / Wrote connector "${options.id}" to "${options.roleA}" but could not write "${options.roleB}" or undo "${options.roleA}", so only one side declares the seam.`,
             target: filePathA,
             suggestion: [
               `Remove connectors.${options.id} from ${options.roleA}'s part.loom by hand, then run loom connect again.`
@@ -455,7 +457,7 @@ export async function connectBand(
           rollbackFailures.push(
             describeFsError(rollbackError, {
               code: "CONNECT_ROLLBACK_FAILED",
-              message: `Wrote connector "${options.id}" to "${done.role}" but could not finish the band or undo it, so its part.loom still declares the seam.`,
+              message: `コネクタ "${options.id}" を "${done.role}" に書きましたが、band を完了することも巻き戻すこともできませんでした。その part.loom には縫い目の宣言が残っています。 / Wrote connector "${options.id}" to "${done.role}" but could not finish the band or undo it, so its part.loom still declares the seam.`,
               target: done.filePath,
               suggestion: [
                 `Remove connectors.${options.id} from ${done.role}'s part.loom by hand, then run loom connect again.`
@@ -573,7 +575,7 @@ async function prepareSide(
         createDiagnostic({
           severity: "error",
           code: "CONNECT_ID_ALREADY_DECLARED",
-          message: `Part "${role}" already declares a connector "${id}".`,
+          message: `パーツ "${role}" はすでにコネクタ "${id}" を宣言しています。 / Part "${role}" already declares a connector "${id}".`,
           target: `${role}.${id}`,
           suggestion: [
             `Use a different --as id, or edit ${role}'s part.loom if you meant to change the existing connector.`
@@ -653,7 +655,7 @@ function validatePart(part: Part, role: string): LoadFileResult<Part> {
         createDiagnostic({
           severity: "error",
           code: "CONNECT_SCHEMA_INVALID",
-          message: `The updated part.loom for "${role}" does not match the schema.`,
+          message: `更新後の "${role}" の part.loom が schema に合っていません。 / The updated part.loom for "${role}" does not match the schema.`,
           target: `parts.${role}`,
           suggestion: [parsed.error.issues.map((issue) => issue.message).join("; ")]
         })
@@ -667,7 +669,8 @@ function validatePart(part: Part, role: string): LoadFileResult<Part> {
 function connectWriteError(error: unknown, filePath: string): Diagnostic {
   return describeFsError(error, {
     code: "CONNECT_WRITE_FAILED",
-    message: "Could not write the connector into the part.loom.",
+    message:
+      "コネクタを part.loom に書き込めませんでした。 / Could not write the connector into the part.loom.",
     target: filePath,
     suggestion: ["Check filesystem permissions for the part directory."]
   });

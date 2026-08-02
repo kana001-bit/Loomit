@@ -171,7 +171,7 @@ describe("buildProject", () => {
         {
           severity: "error",
           code: "BUILD_INPUT_FILE_MISSING",
-          message: "A part file referenced for build output does not exist.",
+          message: "ビルド出力が参照する part ファイルが存在しません。 / A part file referenced for build output does not exist.",
           target: "parts/body/body.svg",
           suggestion: ["Add the preview file, or update part files.preview."]
         }

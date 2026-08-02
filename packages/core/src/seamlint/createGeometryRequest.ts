@@ -176,7 +176,7 @@ export function createSeamlintGeometryRequest(
         createDiagnostic({
           severity: "warning",
           code: "SEAMLINT_CONNECTOR_JOIN_OPEN",
-          message: `Connector "${joinId}" is declared only by "${only?.part.role ?? "one part"}", so there is no second side to build a Seamlint seam request from yet.`,
+          message: `コネクタ "${joinId}" を宣言しているのは "${only?.part.role ?? "one part"}" だけなので、縫い合わせ相手の側がなく Seamlint の seam request を組めません。 / Connector "${joinId}" is declared only by "${only?.part.role ?? "one part"}", so there is no second side to build a Seamlint seam request from yet.`,
           target: `${only?.part.role ?? joinId}.${joinId}`,
           suggestion: [
             `Declare connector "${joinId}" on the joining part too, or remove it until its mate exists.`
@@ -197,7 +197,7 @@ export function createSeamlintGeometryRequest(
         createDiagnostic({
           severity: "error",
           code: "SEAMLINT_CONNECTOR_JOIN_TOO_MANY_SIDES",
-          message: `Connector "${joinId}" declares ${topology.sides.length} sides (${topology.sides.join(", ")}); a seam joins exactly two sides, so Loomit cannot build a seam request for it.`,
+          message: `コネクタ "${joinId}" が ${topology.sides.length} つの側を宣言しています(${topology.sides.join(", ")})。1本の縫い目が繋ぐ側はちょうど2つなので、seam request を組めません。 / Connector "${joinId}" declares ${topology.sides.length} sides (${topology.sides.join(", ")}); a seam joins exactly two sides, so Loomit cannot build a seam request for it.`,
           target: joinId,
           suggestion: [
             `Use distinct connector ids for separate seams, or regroup the parts into two sides.`
@@ -212,7 +212,7 @@ export function createSeamlintGeometryRequest(
         createDiagnostic({
           severity: "warning",
           code: "SEAMLINT_CONNECTOR_JOIN_SIDES_INCOMPLETE",
-          message: `Connector "${joinId}" is a contiguous seam with an incomplete set of sides, so Loomit did not build a seam request for it.`,
+          message: `コネクタ "${joinId}" は contiguous な縫い目ですが側の宣言が不完全なので、seam request を組みませんでした。 / Connector "${joinId}" is a contiguous seam with an incomplete set of sides, so Loomit did not build a seam request for it.`,
           target: joinId,
           suggestion: [
             `Give every participating part a side and declare both sides, or drop side to treat it as a stacked seam.`
@@ -249,7 +249,7 @@ export function createSeamlintGeometryRequest(
         createDiagnostic({
           severity: "warning",
           code: "SEAMLINT_CONNECTOR_SEAM_DEFERRED",
-          message: `Connector "${joinId}" is declared by ${roles.length} parts (${roles.join(", ")}); Loomit only emits pairwise (two-part) or band (one-vs-many) seam requests for now, so its ${topology.kind === "contiguous" ? "contiguous" : "stacked"} geometry check is deferred.`,
+          message: `コネクタ "${joinId}" を ${roles.length} つのパーツが宣言しています(${roles.join(", ")})。今の Loomit が組めるのは pairwise(2パーツ)と band(1対多)の seam request だけなので、この ${topology.kind === "contiguous" ? "contiguous" : "stacked"} な幾何チェックは見送ります。 / Connector "${joinId}" is declared by ${roles.length} parts (${roles.join(", ")}); Loomit only emits pairwise (two-part) or band (one-vs-many) seam requests for now, so its ${topology.kind === "contiguous" ? "contiguous" : "stacked"} geometry check is deferred.`,
           target: joinId,
           suggestion: [
             `This is expected for stacked (facing/lining) seams, or contiguous seams where both sides have multiple pieces; measuring their combined length is a future Seamlint step.`
@@ -281,7 +281,7 @@ export function createSeamlintGeometryRequest(
         createDiagnostic({
           severity: "warning",
           code: "SEAMLINT_UNSAFE_JOIN_IDENTIFIER",
-          message: `Join "${joinId}" (${from.part.role} / ${to.part.role}) uses a part role or connector id containing a reserved separator (":", ".", "/", or "__"), so Loomit skipped it to avoid colliding Seamlint check ids or markers.`,
+          message: `縫い目 "${joinId}"(${from.part.role} / ${to.part.role})の role かコネクタ id に予約された区切り文字(":" "." "/" "__")が含まれています。Seamlint の check id や marker が衝突するため、この縫い目は飛ばしました。 / Join "${joinId}" (${from.part.role} / ${to.part.role}) uses a part role or connector id containing a reserved separator (":", ".", "/", or "__"), so Loomit skipped it to avoid colliding Seamlint check ids or markers.`,
           target: `${from.part.role}.${joinId}/${to.part.role}.${joinId}`,
           suggestion: [
             `Rename the part role or connector id to avoid ":", ".", "/", and "__" before handing this seam to Seamlint.`
@@ -296,7 +296,7 @@ export function createSeamlintGeometryRequest(
         createDiagnostic({
           severity: "warning",
           code: "SEAMLINT_CONNECTOR_TYPE_MISMATCH",
-          message: `Connector "${joinId}" uses different types on ${from.part.role} and ${to.part.role}, so Loomit cannot auto-build one Seamlint seam request for it yet.`,
+          message: `コネクタ "${joinId}" の type が ${from.part.role} と ${to.part.role} で食い違っているため、1つの Seamlint seam request を自動で組めません。 / Connector "${joinId}" uses different types on ${from.part.role} and ${to.part.role}, so Loomit cannot auto-build one Seamlint seam request for it yet.`,
           target: `${from.part.role}.${joinId}/${to.part.role}.${joinId}`,
           suggestion: [
             `Keep connector "${joinId}" on both parts aligned to one seam type before handing it off to Seamlint.`
@@ -342,7 +342,7 @@ export function createSeamlintGeometryRequest(
           createDiagnostic({
             severity: "warning",
             code: "SEAMLINT_CONNECTOR_LEFT_UNCHECKED",
-            message: `Connector "${joinId}" declares connector ranges but Loomit emitted no Seamlint check for it, so this seam is left entirely unchecked.`,
+            message: `コネクタ "${joinId}" は connector range を宣言していますが Seamlint の check が1つも出ていないため、この縫い目は丸ごと未検査のままです。 / Connector "${joinId}" declares connector ranges but Loomit emitted no Seamlint check for it, so this seam is left entirely unchecked.`,
             target: `${from.part.role}.${joinId}/${to.part.role}.${joinId}`,
             suggestion: [
               `Resolve the accompanying range diagnostic, or remove the ranges so the seam falls back to a plain sewn-seam check.`
@@ -498,7 +498,7 @@ function emitBandSeam(input: {
       createDiagnostic({
         severity: "warning",
         code: "SEAMLINT_UNSAFE_JOIN_IDENTIFIER",
-        message: `Band seam "${joinId}" (${roles.join(", ")}) uses a part role or connector id containing a reserved separator (":", ".", "/", or "__"), so Loomit skipped it to avoid colliding Seamlint check ids or markers.`,
+        message: `band seam "${joinId}"(${roles.join(", ")})の role かコネクタ id に予約された区切り文字(":" "." "/" "__")が含まれています。Seamlint の check id や marker が衝突するため、この縫い目は飛ばしました。 / Band seam "${joinId}" (${roles.join(", ")}) uses a part role or connector id containing a reserved separator (":", ".", "/", or "__"), so Loomit skipped it to avoid colliding Seamlint check ids or markers.`,
         target: joinId,
         suggestion: [
           `Rename the part role or connector id to avoid ":", ".", "/", and "__" before handing this band seam to Seamlint.`
@@ -520,7 +520,7 @@ function emitBandSeam(input: {
       createDiagnostic({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_TYPE_MISMATCH",
-        message: `Band seam "${joinId}" uses different connector types across its parts (band "${band.part.role}" declares type "${bandType}"; mismatched: ${mismatchedRoles.join(", ")}), so Loomit cannot auto-build one Seamlint band-seam request for it yet.`,
+        message: `band seam "${joinId}" のコネクタ type がパーツ間で食い違っています(band "${band.part.role}" は type "${bandType}" を宣言、食い違い: ${mismatchedRoles.join(", ")})。1つの Seamlint band-seam request を自動で組めません。 / Band seam "${joinId}" uses different connector types across its parts (band "${band.part.role}" declares type "${bandType}"; mismatched: ${mismatchedRoles.join(", ")}), so Loomit cannot auto-build one Seamlint band-seam request for it yet.`,
         target: joinId,
         suggestion: [
           `Keep connector "${joinId}" on the band and every neighbour aligned to one seam type before handing it off to Seamlint.`
@@ -564,7 +564,7 @@ function emitBandSeam(input: {
       createDiagnostic({
         severity: "warning",
         code: "SEAMLINT_BAND_SEAM_REQUIRES_DXF",
-        message: `Band seam "${joinId}" needs DXF geometry to sum the neighbour edges, but ${nonDxfRoles.join(", ")} resolved to a non-DXF (SVG) source, so Loomit did not build a band-seam check for it.`,
+        message: `band seam "${joinId}" は隣接辺の長さを合計するため DXF の幾何が必要ですが、${nonDxfRoles.join(", ")} は DXF 以外(SVG)のソースに解決されました。band-seam の check は組みませんでした。 / Band seam "${joinId}" needs DXF geometry to sum the neighbour edges, but ${nonDxfRoles.join(", ")} resolved to a non-DXF (SVG) source, so Loomit did not build a band-seam check for it.`,
         target: joinId,
         suggestion: [
           `Add files.geometry (DXF) for ${nonDxfRoles.join(", ")} so Loomit can hand Seamlint a band-seam check (SVG cannot be split into band edges).`
@@ -627,7 +627,7 @@ function resolveJoinedConnectorNotchCount(
       createDiagnostic({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_NOTCH_COUNT_MISMATCH",
-        message: `Connector "${joinId}" declares different notch counts on ${from.part.role} (${fromCount}) and ${to.part.role} (${toCount}), so Loomit did not hand Seamlint a notch signature to disambiguate the seam.`,
+        message: `コネクタ "${joinId}" の合印(notch)数が ${from.part.role}(${fromCount})と ${to.part.role}(${toCount})で食い違っています。縫い目を identify する notch 署名を Seamlint に渡しませんでした。 / Connector "${joinId}" declares different notch counts on ${from.part.role} (${fromCount}) and ${to.part.role} (${toCount}), so Loomit did not hand Seamlint a notch signature to disambiguate the seam.`,
         target: `${from.part.role}.${joinId}/${to.part.role}.${joinId}`,
         suggestion: [
           `Align connectors.${joinId}.notch_count on both parts (a seam has the same notches on both pieces).`
@@ -655,7 +655,7 @@ function resolveGeometrySide(
       createDiagnostic({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_PATH_REF_MISSING",
-        message: `Connector "${connectorId}" on part "${part.role}" has no path_ref, so Loomit cannot point Seamlint at the seam geometry yet.`,
+        message: `パーツ "${part.role}" のコネクタ "${connectorId}" に path_ref がないため、縫い目の幾何がどこにあるか Seamlint に示せません。 / Connector "${connectorId}" on part "${part.role}" has no path_ref, so Loomit cannot point Seamlint at the seam geometry yet.`,
         target: `${part.role}.${connectorId}`,
         suggestion: [
           `Set connectors.${connectorId}.path_ref to the exported seam path before building a Seamlint request.`
@@ -703,7 +703,7 @@ function resolvePartGeometry(
       createDiagnostic({
         severity: "warning",
         code: "SEAMLINT_GEOMETRY_SOURCE_MISSING",
-        message: `Part "${part.role}" has no files.geometry or files.preview entry, so Loomit does not know which geometry source Seamlint should read for its seams.`,
+        message: `パーツ "${part.role}" に files.geometry も files.preview もないため、Seamlint がどの幾何ソースを読めばよいか分かりません。 / Part "${part.role}" has no files.geometry or files.preview entry, so Loomit does not know which geometry source Seamlint should read for its seams.`,
         target: part.filePath,
         suggestion: [
           `Add files.geometry (DXF) or files.preview (SVG) for part "${part.role}" so Loomit can hand its seam geometry to Seamlint.`
@@ -724,7 +724,7 @@ function resolvePartGeometry(
       createDiagnostic({
         severity: "warning",
         code: "SEAMLINT_GEOMETRY_SOURCE_FILE_MISSING",
-        message: `Part "${part.role}" points files.${preferredSource.kind} at "${preferredSource.path}", but that geometry file does not exist, so Loomit skipped its Seamlint handoff.`,
+        message: `パーツ "${part.role}" の files.${preferredSource.kind} が "${preferredSource.path}" を指していますが、その幾何ファイルが存在しません。Seamlint への受け渡しを飛ばしました。 / Part "${part.role}" points files.${preferredSource.kind} at "${preferredSource.path}", but that geometry file does not exist, so Loomit skipped its Seamlint handoff.`,
         target: absoluteSourcePath,
         suggestion: [
           `Add the missing ${preferredSource.kind} file, or update part "${part.role}" files.${preferredSource.kind} to an existing path.`
@@ -811,7 +811,7 @@ function planConnectorRanges(input: {
         createDiagnostic({
           severity: "warning",
           code: "SEAMLINT_CONNECTOR_RANGE_BEHAVIOR_MISMATCH",
-          message: `Connector range "${rangeId}" on join "${input.joinId}" uses different behaviors on ${input.fromPart.role} and ${input.toPart.role}, so Loomit cannot map it to one Seamlint check.`,
+          message: `縫い目 "${input.joinId}" の connector range "${rangeId}" の behavior が ${input.fromPart.role} と ${input.toPart.role} で食い違っているため、1つの Seamlint check に対応づけられません。 / Connector range "${rangeId}" on join "${input.joinId}" uses different behaviors on ${input.fromPart.role} and ${input.toPart.role}, so Loomit cannot map it to one Seamlint check.`,
           target: `${input.fromPart.role}.${input.joinId}/${input.toPart.role}.${input.joinId}`,
           suggestion: [
             `Keep connector range "${rangeId}" aligned to one behavior on both parts before handing it off to Seamlint.`
@@ -855,7 +855,7 @@ function planConnectorRanges(input: {
       createDiagnostic({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_RANGE_BEHAVIOR_UNSUPPORTED",
-        message: `Connector range "${rangeId}" on join "${input.joinId}" uses behavior "${fromRange.behavior}", which this adapter does not map to a Seamlint check yet.`,
+        message: `縫い目 "${input.joinId}" の connector range "${rangeId}" は behavior "${fromRange.behavior}" を使っていますが、この adapter はまだ Seamlint の check に対応づけていません。 / Connector range "${rangeId}" on join "${input.joinId}" uses behavior "${fromRange.behavior}", which this adapter does not map to a Seamlint check yet.`,
         target: `${input.fromPart.role}.${input.joinId}/${input.toPart.role}.${input.joinId}`,
         suggestion: [
           `Keep "${rangeId}" as a plain whole-seam check, or extend the adapter before treating behavior "${fromRange.behavior}" as a Seamlint range check.`
@@ -873,7 +873,7 @@ function planConnectorRanges(input: {
       createDiagnostic({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_RANGE_MATCH_MISSING",
-        message: `Join "${input.joinId}" has connector ranges that do not line up by id on both parts, so Loomit skipped those subrange checks.`,
+        message: `縫い目 "${input.joinId}" の connector range が両パーツで id 対応していないため、その部分範囲の check を飛ばしました。 / Join "${input.joinId}" has connector ranges that do not line up by id on both parts, so Loomit skipped those subrange checks.`,
         target: `${input.fromPart.role}.${input.joinId}/${input.toPart.role}.${input.joinId}`,
         suggestion: [
           `Use matching connector range ids on both parts for ${unmatchedRangeIds.join(", ")} before handing subrange checks to Seamlint.`
@@ -908,7 +908,7 @@ function planWholeSeamEase(input: {
       createDiagnostic({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_RANGE_EASE_SUBRANGE_UNSUPPORTED",
-        message: `Connector range "${rangeId}" on join "${joinId}" applies ease to part of the seam (or alongside other ranges), but Seamlint only checks ease across the whole seam, so Loomit did not build an eased-seam check for it.`,
+        message: `縫い目 "${joinId}" の connector range "${rangeId}" は縫い目の一部(または他の range と併用)にゆとりを与えていますが、Seamlint が検査できるゆとりは縫い目全体に対してのみです。eased-seam の check は組みませんでした。 / Connector range "${rangeId}" on join "${joinId}" applies ease to part of the seam (or alongside other ranges), but Seamlint only checks ease across the whole seam, so Loomit did not build an eased-seam check for it.`,
         target: seamTarget,
         suggestion: [
           `Declare the ease as a single range covering the whole seam (from 0 to 1), or wait for subrange-ease support before handing "${rangeId}" to Seamlint.`
@@ -945,7 +945,7 @@ function planWholeSeamEase(input: {
         : createDiagnostic({
             severity: "warning",
             code: "SEAMLINT_EASE_RATIO_UNRESOLVED",
-            message: `Whole-seam ease range "${rangeId}" on join "${joinId}" has no ease_ratio_min/ease_ratio_max, so Loomit cannot tell Seamlint how much length difference to accept and did not emit an eased-seam check (the seam is reported as unchecked instead).`,
+            message: `縫い目 "${joinId}" の全体ゆとり range "${rangeId}" に ease_ratio_min / ease_ratio_max がないため、どれだけの長さ差を許容するか Seamlint に伝えられず、eased-seam の check を出しませんでした(この縫い目は未検査として報告します)。 / Whole-seam ease range "${rangeId}" on join "${joinId}" has no ease_ratio_min/ease_ratio_max, so Loomit cannot tell Seamlint how much length difference to accept and did not emit an eased-seam check (the seam is reported as unchecked instead).`,
             target: rangeTarget,
             suggestion: [
               `Set ease_ratio_min and ease_ratio_max on range "${rangeId}" (matching on both parts) so Loomit can hand Seamlint an eased-seam check with an ease band.`
@@ -1014,7 +1014,7 @@ function diagnoseGatheredRange(input: {
       createDiagnostic({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_RANGE_ALLOWANCE_MISMATCH",
-        message: `Gathered range "${rangeId}" on join "${joinId}" declares different allowance_mm on ${fromPart.role} (${fromRange.allowance_mm}) and ${toPart.role} (${toRange.allowance_mm}).`,
+        message: `縫い目 "${joinId}" のギャザー range "${rangeId}" の allowance_mm が ${fromPart.role}(${fromRange.allowance_mm})と ${toPart.role}(${toRange.allowance_mm})で食い違っています。 / Gathered range "${rangeId}" on join "${joinId}" declares different allowance_mm on ${fromPart.role} (${fromRange.allowance_mm}) and ${toPart.role} (${toRange.allowance_mm}).`,
         target: `${fromPart.role}.${joinId}.${rangeId}/${toPart.role}.${joinId}.${rangeId}`,
         suggestion: [
           `Align allowance_mm for range "${rangeId}" on both parts so the intended gather amount is unambiguous.`
@@ -1032,7 +1032,7 @@ function diagnoseGatheredRange(input: {
     createDiagnostic({
       severity: "warning",
       code: "SEAMLINT_GATHER_DIRECTION_UNRESOLVED",
-      message: `Gathered range "${rangeId}" on join "${joinId}" (${fromPart.role} / ${toPart.role}) has no recorded gather direction and Loomit cannot measure which side is gathered, so it did not emit a gathered-seam check (the seam is reported as unchecked instead).`,
+      message: `縫い目 "${joinId}"(${fromPart.role} / ${toPart.role})のギャザー range "${rangeId}" にギャザーの向きが記録されておらず、どちら側を縮めるか Loomit は測れないため、gathered-seam の check を出しませんでした(この縫い目は未検査として報告します)。 / Gathered range "${rangeId}" on join "${joinId}" (${fromPart.role} / ${toPart.role}) has no recorded gather direction and Loomit cannot measure which side is gathered, so it did not emit a gathered-seam check (the seam is reported as unchecked instead).`,
       target: `${fromPart.role}.${joinId}.${rangeId}/${toPart.role}.${joinId}.${rangeId}`,
       suggestion: [
         `Record which side is the gathered (fuller) edge for range "${rangeId}" so Loomit can hand Seamlint a correctly-oriented gathered-seam check.`
@@ -1068,7 +1068,7 @@ function easeRatioMismatchDiagnostic(input: {
   return createDiagnostic({
     severity: "warning",
     code: "SEAMLINT_CONNECTOR_RANGE_EASE_RATIO_MISMATCH",
-    message: `Whole-seam ease range "${rangeId}" on join "${joinId}" declares different ease bands on ${fromPart.role} (${formatEaseBand(fromRange)}) and ${toPart.role} (${formatEaseBand(toRange)}), so Loomit cannot pick one ease band for Seamlint.`,
+    message: `縫い目 "${joinId}" の全体ゆとり range "${rangeId}" のゆとり幅が ${fromPart.role}(${formatEaseBand(fromRange)})と ${toPart.role}(${formatEaseBand(toRange)})で食い違っているため、Seamlint に渡すゆとり幅を1つに決められません。 / Whole-seam ease range "${rangeId}" on join "${joinId}" declares different ease bands on ${fromPart.role} (${formatEaseBand(fromRange)}) and ${toPart.role} (${formatEaseBand(toRange)}), so Loomit cannot pick one ease band for Seamlint.`,
     target: input.rangeTarget,
     suggestion: [
       `Align ease_ratio_min/ease_ratio_max for range "${rangeId}" on both parts so the ease band is unambiguous.`

@@ -33,8 +33,11 @@ export async function materializeSeamlintGeometry(
         createDiagnostic({
           severity: "warning",
           code: "SEAMLINT_GEOMETRY_SOURCE_UNREADABLE",
+          // 詳細(errorMessage)は日英併記を閉じたあとに1回だけ置く。日本語側と英語側の両方に差し込むと、
+          // errno のメッセージが長いときに同じ内容が2回並び、区切りの "/" が本文に埋もれて日英の切れ目が
+          // 読めなくなる(seamlintCheck / match / truerPropose と同じ規律)。
           message:
-            `Loomit could not read geometry source "${part.geometrySource}" for part "${part.partId}", so it could not inline the seam geometry for Seamlint (${errorMessage(error)}).`,
+            `パーツ "${part.partId}" の幾何ソース "${part.geometrySource}" を読めなかったため、Seamlint に渡す縫い目の幾何を埋め込めませんでした。 / Loomit could not read geometry source "${part.geometrySource}" for part "${part.partId}", so it could not inline the seam geometry for Seamlint. (${errorMessage(error)})`,
           target: part.geometrySource,
           suggestion: [
             `Check that "${part.geometrySource}" exists and is readable before running loom slnt check.`
