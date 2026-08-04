@@ -352,6 +352,30 @@ loom test <scenario> [path] [--notes path] [--format text|json]
 
 - `v0` では scenario の対応範囲を意図的に小さく保っている。
 
+## `loom note`
+
+試作(トワル)で分かったことを `notes/prototype-notes.yml` に1件追記する。対話のみで、引数は取らない。
+
+```text
+loom note
+```
+
+訊かれる順:
+
+1. **Result**(必須)— `failed` / `ok` / `mixed` から選ぶ。`other` を選ぶと自由入力になる。
+2. **Issue**(必須)— 何が起きたか、何を見たか。
+3. **Short label for the id**(任意・ascii)— id の slug 元。日本語の issue は slug 化できないので、短い英字ラベルを別に受ける。空なら core が issue から slug を作り(英字が無ければ `note`)、日付で一意化する。
+4. **Observation**(任意・複数)— 空 Enter で打ち切り。
+5. **Suggested change**(任意・複数)— 同上。
+6. **Record a movement test case?** — yes なら **Movement test case id**(必須)と **applies-to タグ**(1件以上必須)を続けて訊く。
+
+補足:
+
+- `creates_test_case` と `applies_to` は schema 上「対で必須」なので、まとめて訊く(片方だけ埋まる状態を作らない)。
+- 対話を始める前に project の存在を確認する。無ければ即座に失敗する(全項目を入力させた最後に「project が無い」と言わない)。
+- 記録したノートは後で効く。`loom diff` は同じタグを持つ part を変更したときに該当ノートを surface し、`loom suggest-tests` は `creates_test_case` を提案に使う。
+- 試作メモは一着の構成とは別物として `notes/` に置く。`loom fork` では経験データとしてコピーされる(構成は切り離すが学びは持ち越す)。
+
 ## Output Formats
 
 次のコマンドは `--format text|json` を持つ。

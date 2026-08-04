@@ -2147,7 +2147,114 @@ describe("runCli", () => {
       await rm(tempRoot, { recursive: true, force: true });
     }
   });
+
+  // connect / match / truer は各コマンドのテストが run*Command を直接呼んでおり、runCli 経由の配線
+  // (argv の切り出し・cwd/io の受け渡し・runner の注入口の名前合わせ)が一度も通っていなかった。
+  // dispatcher が壊れてもコマンド本体のテストは緑のままなので、経路そのものをここで固定する。
+
+  it("routes connect through the dispatcher and writes both sides", async () => {
+    // 守る仕様: loom connect は runCli 経由でも args と cwd が届き、両 part.loom に同じ id の connector を書く。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-connect-"));
+
+    try {
+      await writeConnectableProject(tempRoot);
+      const output = createOutputCollector();
+
+      const exitCode = await runCli(
+        ["node", "loom", "connect", "front", "back", "--as", "outseam", "--notches", "2"],
+        { cwd: tempRoot, io: output.io }
+      );
+
+      expect(exitCode).toBe(0);
+      expect(output.stderr).toEqual([]);
+
+      const front = await readFile(join(tempRoot, "parts/front/part.loom"), "utf8");
+      const back = await readFile(join(tempRoot, "parts/back/part.loom"), "utf8");
+      expect(front).toContain("outseam:");
+      expect(back).toContain("outseam:");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("forwards the injected Seamlint runner to match", async () => {
+    // 守る仕様: runCli の seamlintRunner は match のオプション名 runner に付け替えて渡される。
+    // ここが崩れると注入が無視され、テストが気付かないまま実 slnt を spawn しに行く。
+    const calls: string[] = [];
+    const output = createOutputCollector();
+
+    const exitCode = await runCli(
+      ["node", "loom", "match", "body", "sleeve", "--format", "json"],
+      {
+        cwd: join(fixturesRoot, "valid-blouse"),
+        io: output.io,
+        seamlintRunner: {
+          run: async (requestJson: string) => {
+            calls.push(requestJson);
+            return {
+              ok: true as const,
+              exitCode: 0,
+              report: { status: "ok" as const, target: "geometry-request", diagnostics: [], reports: [] }
+            };
+          }
+        }
+      }
+    );
+
+    expect(exitCode).toBe(0);
+    // 注入した runner が実際に呼ばれた = 付け替えが効いている(呼ばれなければ calls は空のまま)。
+    expect(calls).toHaveLength(1);
+  });
+
+  it("routes truer request through the dispatcher", async () => {
+    // 守る仕様: loom truer <sub> は runCli 経由でもサブコマンドまで args が届く。
+    const output = createOutputCollector();
+
+    const exitCode = await runCli(
+      ["node", "loom", "truer", "request", join(fixturesRoot, "valid-blouse"), "--format", "json"],
+      { cwd: workspaceRoot, io: output.io }
+    );
+
+    expect(exitCode).toBe(0);
+    expect(output.stderr).toEqual([]);
+    // JSON として読めることまで見る(help やエラー文が返っていないことの担保)。
+    expect(() => JSON.parse(output.stdout.join("")) as unknown).not.toThrow();
+  });
 });
+
+// connect を通すための最小プロジェクト。各 part は files.piece(path_ref の既定元)を持つ。
+async function writeConnectableProject(projectRoot: string): Promise<void> {
+  await mkdir(join(projectRoot, "parts/front"), { recursive: true });
+  await mkdir(join(projectRoot, "parts/back"), { recursive: true });
+
+  await writeFile(
+    join(projectRoot, "loomit.yml"),
+    [
+      "schema: loomit.project.v0",
+      "name: cli-connect-skirt",
+      "garment: skirt",
+      "parts:",
+      "  front: ./parts/front/part.loom",
+      "  back: ./parts/back/part.loom"
+    ].join("\n"),
+    "utf8"
+  );
+
+  for (const role of ["front", "back"]) {
+    await writeFile(
+      join(projectRoot, `parts/${role}/part.loom`),
+      [
+        "schema: loomit.part.v0",
+        `name: cli-connect-${role}`,
+        "variant: test",
+        "type: body",
+        "files:",
+        `  piece: ${role}`
+      ].join("\n"),
+      "utf8"
+    );
+  }
+}
 
 // 対話ウィザードを決定的にテストするための Prompter。input/select は texts を、confirm は confirms を
 // 呼び出し順に消費する。使い切ったら空文字/false を返す。

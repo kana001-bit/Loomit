@@ -1,5 +1,17 @@
 import type { DiagnosticCode, RegisteredDiagnosticCode } from "./codes.js";
 
+// 注記: Loomit 自身が発行する診断は今のところ warning と error だけで、"info" を出す箇所は無い。
+// それでも level を残す理由は2つ。使われていないからといって削らないこと。
+//
+// 1. **公開契約だから。** severity は report JSON にそのまま出る。`--format json` の消費者が
+//    "info" で分岐していれば、union を狭めるのは breaking change になる。
+// 2. **注入された rule が出せるから。** FitRule / MovementTestRule / CompatibilityRule は公開の
+//    拡張点で、呼び出し側の rule は Diagnostic を自分で組み立てる。severity に "info" を選ぶ道を
+//    塞ぐ理由が無い(拡張コードを X_ 接頭辞で許しているのと同じ立て付け)。
+//
+// なお `loom slnt check` の出力に `[info]` が現れることはあるが、それは Seamlint 由来の
+// SeamlintGeometryDiagnostic["severity"] で、この型とは独立に宣言されている(geometryReport.ts)。
+// ここから "info" を外しても Seamlint 側の型も表示も変わらないので、維持の根拠にはならない。
 export const diagnosticSeverities = ["info", "warning", "error"] as const;
 
 export type DiagnosticSeverity = (typeof diagnosticSeverities)[number];

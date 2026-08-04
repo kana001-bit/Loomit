@@ -55,3 +55,20 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      # 既定の `pnpm test` は src を in-process で読むため、ビルド成果物を別プロセスで起動する経路が
+      # 一度も通らない。この e2e が `node dist/main.js` を spawn して守るのは次の3つ:
+      #   - dist が実際に建ち、そのまま node で起動できること
+      #   - process.argv がコマンドまで届くこと
+      #   - runCli の戻り値が process.exitCode に載ること
+      #
+      # 守らないものも書いておく(過信しないため)。`node <path>` と明示起動しているので、
+      # package.json#bin の解決も shebang も**使われない** ── どちらを壊しても、この e2e は緑のまま通る
+      # (実際に確かめた)。外部ツール(slnt / tru)の spawn 経路も呼ばないので、Windows の
+      # PATH/PATHEXT 自前解決や cmd.exe 引用はここでは検証されない(そちらは spawnResolvedProcess の
+      # 単体テストが受け持つ)。両 OS で回すのは、spawn と exit code の扱い自体が OS 差を持つため。
+      #
+      # `test:e2e` は自前で `pnpm -r build` を含むので上の Build と重複するが、開発者がローカルで打つのと
+      # 同じコマンドを CI も走らせるほうを優先する(CI 専用の派生コマンドを増やして乖離させない)。
+      - name: E2E smoke test
+        run: pnpm test:e2e
