@@ -35,6 +35,28 @@ describe("describeFsError", () => {
     expect(noSpace.message).not.toBe(notFound.message);
   });
 
+  it("leaves exactly one Japanese/English boundary after appending the errno detail", () => {
+    // 守る仕様: errno の詳細は英語のまま、日英併記の文を閉じたあとに括弧で1回だけ足す。
+    // reason 自体を併記にすると `日本語 / English (日本語 / English)` になり、区切りが2つ出て
+    // どちらが日英の切れ目か読めなくなる(全 errno 分岐で崩れないことをまとめて固定する)。
+    for (const errno of ["EACCES", "EPERM", "ENOSPC", "EROFS", "EEXIST", "ENOENT"]) {
+      const diagnostic = describeFsError(fsError(errno), context);
+
+      expect(diagnostic.message.split(" / ")).toHaveLength(2);
+      // 詳細は base message の後ろに付く(日本語側に割り込まない)。
+      expect(diagnostic.message.startsWith(context.message)).toBe(true);
+    }
+  });
+
+  it("still delivers the Japanese guidance through suggestion", () => {
+    // 守る仕様: 詳細を英語にしても日本語話者が迷子にならない。errno ごとの「どうすればよいか」は
+    // suggestion が日英併記で運ぶので、message から日本語の理由を落としても道案内は失われない。
+    const diagnostic = describeFsError(fsError("EACCES"), context);
+
+    expect(diagnostic.suggestion?.join(" ")).toContain("アクセス権限を確認してください");
+    expect(diagnostic.suggestion?.join(" ")).toContain("Check file and directory permissions");
+  });
+
   it("falls back to the base message for unknown errors", () => {
     // 守る仕様: errno が取れない/未知の場合は base message と fallback suggestion をそのまま使う。
     const diagnostic = describeFsError(new Error("boom"), {
