@@ -16,6 +16,13 @@ export interface ValDetailList {
   readonly totalDetails: number;
 }
 
+// .val から検出した1ピース。どの <draw> の <detail> かを覚えておく。ピース名は part の files.piece に
+// 入り、DXF export の BLOCK 名として Seamlint の突き合わせ住所にもなるので、draw 名とセットで持つ。
+export interface DetectedPiece {
+  readonly drawName: string;
+  readonly pieceName: string;
+}
+
 // .val を read-only で読み、draw ごとの <detail> ピース名を列挙する。幾何には触れず(Loomit は幾何を
 // 計算しない: A案)、純粋な XML の read で取れる「どんなピースが入っているか」だけを返す。loom add が
 // 1着 = 1 .val = N ピースを N part に scaffold する土台(案B)であり、取り込み前の一覧提示にも使う。
@@ -56,6 +63,15 @@ export function listValDetailsFromText(source: string): ValDetailList {
     draws,
     totalDetails: draws.reduce((count, draw) => count + draw.details.length, 0)
   };
+}
+
+// draw ごとの detail 一覧を、(draw 名, ピース名)の平らな列に均す。1着 = 1 .val = N ピースを N part に
+// 割る側(案B)は draw の入れ子ではなくピースの列で回るので、その形に合わせる。draw の出現順・その中の
+// detail の出現順を保つ(取り込み前に見せた一覧と、実際に処理する順が食い違わないように)。
+export function flattenDetectedPieces(detailList: ValDetailList): readonly DetectedPiece[] {
+  return detailList.draws.flatMap((draw) =>
+    draw.details.map((pieceName) => ({ drawName: draw.drawName, pieceName }))
+  );
 }
 
 // detail の表示ラベルを決める。name 属性があればそれを、無ければ id、どちらも無ければ出現順の連番で

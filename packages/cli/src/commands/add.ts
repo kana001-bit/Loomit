@@ -3,14 +3,27 @@ import { basename, dirname, relative, resolve } from "node:path";
 import {
   addPartToProject,
   checkValSourceExists,
+  collectCollidingPieceNames,
+  collectExistingJoins,
+  combineJoins,
+  findCollidingRoleNames,
   findUnregisteredValSources,
+  flattenDetectedPieces,
   isCaseInsensitiveFileSystemAt,
   isSafePathSegment,
   listValDetailsFromFile,
   loadProject,
-  resolveParts
+  resolveParts,
+  suggestJoinId
 } from "@loomit/core";
-import type { AddedPart, AddPartConnectorInput, UnregisteredValSource } from "@loomit/core";
+import type {
+  AddedPart,
+  AddPartConnectorInput,
+  DetectedPiece,
+  Diagnostic,
+  ExistingJoin,
+  UnregisteredValSource
+} from "@loomit/core";
 import { formatDiagnosticsText } from "../formatters/diagnosticsText.js";
 import { createReadlinePrompter, EndOfInputError } from "../prompter.js";
 import type { Prompter } from "../prompter.js";
@@ -42,12 +55,6 @@ interface DetailPartAnswers extends PartAnswers {
   readonly role: string;
 }
 
-// .val から検出した1ピース。どの <draw> の <detail> かを覚えておき、prompt 見出しと files.piece に使う。
-interface DetectedPiece {
-  readonly drawName: string;
-  readonly pieceName: string;
-}
-
 // type は garment 上の役割。schema は自由な単一 segment だが、よく使う候補を出して選びやすくする。
 const TYPE_CHOICES = ["body", "sleeve", "collar", "cuff", "facing", "other"] as const;
 // connector は「名前付きの join(縫い合わせ先)」で、check は両パーツが同じ id を宣言しているかだけで
@@ -60,6 +67,11 @@ const TYPE_CHOICES = ["body", "sleeve", "collar", "cuff", "facing", "other"] as 
 // (slash も ".." も含まない)ため、実 join id としては promptNewJoinId で拒否する。許してしまうと、
 // 次回以降その join を選んでも番兵と誤認され、同名 join を再利用できなくなる。
 const NAME_NEW_JOIN = "(name a new join)";
+
+// 「連結を足すのはやめる」を表す select の番兵。「Add a seam connector?」に yes と答えた後で降りるための
+// 出口で、繋ぎたかった縫い目がここでは繋げない(side 付き)と分かったときに要る。番兵は isSafePathSegment を
+// 通ってしまうため、実 join id としては promptNewJoinId が拒否する(NAME_NEW_JOIN と同じ理由)。
+const SKIP_CONNECTOR = "(skip — add no connector)";
 
 // seam の種類(connector.type)。id とは別軸のラベルで、ペアリングには使われない(check は id で繋ぐ)。
 // よく使う縫い目種を候補に出して選びやすくする(glossary の Connector 例に対応)。schema 上 type は
@@ -74,19 +86,23 @@ const SEAM_TYPE_CHOICES = [
   "other"
 ] as const;
 
-// プロジェクト内に既にある join(縫い合わせ先候補)。id・その種類(type)・宣言しているパーツ(role)を持つ。
-// id は縫い目ごとに一意な rendezvous、type は種類ラベル。既存 join に繋ぐときは相手の id と type を継ぐ
-// (同じ縫い目なので種類も同じ。第2の当事者に type を訊き直すと同一 seam で分類が食い違いうる)。
-interface ExistingJoin {
-  readonly id: string;
-  readonly type: string;
-  readonly roles: readonly string[];
-}
-
 // 対話で決まった1つの縫い合わせ先。一意な id と種類 type を分けて持つ(buildConnectors がこの2軸を書く)。
 interface ChosenJoin {
   readonly id: string;
   readonly type: string;
+}
+
+// 縫い合わせ候補(既存 join)を集められなかった。診断を運んで対話ループの外まで抜ける。
+// prompt 群の戻り値を全て result 型に変えるより、EndOfInputError と同じ throw/catch に揃える方が、
+// 「対話の途中で打ち切る」という同じ性質の失敗を1か所で扱えて読みやすい。
+class JoinLookupError extends Error {
+  readonly diagnostics: readonly Diagnostic[];
+
+  constructor(diagnostics: readonly Diagnostic[]) {
+    super("Could not collect existing seam joins.");
+    this.name = "JoinLookupError";
+    this.diagnostics = diagnostics;
+  }
 }
 
 export async function runAddCommand(
@@ -198,14 +214,26 @@ export async function runAddCommand(
 
   // 縫い合わせ相手の候補(join)は遅延ロードする。連結を1つも足さない add(「Add a seam connector?」に N)では
   // project を一切読まないよう、既存パーツが宣言済みの join(ベース)を初回に必要になったときだけ1回読んで
-  // キャッシュする。取得できなくても add は続行する(最初のパーツや壊れた project では候補なしで新規命名に倒す)。
-  // それに、この add で続けて足したピースの join を重ねて返す(直前のピースが宣言した join を選べる)。
+  // キャッシュする。それに、この add で続けて足したピースの join を重ねて返す(直前のピースが宣言した join を選べる)。
+  //
+  // 読めなかったときは候補なしに畳まず中断する。壊れた part.loom を「join が無い」と読み替えると、作者は
+  // 既存の縫い目に繋いだつもりで新しい id を振ってしまい、part を直した後に意図しない同一 id 参加が現れる。
+  // 積み上げ中は書き換えるので、公開型(readonly な JoinSide)ではなく可変の形で持つ。
   let baseJoins: readonly ExistingJoin[] | undefined;
-  const addedJoins = new Map<string, { type: string; roles: string[] }>();
+  const addedJoins = new Map<
+    string,
+    { type: string; roles: string[]; sides: { side: string; roles: string[] }[] }
+  >();
 
   const listJoins = async (): Promise<readonly ExistingJoin[]> => {
     if (baseJoins === undefined) {
-      baseJoins = await collectExistingJoins(options.cwd);
+      const result = await collectExistingJoins(options.cwd);
+
+      if (!result.ok) {
+        throw new JoinLookupError(result.diagnostics);
+      }
+
+      baseJoins = result.value;
     }
 
     return combineJoins(baseJoins, addedJoins);
@@ -213,17 +241,36 @@ export async function runAddCommand(
 
   // 足したばかりの part の connectors を候補に反映する(次のピースが同じ join(id と type)を選べるように)。
   // ベース未ロードでも記録だけしておき、次に候補が必要になったとき combineJoins でベースと合流する。
+  // side も書かれていれば運ぶ。wizard は side を書かないので今は常に空だが、書き込み結果をそのまま読む形に
+  // しておけば、side を書く経路が増えたときに候補一覧が黙って coincident 扱いに落ちることがない。
   const recordAddedJoins = (
     role: string,
-    connectors: Readonly<Record<string, { readonly type: string }>> | undefined
+    connectors:
+      | Readonly<Record<string, { readonly type: string; readonly side?: string | undefined }>>
+      | undefined
   ): void => {
     for (const [joinId, connector] of Object.entries(connectors ?? {})) {
-      const entry = addedJoins.get(joinId);
+      let entry = addedJoins.get(joinId);
 
       if (entry === undefined) {
-        addedJoins.set(joinId, { type: connector.type, roles: [role] });
-      } else if (!entry.roles.includes(role)) {
+        entry = { type: connector.type, roles: [], sides: [] };
+        addedJoins.set(joinId, entry);
+      }
+
+      if (!entry.roles.includes(role)) {
         entry.roles.push(role);
+      }
+
+      if (connector.side === undefined) {
+        continue;
+      }
+
+      const side = entry.sides.find((candidate) => candidate.side === connector.side);
+
+      if (side === undefined) {
+        entry.sides.push({ side: connector.side, roles: [role] });
+      } else if (!side.roles.includes(role)) {
+        side.roles.push(role);
       }
     }
   };
@@ -279,6 +326,17 @@ export async function runAddCommand(
       options.stderr(
         "Input ended before all required answers were provided.\n" +
           "Provide every answer, or run it in an interactive terminal.\n"
+      );
+      return 1;
+    }
+
+    // 縫い合わせ候補を集める段階で project / part.loom が読めなかったとき。診断をそのまま見せて止める
+    // (候補なしとして続けると、既存の縫い目に繋げないまま別 id が生えるため)。
+    if (error instanceof JoinLookupError) {
+      options.stderr(`${formatDiagnosticsText(error.diagnostics).join("\n")}\n`);
+      options.stderr(
+        "Could not read the existing seam joins, so loom add stopped before writing this part.\n" +
+          "Fix the reported files (or run loom check) and try again.\n"
       );
       return 1;
     }
@@ -608,7 +666,11 @@ async function addAllPiecesWithDefaults(
   const existingRoleKeys = new Set(takenRoleKeys);
 
   // role 衝突(既存 part / 先行ピース / detail 重複)するピースを書き込み前に洗い出す。
-  const collidingPieceNames = collectCollidingPieceNames(addable, takenRoleKeys, normalizeRoleKey);
+  const collidingPieceNames = collectCollidingPieceNames(
+    addable.map((piece) => piece.pieceName),
+    takenRoleKeys,
+    normalizeRoleKey
+  );
 
   // --yes は automation を止めない契約。衝突の解決には role 入力が要るが、非対話(TTY でない CI / パイプ)では
   // stdin を開かず、書き込みも一切せずに clean fail する。対話端末(または注入 prompter)のときだけ衝突分を訊く。
@@ -713,29 +775,6 @@ async function addAllPiecesWithDefaults(
   return 0;
 }
 
-// role 衝突する(= 同じ parts/ ディレクトリ / loomit.yml キーに解決される)ピース名を、書き込み前に洗い出す。
-// seededKeys(既存 part の role)と、先行するピースの role の両方と照合する。判定用のコピーで回し seededKeys は破壊しない。
-function collectCollidingPieceNames(
-  pieces: readonly DetectedPiece[],
-  seededKeys: ReadonlySet<string>,
-  normalizeRoleKey: (role: string) => string
-): readonly string[] {
-  const simulated = new Set(seededKeys);
-  const colliding: string[] = [];
-
-  for (const piece of pieces) {
-    const key = normalizeRoleKey(piece.pieceName);
-
-    if (simulated.has(key)) {
-      colliding.push(piece.pieceName);
-    } else {
-      simulated.add(key);
-    }
-  }
-
-  return colliding;
-}
-
 // role 衝突したピースに distinct な role を訊く(B: --yes でも衝突分だけ対話する)。safe segment かつ、実 FS の
 // case 感度で正規化して未使用になるまで訊き直す(既存 part や先に決めた role と重ならないよう takenRoleKeys で判定)。
 // 冒頭の案内は衝突の理由で言い分ける: 元からプロジェクトにある role(existingRoleKeys)なら「もう add 済みかも」を
@@ -769,38 +808,6 @@ async function promptDistinctRole(
 
     return role;
   }
-}
-
-// role に使う名前のうち、role として衝突する(= 同じ parts/ ディレクトリ / loomit.yml キーに解決される)
-// ものを、原文の綴りのまま初出順で返す。addPartToProject は完全一致で role を登録し、ディレクトリ生成は
-// FS の case 感度に従うので、caseInsensitive=true のときは小文字化して比較し大文字小文字違いも衝突として拾う
-// (false=case-sensitive な Linux 等では完全一致のみ)。純関数にして両モードを決定的にテストできるようにする。
-export function findCollidingRoleNames(
-  names: readonly string[],
-  caseInsensitive: boolean
-): readonly string[] {
-  const firstByKey = new Map<string, string>();
-  const colliding: string[] = [];
-
-  for (const name of names) {
-    const key = caseInsensitive ? name.toLowerCase() : name;
-    const first = firstByKey.get(key);
-
-    if (first === undefined) {
-      firstByKey.set(key, name);
-      continue;
-    }
-
-    // 衝突。最初に見た綴りと今の綴りの両方を報告に含める(ケース違いも一目で分かるように)。
-    if (!colliding.includes(first)) {
-      colliding.push(first);
-    }
-    if (!colliding.includes(name)) {
-      colliding.push(name);
-    }
-  }
-
-  return colliding;
 }
 
 async function collectAnswers(
@@ -870,9 +877,16 @@ async function promptConnectors(
     // この part の add ループ中に既に選んだ id。これを渡し、次の新規 join の既定 id 生成と衝突判定が
     // 「今この part で使った id」も taken として見るようにする。無いと、同じ type を2本足すとき2本目も
     // 既定が同じ id を提案し、最後に duplicate として黙って捨てられ、「同 type で別 id」が成立しない。
-    // 既存 open join 一覧からも選択済みは外す(同じ相手を二度提示して skip される導線を避ける)。
+    // 既存 join 一覧からも選択済みは外す(同じ相手を二度提示して skip される導線を避ける)。
     const chosenIds = new Set(connectors.map((connector) => connector.id));
     const join = await promptJoin(prompter, notify, existingJoins, chosenIds);
+
+    // 「連結しない」を選んだ。ここまでに足した分はそのまま活かして、連結の対話だけ打ち切る。
+    // 「Add a seam connector?」に yes と答えた後でも降りられる出口が要る ── とくに繋ぎたかった縫い目が
+    // side 付き(ここでは繋げない)だったとき、逃げ道が無いと要らない join を発明させることになる。
+    if (join === undefined) {
+      break;
+    }
 
     // 重複は id(=record key/rendezvous)で判定する。同じ type の別 id は別の縫い目なので重複ではない。
     // 上流(既定/衝突/一覧除外)で防いでいるが、既存 join を二度選んだ場合の最終セーフティネットとして残す。
@@ -891,56 +905,117 @@ async function promptConnectors(
 }
 
 // 縫い合わせ先(join)を1つ決める。connector の本質は「名前付きの join」なので、seam の形ではなく
-// 「どの join に繋ぐか」を尋ねる。既存の open join があればそこから選ばせ(選べば相手と id が一致して
+// 「どの join に繋ぐか」を尋ねる。既存の join があればそこから選ばせ(選べば相手と id が一致して
 // check がペアにし、type も継いで同じ縫い目の分類がそろう)、無い/新規を選んだときだけ新しい join を作る。
+// undefined を返したら「連結を足すのはやめる」(呼び出し側は連結の対話を打ち切る)。
 async function promptJoin(
   prompter: Prompter,
   notify: (text: string) => void,
   existingJoins: readonly ExistingJoin[],
   chosenIds: ReadonlySet<string>
-): Promise<ChosenJoin> {
-  // 縫い合わせ相手になれるのは「まだ1パーツしか宣言していない open な join(=相手待ち)」だけに絞る。
-  // check は同じ id を宣言するパーツ同士を総当たりでペアにする(rules.ts comparePartConnectorLengths)ため、
-  // 既に2パーツで閉じた join を3つ目にも選ばせると、狙った相手だけでなく既存の両者と多対多に繋がってしまう。
-  // この part の add で既に選んだ id も外す(同じ相手を二度提示して duplicate skip される導線を避ける)。
-  const openJoins = existingJoins.filter(
-    (join) => join.roles.length === 1 && !chosenIds.has(join.id)
-  );
+): Promise<ChosenJoin | undefined> {
+  // 参加パーツ数では絞らない。seam は作者が宣言する参加エッジの集合であって「1本の縫い目 = 2枚」ではなく、
+  // 2パーツが宣言済みの join を「閉じている」と見て3枚目を拒むのは誤り。表地＋見返し＋裏地のような重ね
+  // (coincident)は N 枚が同じ縫い目に参加するのが正しい宣言で、そこを塞ぐと作者は同じ縫い目に別 id を振る
+  // 羽目になる(docs/glossary.md の Connector 節、design-history の「seam は参加エッジの集合、over-pair は
+  // 退役」)。check 側も3枚以上の重ねを pairwise 比較から外して幾何は Seamlint に defer する
+  // (rules.ts collectNonPairwiseJoinIds)ので、多対多に壊れることはない。
+  //
+  // 絞るのは side を宣言している縫い目(contiguous / band)だけ。ここに side 無しで id だけ足すと
+  // classifyJoinSides が mixed と見て CONNECTOR_JOIN_SIDES_INCOMPLETE になり、band なら「和が band に等しい」
+  // という不変条件も壊れる。正しく参加するには「自分がどちらの側か」の宣言が要るが、それは wizard が訊いても
+  // 正しく答えられない ── band は定義上ちょうど1枚なので band 側を選ぶ答えはほぼ常に誤りで、neighbour 側を
+  // 選ぶことは和の不変条件を動かす設計判断になる。band seam を**新規に**張るときは side を `connectBand`
+  // (`loom connect --to`)が裏で書き、作者は触らない ── ただしそれは新規に限った話で、既存 join の拡張は
+  // どのコマンドも持っていない(下の注参照)。よってここでは選ばせず、存在と理由と実行できる直し方を示す。
+  const availableJoins = existingJoins.filter((join) => !chosenIds.has(join.id));
+  const selectableJoins = availableJoins.filter((join) => join.sides.length === 0);
+  const sidedJoins = availableJoins.filter((join) => join.sides.length > 0);
 
-  // 相手になりうる open join がまだ無い(最初のパーツ / 既存が全て閉じている)なら、新しい join を作る。
-  if (openJoins.length === 0) {
+  // side 付きの縫い目は選べないが、存在は伝える(黙って消すと「候補に無い=無い」と誤解され、作者は同じ縫い目に
+  // 別 id を振ってしまう)。
+  //
+  // 行き先に `loom connect ... --as <既存id>` を出してはいけない。connectParts / connectBand は対象パーツが
+  // その id を既に宣言していると CONNECT_ID_ALREADY_DECLARED で止まるので、既存参加者を含めれば必ず失敗し、
+  // 含めなければ band の側が揃わない ── どう書いても実行できないコマンドになる(実測で確認)。既存 join を
+  // 拡張する口は今の `loom connect` に無いので、実行できる唯一の手順(part.loom に side 付きで書き足す)を出す。
+  if (sidedJoins.length > 0) {
+    notify(
+      "Joins with sides (contiguous / band seams) cannot be joined here — loom add does not write a side:\n" +
+        sidedJoins.map(formatSidedJoin).join("\n") +
+        "\nTo join one, add it to this part's part.loom by hand under connectors:, with the side shown\n" +
+        "above, then run loom check. (loom connect cannot extend an existing join — it stops with\n" +
+        "CONNECT_ID_ALREADY_DECLARED.)\n"
+    );
+  }
+
+  // 選べる既存 join がまだ無い。最初のパーツなら従来どおり新しい join を作る導線へ直行する(余計な質問を
+  // 足さない)。side 付きしか無いときだけは、繋ぎたかった相手に繋げないと分かった直後なので、要らない join を
+  // 発明させずに降りられる出口も出す。
+  if (selectableJoins.length === 0) {
+    if (sidedJoins.length === 0) {
+      return promptNewJoin(prompter, notify, existingJoins, chosenIds);
+    }
+
+    // default は skip に倒す。空 Enter や EOF でも(prompter.select はどちらでも default を返す)、繋げない
+    // 縫い目の代わりに意味の無い join が生まれるより、connector 無しで add を終えられる方が安全。
+    const chosenWithoutCandidates = await prompter.select(
+      "No joinable seam here. What now?",
+      [SKIP_CONNECTOR, NAME_NEW_JOIN],
+      { default: SKIP_CONNECTOR }
+    );
+
+    if (chosenWithoutCandidates === SKIP_CONNECTOR) {
+      return undefined;
+    }
+
     return promptNewJoin(prompter, notify, existingJoins, chosenIds);
   }
 
   // どの join がどのパーツのものかは select の番号一覧だけでは分からないため、先に宣言元 role と種類(type)付きで
   // 示す。id[type] を並べることで、id(一意な rendezvous)と type(種類ラベル)が別物だと対話上でも伝える。
+  // 相手待ち(1パーツ)か、既に複数パーツが参加しているかも添える。どちらも繋いでよいが、意味は違う
+  // (前者は相方を待っている縫い目、後者は重ね縫いに1枚足すことになる)ので、選ぶ前に見えるようにする。
   notify(
     "Existing joins (pick one to connect, or name a new one):\n" +
-      openJoins.map((join) => `  ${join.id} [${join.type}] (${join.roles.join(", ")})`).join("\n") +
+      selectableJoins
+        .map(
+          (join) =>
+            `  ${join.id} [${join.type}] (${join.roles.join(", ")}${
+              join.roles.length === 1 ? " — waiting for a mate" : ` — ${join.roles.length} parts`
+            })`
+        )
+        .join("\n") +
       "\n"
   );
 
-  const choices = [...openJoins.map((join) => join.id), NAME_NEW_JOIN];
+  // 「やめる」も常に出す。yes と答えた後で降りられないと、繋ぎたい相手が居ないときに要らない join を
+  // 発明するしかなくなる(side 付きしか無い場合は上で同じ出口を出している)。
+  const choices = [...selectableJoins.map((join) => join.id), NAME_NEW_JOIN, SKIP_CONNECTOR];
   // default は「新しい join を名付ける」に倒す。既存 join を default にすると、空 Enter や EOF で
   // (prompter.select はどちらでも default を返す)意図せず先頭の相手へ黙って接続してしまう。
   const chosen = await prompter.select("Connect to which join?", choices, {
     default: NAME_NEW_JOIN
   });
 
+  if (chosen === SKIP_CONNECTOR) {
+    return undefined;
+  }
+
   if (chosen === NAME_NEW_JOIN) {
     return promptNewJoin(prompter, notify, existingJoins, chosenIds);
   }
 
-  // 既存 open join を選んだら id と type を継ぐ(同じ縫い目なので種類も同じ)。相手と id が一致して check が
+  // 既存 join を選んだら id と type を継ぐ(同じ縫い目なので種類も同じ)。相手と id が一致して check が
   // ペアにする。select は choices の値だけ返すので picked は必ず見つかるが、型を絞るための保険を置く。
-  const picked = openJoins.find((join) => join.id === chosen);
+  const picked = selectableJoins.find((join) => join.id === chosen);
 
   return picked ?? { id: chosen, type: chosen };
 }
 
 // 新しい join を作る。縫い目の種類(type)と一意な id を分けて受け取る。type はペアリングに使われない
-// 種類ラベルなので複数の縫い目で同じでよく、区別は id が担う。id を潰さない限り、同じ type の別の縫い目を
-// 足しても over-pair(CONNECTOR_JOIN_OVERPAIRED)しない。
+// 種類ラベルなので複数の縫い目で同じでよく、区別は id が担う。同じ type の別の縫い目を足しても、
+// id さえ分けてあれば別の縫い目として扱われる(check がペアにするのは id の一致だけ)。
 async function promptNewJoin(
   prompter: Prompter,
   notify: (text: string) => void,
@@ -967,7 +1042,7 @@ async function promptSeamType(prompter: Prompter, notify: (text: string) => void
 
 // 新しい join の一意 id を単一 segment で受け取る。既定は type から導いた空き id(1本目の side は "side"、
 // 埋まっていれば side_2…)なので、素直な縫い目なら Enter 1つで一意 id が付く。番兵は弾き、既存 id との
-// 衝突(a: closed への相乗り=over-pair の事故、open への同名付け=一覧から選ぶべき)も弾いて訊き直す。
+// 衝突も弾いて訊き直す(既存の縫い目に参加したいなら一覧から選ぶ導線があり、そちらなら type も継げる)。
 async function promptNewJoinId(
   prompter: Prompter,
   notify: (text: string) => void,
@@ -980,8 +1055,10 @@ async function promptNewJoinId(
   for (;;) {
     const id = await promptSegment(prompter, notify, "Join id (unique per seam)", suggested);
 
-    if (id === NAME_NEW_JOIN) {
-      notify(`"${NAME_NEW_JOIN}" is reserved; choose a different join id.\n`);
+    // select の番兵はどちらも isSafePathSegment を通ってしまう。実 join id として許すと、次回以降その id を
+    // 選んでも番兵と誤認され、同名 join を再利用できなくなる。
+    if (id === NAME_NEW_JOIN || id === SKIP_CONNECTOR) {
+      notify(`"${id}" is reserved; choose a different join id.\n`);
       continue;
     }
 
@@ -1003,134 +1080,99 @@ async function promptNewJoinId(
   }
 }
 
-// 既存 id と衝突したときの案内。closed(2パーツで縫い合わせ済み)への相乗りは over-pair の事故なので
-// 「別 id を」、open(相手待ち)への同名付けは「一覧から選んで繋ぐか、別 id を」と、直し方を分けて示す。
-function formatJoinIdClash(id: string, clash: ExistingJoin): string {
-  const roles = clash.roles.join(" ↔ ");
+// side 付きの縫い目1本を、参加者と「足すならどの側か」つきで1行に出す。
+//
+// **どちらの側でもよい、ではない。** band seam は「片側がちょうど1枚(band)・反対側が複数枚(neighbours)」で
+// 成立し、createGeometryRequest の findBandShape は**ちょうど1枚の側**を探して band と判定する。1枚の側に
+// 足して両側とも複数枚になると band 形が消え、band-seam の実測が発行されなくなる
+// (SEAMLINT_CONNECTOR_SEAM_DEFERRED に落ちる)。しかも check は contiguous として健全のままなので、
+// 診断を見ても気づけない。よって足す先は選ばせず、安全な側を名指しする。
+function formatSidedJoin(join: ExistingJoin): string {
+  const head = `  ${join.id} [${join.type}] (${join.roles.join(", ")})`;
+  const sides = join.sides.map((side) => `${side.side}: ${side.roles.join(", ")}`).join(" | ");
 
-  if (clash.roles.length >= 2) {
-    return `Join id "${id}" is already a closed seam (${roles}). Give this seam a distinct id.\n`;
+  // まず「そもそも側の宣言が健全か」を見る。core の classifyJoinSides と同じ切り分けで、
+  //   - 参加者の一部しか side を宣言していない(mixed)
+  //   - 側が1種類だけ(one-side)
+  //   - 側が3種類以上(too-many-sides = CONNECTOR_JOIN_TOO_MANY_SIDES で error)
+  // はどれも既に不健全で、1枚足しても健全にならない。ここで「どちらの側に足すか」を案内すると、壊れた
+  // 構成を広げさせることになる。足す話をせず、先に直せと言う(直し方は loom check の診断が出す)。
+  const sidedRoleCount = join.sides.reduce((total, side) => total + side.roles.length, 0);
+
+  if (join.sides.length !== 2 || sidedRoleCount !== join.roles.length) {
+    return (
+      `${head}\n    sides: ${sides}\n` +
+      `    → this seam's sides are not healthy yet (loom check reports it); a contiguous seam needs ` +
+      `exactly two sides and every participant on one of them. Fix the sides first — adding a piece ` +
+      `here cannot repair them.`
+    );
   }
 
+  // ここから先は側がちょうど2つ・全参加者がどちらかに属する健全な contiguous。
+  // 1枚だけの側 = いまの band。ここを増やすと band 形が消えるので、足すのは複数枚の側。
+  const singletons = join.sides.filter((side) => side.roles.length === 1);
+
+  if (singletons.length === 1) {
+    const band = singletons[0];
+    const neighbour = join.sides.find((side) => side !== band);
+
+    if (band !== undefined && neighbour !== undefined) {
+      return (
+        `${head}\n    sides: ${sides}\n` +
+        `    → use side: ${neighbour.side}. Side "${band.side}" is the band and must stay a single ` +
+        `piece; growing it drops the band-seam check.`
+      );
+    }
+  }
+
+  // 両側とも1枚。形の上ではどちらに足しても singleton が1つ残るが、**同価ではない**。band になるのは
+  // 「足さなかった側」なので、物理的な band を持つ側に足すと相手が band と見なされ、band-seam が逆向きに
+  // 発行される(from が入れ替わる)。side はただのラベルで Loomit は band identity を保持していないため、
+  // どちらが物理的な band かはデータから決められない。推測せず、作者に確かめさせる。
+  if (singletons.length === 2) {
+    return (
+      `${head}\n    sides: ${sides}\n` +
+      `    → both sides hold one piece, so Loomit cannot tell which one is the band. Add to the ` +
+      `side that does NOT hold the band: the side you leave alone becomes the band, so growing the ` +
+      `band's own side reverses the band-seam check.`
+    );
+  }
+
+  // 両側とも複数枚。band 形は既に無く(和が band へ一意に解けないので幾何は defer 済み)、足しても singleton は
+  // 生まれないので band identity が入れ替わる心配も無い。どちらの側でもよい、と言えるのはこの形だけ。
   return (
-    `Join id "${id}" is already an open join from ${roles}. ` +
-    "Pick it from the list to connect, or choose a distinct id.\n"
+    `${head}\n    sides: ${sides}\n` +
+    `    → either side works: no side holds a single piece, so this is not a band seam and Seamlint ` +
+    `defers its geometry either way.`
   );
 }
 
-// type から新しい join id の既定を導く。type がそのまま単一 segment で空いていれば type を使い、
-// 埋まっていれば type_2, type_3… と空き番号を探す(2本目の side は別の縫い目なので別 id になる)。
-// type がパス segment にならない(空白入り等)ときは base を "seam" に倒す。
-function suggestJoinId(
-  type: string,
-  existingJoins: readonly ExistingJoin[],
-  chosenIds: ReadonlySet<string>
-): string {
-  const taken = new Set([...existingJoins.map((join) => join.id), ...chosenIds]);
-  const base = isSafePathSegment(type) ? type : "seam";
+// 既存 id と衝突したときの案内。参加パーツ数で文言を分けない ── 何枚が参加していようと直し方は同じで、
+// 「その縫い目に参加したいなら一覧から選ぶ(type も継げる)、別の縫い目なら別 id を付ける」の2択になる。
+// 手打ちの同名をそのまま通さないのは、参加したいのか別の縫い目なのかが id だけでは区別できないため。
+// 分けるのは side の有無だけ。side 付きの縫い目は一覧に出ないので「一覧から選べ」は行き先として嘘になる。
+// 参加には side の宣言が要り、それを書けるコマンドが無い(既存 join は `loom connect` でも拡張できない)ので、
+// 上と同じ formatSidedJoin を使って側ごとの参加者と手編集の手順を示す。
+function formatJoinIdClash(id: string, clash: ExistingJoin): string {
+  const roles = clash.roles.join(", ");
 
-  if (!taken.has(base)) {
-    return base;
+  if (clash.sides.length > 0) {
+    return (
+      `Join id "${id}" is already a seam with sides (${roles}). It needs a side, so it cannot be ` +
+      `declared here:\n${formatSidedJoin(clash)}\n` +
+      "Choose a distinct id if you meant a different seam.\n"
+    );
   }
 
-  for (let n = 2; ; n += 1) {
-    const candidate = `${base}_${n}`;
-
-    if (!taken.has(candidate)) {
-      return candidate;
-    }
-  }
-}
-
-// プロジェクト内の他パーツが宣言している join を、id・種類(type)・宣言元 role をまとめて集める。
-// id ごとにまとめて id 昇順で返す。type は最初に見た宣言元の値を採る(継承していれば両者で一致する)。
-// project が読めない/解決できないときは候補なし([])で返し、add を止めない(縫い合わせ相手が居ないだけ
-// なので、新規 join を名付ける導線に倒す)。
-async function collectExistingJoins(projectPath: string): Promise<readonly ExistingJoin[]> {
-  const loaded = await loadProject(projectPath);
-
-  if (!loaded.ok) {
-    return [];
-  }
-
-  const resolved = await resolveParts(loaded.value);
-
-  if (!resolved.ok) {
-    return [];
-  }
-
-  const byJoinId = new Map<string, { type: string; roles: string[] }>();
-
-  for (const part of Object.values(resolved.value.parts)) {
-    for (const [joinId, connector] of Object.entries(part.part.connectors ?? {})) {
-      const entry = byJoinId.get(joinId);
-
-      if (entry === undefined) {
-        byJoinId.set(joinId, { type: connector.type, roles: [part.role] });
-      } else {
-        entry.roles.push(part.role);
-      }
-    }
-  }
-
-  return sortJoins(byJoinId);
-}
-
-// draw ごとの detail 一覧を、(draw 名, ピース名)の平らな列に均す。add はこの順にピースを訊いていく。
-function flattenDetectedPieces(detailList: {
-  readonly draws: readonly {
-    readonly drawName: string;
-    readonly details: readonly string[];
-  }[];
-}): readonly DetectedPiece[] {
-  return detailList.draws.flatMap((draw) =>
-    draw.details.map((pieceName) => ({ drawName: draw.drawName, pieceName }))
+  return (
+    `Join id "${id}" is already declared by ${roles}. ` +
+    "Pick it from the list to join that seam, or choose a distinct id for a different seam.\n"
   );
 }
 
 // 今どのピースを訊いているかを示す見出し。どの draw の detail かも添えて、複数ピースでも迷子にしない。
 function formatPiecePromptHeader(piece: DetectedPiece): string {
   return `Piece: ${piece.pieceName} (draw: ${piece.drawName})\n`;
-}
-
-// ベース(既存パーツが宣言済みの join)と、この add で足したピースの join(addedJoins)を id ごとに合流し、
-// id 昇順で返す。type はベース優先で運び(継承していれば両者で一致する)、同じ id は roles を和(重複なし)に
-// する。ベースを遅延ロードした結果このピースが既に含まれても、roles の重複を除くので二重にならない。
-function combineJoins(
-  base: readonly ExistingJoin[],
-  added: ReadonlyMap<string, { readonly type: string; readonly roles: readonly string[] }>
-): readonly ExistingJoin[] {
-  const byJoinId = new Map<string, { type: string; roles: string[] }>();
-
-  for (const join of base) {
-    byJoinId.set(join.id, { type: join.type, roles: [...join.roles] });
-  }
-
-  for (const [joinId, join] of added) {
-    const entry = byJoinId.get(joinId);
-
-    if (entry === undefined) {
-      byJoinId.set(joinId, { type: join.type, roles: [...join.roles] });
-    } else {
-      for (const role of join.roles) {
-        if (!entry.roles.includes(role)) {
-          entry.roles.push(role);
-        }
-      }
-    }
-  }
-
-  return sortJoins(byJoinId);
-}
-
-// join の Map(id -> {type, roles})を id 昇順の ExistingJoin[] に均す。collect と merge が同じ整列で
-// 候補を返すための共有ヘルパ。
-function sortJoins(
-  byJoinId: ReadonlyMap<string, { readonly type: string; readonly roles: readonly string[] }>
-): readonly ExistingJoin[] {
-  return [...byJoinId.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([id, { type, roles }]) => ({ id, type, roles }));
 }
 
 // 空でない自由文字列を、非空になるまで訊き直す(seam の Custom type 用)。connector.type は schema 上

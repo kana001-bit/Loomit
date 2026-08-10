@@ -69,6 +69,15 @@ export type {
   AddedPrototypeNote
 } from "./prototype-notes/addPrototypeNote.js";
 export { buildProject, createBuildReport } from "./build/buildProject.js";
+
+// --- authoring の判断(何を書くかを決めるまで) -------------------------------
+// 上の addPartToProject / connectParts は「書く」操作で、その手前には「何を書くか」を決めるドメイン規則が
+// ある。role 名がぶつからないか、どの join(縫い合わせ先)に繋げるか、新しい縫い目にどの id を付けるか。
+// これらは対話 UI でも GUI でも同じ答えを出すべきものなので、CLI のウィザードに埋めず操作として公開する。
+// 呼び出し側が持つのは訊き方と見せ方だけになる。
+export { collectCollidingPieceNames, findCollidingRoleNames } from "./parts/roleCollisions.js";
+export { collectExistingJoins, combineJoins, suggestJoinId } from "./parts/joinInventory.js";
+export type { ExistingJoin, JoinSide } from "./parts/joinInventory.js";
 export type {
   BuildAssetKind,
   BuildManifest,
@@ -198,8 +207,12 @@ export type {
 // .val(Valentina) から detail / dart / notch / increment / 辺の出現を読み出す。Loomit は .val を書かない。
 // File 版(パスを渡す) / Text 版(本文を渡す) / Source 版(part の files.source を辿る)が対称に並ぶ。
 // 呼び出し側が何を持っているかで選べるように揃えてあるので、未使用の版だけを間引かない。
-export { listValDetailsFromFile, listValDetailsFromText } from "./parts/listValDetails.js";
-export type { ValDetailList, ValDrawDetails } from "./parts/listValDetails.js";
+export {
+  flattenDetectedPieces,
+  listValDetailsFromFile,
+  listValDetailsFromText
+} from "./parts/listValDetails.js";
+export type { DetectedPiece, ValDetailList, ValDrawDetails } from "./parts/listValDetails.js";
 export {
   projectDartsFromValFile,
   projectDartsFromValText,

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 
 import { describe, expect, it } from "vitest";
 
-import { findCollidingRoleNames, runAddCommand } from "../src/commands/add.js";
+import { runAddCommand } from "../src/commands/add.js";
 import { EndOfInputError } from "../src/prompter.js";
 import type { Prompter } from "../src/prompter.js";
 
@@ -721,25 +721,5 @@ describe("loom add (no .val argument)", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
-  });
-});
-
-describe("findCollidingRoleNames", () => {
-  it("flags exact duplicates in either filesystem mode", () => {
-    // 守る仕様: 完全一致はどちらの FS でも role 衝突する。初出の綴りを1回だけ返す。
-    expect(findCollidingRoleNames(["front", "back", "front"], false)).toEqual(["front"]);
-    expect(findCollidingRoleNames(["front", "back", "front"], true)).toEqual(["front"]);
-  });
-
-  it("flags case-only differences only on case-insensitive filesystems", () => {
-    // 守る仕様: 大文字小文字を区別しない FS(Windows/macOS): Front と front は同じ parts/ に解決 = 衝突。両綴りを返す。
-    expect(findCollidingRoleNames(["Front", "front"], true)).toEqual(["Front", "front"]);
-    // 区別する FS(Linux 等): 別ディレクトリなので衝突しない。
-    expect(findCollidingRoleNames(["Front", "front"], false)).toEqual([]);
-  });
-
-  it("returns nothing when every name is distinct", () => {
-    // 守る仕様: すべて別名なら衝突は無く空配列を返す。
-    expect(findCollidingRoleNames(["front", "back", "sleeve"], true)).toEqual([]);
   });
 });

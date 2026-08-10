@@ -1240,8 +1240,9 @@ describe("runCli", () => {
 
       expect(sleeveExit).toBe(0);
       // 既存 join が id・種類[type]・宣言元 role 付きで提示される(shape の taxonomy は出さない)。
+      // 1パーツしか宣言していない join は「相手待ち」と添える(何枚参加しているかで意味が変わるため)。
       expect(sleeveOut.stdout.join("")).toContain("Existing joins");
-      expect(sleeveOut.stdout.join("")).toContain("armhole [armhole] (body)");
+      expect(sleeveOut.stdout.join("")).toContain("armhole [armhole] (body — waiting for a mate)");
       // 選んだ join がそのまま connector id になり、body と同じ id で縫い合わせ相手になる。
       const sleevePart = await readFile(join(tempRoot, "parts/sleeve/part.loom"), "utf8");
       expect(sleevePart).toContain("armhole:");
@@ -1261,11 +1262,13 @@ describe("runCli", () => {
     }
   });
 
-  it("does not re-offer a join already declared by two parts (avoids many-to-many wiring)", async () => {
-    // 守る仕様: check は同じ id を宣言するパーツ同士を総当たりでペアにするため、既に2パーツで閉じた join を
-    // 3つ目にも選ばせると多対多に繋がる。そこで候補は「まだ1パーツしか宣言していない open な join」だけに絞り、
-    // 閉じた join(body+sleeve の armhole)は3つ目のパーツには提示しない。
-    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-closed-join-"));
+  it("still offers a join that two parts already declare, so a third piece can join the same seam", async () => {
+    // 守る仕様: 既に2パーツが宣言している join も候補に出し続ける。seam は作者が宣言する参加エッジの集合で
+    // 「1本の縫い目 = 2枚」ではない ── 表地＋見返し＋裏地のような重ね(coincident)は N 枚が同じ縫い目に
+    // 参加するのが正しい宣言で、over-pair は退役している(glossary の Connector 節 / design-history)。
+    // 2枚で「閉じた」と見て塞ぐと、作者は同じ縫い目に別 id を振るしかなくなり、assembly グラフが嘘になる。
+    // 3枚目は id と type を継いで参加し、check も pairwise 比較から外して幾何は Seamlint に defer する。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-nary-join-"));
 
     try {
       await runCli(["node", "loom", "init", "--garment", "blouse"], {
@@ -1276,8 +1279,8 @@ describe("runCli", () => {
       await writeFile(join(tempRoot, "sleeve.val"), "sleeve source\n", "utf8");
       await writeFile(join(tempRoot, "facing.val"), "facing source\n", "utf8");
 
-      // body と sleeve が armhole を宣言し合い、armhole を「閉じた(2パーツ)」join にする。
-      // body は新規 join(seam type + join id)、sleeve は body の open armhole を選んで継承する。
+      // body と sleeve が armhole を宣言し合い、2パーツが参加する join にする。
+      // body は新規 join(seam type + join id)、sleeve は body の armhole を選んで継承する。
       await runCli(["node", "loom", "add", "body.val"], {
         cwd: tempRoot,
         io: createOutputCollector().io,
@@ -1295,27 +1298,359 @@ describe("runCli", () => {
         })
       });
 
-      // 3つ目(facing): armhole は閉じているので候補に出ず、既存 join 一覧そのものが提示されない。
-      // openJoins が空なので promptJoin は直接「新しい join」を作る(seam type + join id)。
+      // 3枚目(facing): 2パーツが宣言済みの armhole も候補に出るので、選んで同じ縫い目に参加できる。
       const facingOut = createOutputCollector();
       const facingExit = await runCli(["node", "loom", "add", "facing.val"], {
         cwd: tempRoot,
         io: facingOut.io,
         prompter: createScriptedPrompter({
-          texts: ["facing", "facing", "v1", "neckline", "neckline", ""],
+          texts: ["facing", "facing", "v1", "armhole", ""],
           confirms: [true, false]
         })
       });
 
       expect(facingExit).toBe(0);
-      // 閉じた armhole は縫い合わせ候補として再提示されない(一覧そのものが出ない)。
-      // ※ seam type メニューには種類ラベルとしての "armhole" が出るので、join 一覧形式(`id [type]`)で判定する。
-      expect(facingOut.stdout.join("")).not.toContain("Existing joins");
-      expect(facingOut.stdout.join("")).not.toContain("armhole [");
-      // facing は既存 armhole に相乗りせず、新しい join を宣言する。
+      // 一覧に出る。何枚が参加しているかも添えて、相手待ち(1枚)との違いが選ぶ前に見えるようにする。
+      expect(facingOut.stdout.join("")).toContain("Existing joins");
+      expect(facingOut.stdout.join("")).toContain("armhole [armhole] (body, sleeve — 2 parts)");
+      // facing は別 id を振らされず、同じ armhole に id と type を継いで参加する。
       const facingPart = await readFile(join(tempRoot, "parts/facing/part.loom"), "utf8");
-      expect(facingPart).toContain("neckline:");
-      expect(facingPart).not.toContain("armhole:");
+      expect(facingPart).toContain("armhole:");
+      expect(facingPart).toContain("type: armhole");
+
+      // 3枚参加は over-pair ではない。side を宣言しない重ね(coincident)なので check は健全と見る。
+      const checkOut = createOutputCollector();
+      const checkExit = await runCli(["node", "loom", "check", tempRoot], {
+        cwd: workspaceRoot,
+        io: checkOut.io
+      });
+
+      expect(checkExit).toBe(0);
+      expect(checkOut.stdout.join("")).not.toContain("OVERPAIRED");
+      expect(checkOut.stdout.join("")).not.toContain("TOO_MANY_SIDES");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("stops with the load diagnostics when a registered part.loom cannot be read", async () => {
+    // 守る仕様: 縫い合わせ候補を集める段階で登録済み part.loom が読めなかったら、「join が無い」に畳まず
+    // 診断を見せて exit 1 で止める。空の台帳として続けると、作者は既存の縫い目に繋いだつもりで新しい id を
+    // 振ってしまい、壊れた part を直した後に意図しない同一 id 参加が現れる(addPartToProject は既存パーツを
+    // resolve しないので、新しい part の書き込みだけは成功してしまう)。errno / 診断を握り潰さない R3 でもある。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-broken-part-"));
+
+    try {
+      await runCli(["node", "loom", "init", "--garment", "blouse"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io
+      });
+      await writeFile(join(tempRoot, "front.val"), "front source\n", "utf8");
+      await writeFile(join(tempRoot, "back.val"), "back source\n", "utf8");
+
+      // front を hem 付きで登録してから、その part.loom を失わせる(loomit.yml の登録だけが残る)。
+      await runCli(["node", "loom", "add", "front.val"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io,
+        prompter: createScriptedPrompter({
+          texts: ["front", "other", "front", "v1", "hem", "hem", ""],
+          confirms: [true, false]
+        })
+      });
+      await rm(join(tempRoot, "parts/front/part.loom"));
+
+      // back: 連結を足すと答えた時点で台帳の取得に失敗する。
+      const output = createOutputCollector();
+      const exitCode = await runCli(["node", "loom", "add", "back.val"], {
+        cwd: tempRoot,
+        io: output.io,
+        prompter: createScriptedPrompter({
+          texts: ["back", "other", "back", "v1", "(name a new join)", "hem", "hem_back", ""],
+          confirms: [true, false]
+        })
+      });
+
+      expect(exitCode).toBe(1);
+      // 読めなかったファイルの診断がそのまま出る(候補なしとして黙って続けない)。
+      expect(output.stderr.join("")).toContain("FILE_READ_FAILED");
+      expect(output.stderr.join("")).toContain("Could not read the existing seam joins");
+      // back は書かれない。壊れた台帳のまま新しい id を生やさない。
+      const backWritten = await readFile(join(tempRoot, "parts/back/part.loom"), "utf8").then(
+        () => true,
+        () => false
+      );
+      expect(backWritten).toBe(false);
+      expect(await readFile(join(tempRoot, "loomit.yml"), "utf8")).not.toContain("back:");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("does not offer a seam that declares sides, and names the side that is safe to join", async () => {
+    // 守る仕様: side を宣言している縫い目(contiguous / band)は候補に出さない。ExistingJoin から選んで書ける
+    // のは id と type だけで side は書けないため、ここで参加させると classifyJoinSides が mixed と見て
+    // CONNECTOR_JOIN_SIDES_INCOMPLETE になり、band なら「neighbours の和が band に等しい」不変条件も壊れる。
+    // ただし黙って消さない ── 前回 coincident を隠して「別 id を作る」へ誘導していたのと同じ失敗を繰り返さない
+    // よう、存在と理由と行き先(loom connect)を示す。side を作者に訊かないのは docs/cli.md の立場でもある
+    // (band seam の side はコマンドが裏で書き、作者は触らない)。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-sided-join-"));
+
+    try {
+      await runCli(["node", "loom", "init", "--garment", "skirt"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io
+      });
+
+      for (const role of ["waistband", "front", "back", "lining"]) {
+        await writeFile(join(tempRoot, `${role}.val`), `${role} source\n`, "utf8");
+      }
+
+      // connector 無しで3枚 add してから、band seam を loom connect で張る(side はコマンドが書く)。
+      for (const role of ["waistband", "front", "back"]) {
+        await runCli(["node", "loom", "add", `${role}.val`], {
+          cwd: tempRoot,
+          io: createOutputCollector().io,
+          prompter: createScriptedPrompter({ texts: [role, role, "v1"], confirms: [false] })
+        });
+      }
+
+      const connectExit = await runCli(
+        ["node", "loom", "connect", "waistband", "--to", "front", "back", "--as", "waist"],
+        { cwd: tempRoot, io: createOutputCollector().io }
+      );
+
+      expect(connectExit).toBe(0);
+
+      // 4枚目(lining): waist は side 付きなので選択肢に出ず、理由と手で直す手順が案内される。
+      // 繋げる相手が居ないので「連結しない」で降りる(連結を足すと答えた後でも降りられる)。
+      const liningOut = createOutputCollector();
+      const liningExit = await runCli(["node", "loom", "add", "lining.val"], {
+        cwd: tempRoot,
+        io: liningOut.io,
+        prompter: createScriptedPrompter({
+          texts: ["lining", "lining", "v1", "(skip — add no connector)"],
+          confirms: [true]
+        })
+      });
+
+      expect(liningExit).toBe(0);
+      const liningStdout = liningOut.stdout.join("");
+      expect(liningStdout).toContain(
+        "Joins with sides (contiguous / band seams) cannot be joined here"
+      );
+      // 側ごとの参加者を見せる。どちらの側に足すかで結果が変わるので、枚数が読める形で出す。
+      expect(liningStdout).toContain("waist [waist] (waistband, front, back)");
+      expect(liningStdout).toContain("sides: band: waistband | neighbour: front, back");
+      // **安全な側を名指しする。**「どちらでもよい」は誤り: band 側(1枚)に足すと両側とも複数枚になり
+      // findBandShape が band 形を見つけられず、band-seam の実測が発行されなくなる。
+      expect(liningStdout).toContain("use side: neighbour");
+      expect(liningStdout).toContain('Side "band" is the band and must stay a single piece');
+      // 案内は part.loom を手で直す手順。`loom connect ... --as waist` は既存参加者が同じ id を宣言済みで
+      // CONNECT_ID_ALREADY_DECLARED になり必ず失敗するので、実行できない手順を出してはならない。
+      expect(liningStdout).toContain("add it to this part's part.loom by hand");
+      expect(liningStdout).not.toContain("--as waist");
+      // 選べる join は1つも無いので、選択の一覧そのものは出ない。
+      expect(liningStdout).not.toContain("Existing joins (pick one to connect");
+
+      // 連結を足すと答えた後でも降りられる。lining は connector 無しで add が完了する
+      // (繋げない縫い目の代わりに、要らない join を発明させない)。
+      const liningPart = await readFile(join(tempRoot, "parts/lining/part.loom"), "utf8");
+      expect(liningPart).not.toContain("connectors:");
+      expect(liningPart).not.toContain("waist:");
+
+      // 案内どおり `loom connect` を打つと本当に失敗することを固定する(だから案内に出していない)。
+      // 既存参加者を含めても含めなくても、その参加者が waist を宣言済みなので同じ理由で止まる。
+      const connectAgain = createOutputCollector();
+      const args = ["connect", "waistband", "--to", "front", "back", "lining", "--as", "waist"];
+      const connectAgainExit = await runCli(["node", "loom", ...args], {
+        cwd: tempRoot,
+        io: connectAgain.io
+      });
+
+      expect(connectAgainExit).toBe(1);
+      expect(connectAgain.stderr.join("")).toContain("CONNECT_ID_ALREADY_DECLARED");
+
+      // 案内どおり part.loom を手で直すと、band seam に4枚目として健全に参加できる。
+      await writeFile(
+        join(tempRoot, "parts/lining/part.loom"),
+        `${liningPart.trimEnd()}\nconnectors:\n  waist:\n    type: waist\n    side: neighbour\n`,
+        "utf8"
+      );
+
+      const checkOut = createOutputCollector();
+      await runCli(["node", "loom", "check", tempRoot], {
+        cwd: workspaceRoot,
+        io: checkOut.io
+      });
+
+      // 4枚が2側(band / neighbour)に収まっているので、側は不完全でも過多でもない。
+      expect(checkOut.stdout.join("")).not.toContain("CONNECTOR_JOIN_SIDES_INCOMPLETE");
+      expect(checkOut.stdout.join("")).not.toContain("CONNECTOR_JOIN_TOO_MANY_SIDES");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses to call the two sides equivalent when both hold exactly one piece", async () => {
+    // 守る仕様: 側が1枚ずつの縫い目で「どちらでもよい」と言わない。band になるのは**足さなかった側**なので、
+    // 物理的な band を持つ側に足すと相手が band と見なされ band-seam が逆向きに発行される(from が入れ替わる。
+    // create-geometry-request.test.ts「makes whichever side stays a single piece the band」が固定)。
+    // side はただのラベルで Loomit は band identity を保持しないため、どちらが band かは推測できない。
+    // 推測せず作者に確かめさせる ── 1対N のときに neighbour 側を名指しするのとは出し分ける。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-band-pair-"));
+
+    try {
+      await runCli(["node", "loom", "init", "--garment", "skirt"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io
+      });
+
+      for (const role of ["waistband", "front", "lining"]) {
+        await writeFile(join(tempRoot, `${role}.val`), `${role} source\n`, "utf8");
+        await runCli(["node", "loom", "add", `${role}.val`], {
+          cwd: tempRoot,
+          io: createOutputCollector().io,
+          prompter: createScriptedPrompter({ texts: [role, role, "v1"], confirms: [false] })
+        });
+      }
+
+      // band=waistband(1枚) / neighbour=front(1枚)。lining を add した時点では両側とも1枚。
+      await runCli(["node", "loom", "connect", "waistband", "--to", "front", "--as", "waist"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io
+      });
+
+      const out = createOutputCollector();
+      await runCli(["node", "loom", "add", "lining.val"], {
+        cwd: tempRoot,
+        io: out.io,
+        prompter: createScriptedPrompter({
+          texts: ["lining2", "lining2", "v1", "(skip — add no connector)"],
+          confirms: [true]
+        })
+      });
+
+      const stdout = out.stdout.join("");
+      expect(stdout).toContain("sides: band: waistband | neighbour: front");
+      expect(stdout).toContain("Loomit cannot tell which one is the band");
+      expect(stdout).toContain("reverses the band-seam check");
+      // 「どちらでもよい」とは言わない。片側を名指しもしない(どちらが band かは決められないため)。
+      expect(stdout).not.toContain("either side works");
+      expect(stdout).not.toContain("use side:");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("tells the author to fix an unhealthy side set instead of offering a side to grow", async () => {
+    // 守る仕様: 側の宣言が既に不健全な縫い目(側が1種類だけ / 一部だけ side / 3側以上)では「どちらの側に
+    // 足すか」を案内しない。1枚足しても健全にならないので、案内すると壊れた構成を広げさせるだけ。
+    // ここでは「側が1種類だけ」(CONNECTOR_JOIN_SIDES_INCOMPLETE の one-side)を作って確かめる。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-unhealthy-sides-"));
+
+    try {
+      await runCli(["node", "loom", "init", "--garment", "skirt"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io
+      });
+
+      for (const role of ["front", "back", "lining"]) {
+        await writeFile(join(tempRoot, `${role}.val`), `${role} source\n`, "utf8");
+        await runCli(["node", "loom", "add", `${role}.val`], {
+          cwd: tempRoot,
+          io: createOutputCollector().io,
+          prompter: createScriptedPrompter({ texts: [role, role, "v1"], confirms: [false] })
+        });
+      }
+
+      // front と back の両方を同じ側("hip")にする = 側が1種類だけの不健全な contiguous。
+      for (const role of ["front", "back"]) {
+        const path = join(tempRoot, `parts/${role}/part.loom`);
+        const text = await readFile(path, "utf8");
+        await writeFile(
+          path,
+          `${text.trimEnd()}\nconnectors:\n  waist:\n    type: waist\n    side: hip\n`,
+          "utf8"
+        );
+      }
+
+      const out = createOutputCollector();
+      await runCli(["node", "loom", "add", "lining.val"], {
+        cwd: tempRoot,
+        io: out.io,
+        prompter: createScriptedPrompter({
+          texts: ["lining2", "lining2", "v1", "(skip — add no connector)"],
+          confirms: [true]
+        })
+      });
+
+      const stdout = out.stdout.join("");
+      expect(stdout).toContain("sides: hip: front, back");
+      expect(stdout).toContain("this seam's sides are not healthy yet");
+      // 足す側の話はしない(名指しも「どちらでもよい」も出さない)。
+      expect(stdout).not.toContain("use side:");
+      expect(stdout).not.toContain("either side works");
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("says either side works only when neither side holds a single piece", async () => {
+    // 守る仕様: 「どちらの側でもよい」と言ってよいのは両側とも複数枚のときだけ。この形には band が無く
+    // (和が band へ一意に解けないので幾何は既に defer。create-geometry-request.test.ts「still defers a
+    // contiguous join when both sides have multiple pieces」)、足しても singleton は生まれないので band
+    // identity が入れ替わる余地も無い。1対N・1対1 で「どちらでもよい」と言ってはいけないのと対にして固定する。
+    const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-two-by-two-"));
+
+    try {
+      await runCli(["node", "loom", "init", "--garment", "blouse"], {
+        cwd: tempRoot,
+        io: createOutputCollector().io
+      });
+
+      const sideByRole: Record<string, string> = {
+        front: "bodice",
+        back: "bodice",
+        sleeve: "sleeve",
+        cuff: "sleeve"
+      };
+
+      for (const role of [...Object.keys(sideByRole), "lining"]) {
+        await writeFile(join(tempRoot, `${role}.val`), `${role} source\n`, "utf8");
+        await runCli(["node", "loom", "add", `${role}.val`], {
+          cwd: tempRoot,
+          io: createOutputCollector().io,
+          prompter: createScriptedPrompter({ texts: [role, role, "v1"], confirms: [false] })
+        });
+      }
+
+      // bodice 側2枚 / sleeve 側2枚 = どちらの側も singleton でない健全な contiguous。
+      for (const [role, side] of Object.entries(sideByRole)) {
+        const path = join(tempRoot, `parts/${role}/part.loom`);
+        const text = await readFile(path, "utf8");
+        await writeFile(
+          path,
+          `${text.trimEnd()}\nconnectors:\n  armhole:\n    type: armhole\n    side: ${side}\n`,
+          "utf8"
+        );
+      }
+
+      const out = createOutputCollector();
+      await runCli(["node", "loom", "add", "lining.val"], {
+        cwd: tempRoot,
+        io: out.io,
+        prompter: createScriptedPrompter({
+          texts: ["lining2", "lining2", "v1", "(skip — add no connector)"],
+          confirms: [true]
+        })
+      });
+
+      const stdout = out.stdout.join("");
+      expect(stdout).toContain("sides: bodice: front, back | sleeve: sleeve, cuff");
+      expect(stdout).toContain("either side works");
+      // 片側の名指しも「不健全だから直せ」も出さない(この形は健全で、かつ側が同価)。
+      expect(stdout).not.toContain("use side:");
+      expect(stdout).not.toContain("not healthy yet");
     } finally {
       await rm(tempRoot, { recursive: true, force: true });
     }
@@ -1592,9 +1927,10 @@ describe("runCli", () => {
     }
   });
 
-  it("rejects a new join id that collides with a closed seam and re-prompts", async () => {
-    // 守る仕様(打ち手 a): 既に2パーツで縫い合わせ済み(closed)の join id に「新しい join」として同名を
-    // 付けさせない。相乗りは over-pair の事故になるので弾き、別 id を促す。
+  it("rejects a hand-typed new join id that collides with an existing join and re-prompts", async () => {
+    // 守る仕様: 既存 join と同じ id を「新しい join」として手打ちさせない。参加したいのか別の縫い目なのかが
+    // id だけでは区別できないため。弾く理由は「相乗りが事故だから」ではない(3枚目の参加は正当で、一覧から
+    // 選べば type ごと継げる)。案内も参加パーツ数で文言を変えず、一覧から選ぶか別 id を付けるかの2択を示す。
     const tempRoot = await mkdtemp(join(tmpdir(), "loomit-cli-add-clash-"));
 
     try {
@@ -1606,7 +1942,7 @@ describe("runCli", () => {
       await writeFile(join(tempRoot, "side_panel.val"), "side_panel source\n", "utf8");
       await writeFile(join(tempRoot, "back.val"), "back source\n", "utf8");
 
-      // front と side_panel が hem を宣言し合い、hem を closed にする。role を分けるため type=other→役割名。
+      // front と side_panel が hem を宣言し合い、2パーツが参加する hem にする。role を分けるため type=other→役割名。
       await runCli(["node", "loom", "add", "front.val"], {
         cwd: tempRoot,
         io: createOutputCollector().io,
@@ -1624,20 +1960,24 @@ describe("runCli", () => {
         })
       });
 
-      // back: 新規 join の id に closed の "hem" を渡す(拒否される)→ 別 id "hem_back" を渡す。
+      // back: 一覧では「新しい join を名付ける」を選び、その id に既存の "hem" を手打ちする(拒否される)
+      // → 別 id "hem_back" を渡す。既存 hem は候補一覧にも出るが、ここでは手打ちの経路を確かめる。
       const output = createOutputCollector();
       const exitCode = await runCli(["node", "loom", "add", "back.val"], {
         cwd: tempRoot,
         io: output.io,
         prompter: createScriptedPrompter({
-          texts: ["back", "other", "back", "v1", "hem", "hem", "hem_back", ""],
+          texts: ["back", "other", "back", "v1", "(name a new join)", "hem", "hem", "hem_back", ""],
           confirms: [true, false]
         })
       });
 
       expect(exitCode).toBe(0);
-      // 衝突は closed seam として案内され、別 id を促される。
-      expect(output.stdout.join("")).toContain("closed seam");
+      // 案内は「誰が宣言済みか」と、一覧から選ぶ / 別 id を付ける の2択。参加枚数で文言を変えない。
+      expect(output.stdout.join("")).toContain(
+        'Join id "hem" is already declared by front, side_panel'
+      );
+      expect(output.stdout.join("")).toContain("Pick it from the list to join that seam");
       const backPart = await readFile(join(tempRoot, "parts/back/part.loom"), "utf8");
       expect(backPart).toContain("hem_back:");
       expect(backPart).toContain("type: hem");
@@ -1682,7 +2022,9 @@ describe("runCli", () => {
 
       expect(exitCode).toBe(0);
       // 一覧は id・種類[type]・宣言元 role を見せる。
-      expect(output.stdout.join("")).toContain("shoulder_lr [shoulder] (front)");
+      expect(output.stdout.join("")).toContain(
+        "shoulder_lr [shoulder] (front — waiting for a mate)"
+      );
       const backPart = await readFile(join(tempRoot, "parts/back/part.loom"), "utf8");
       // id は選んだ shoulder_lr、type は継いだ shoulder(id にフォールバックしない)。
       expect(backPart).toContain("shoulder_lr:");

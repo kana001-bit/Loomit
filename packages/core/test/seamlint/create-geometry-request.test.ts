@@ -882,6 +882,81 @@ describe("createSeamlintGeometryRequest", () => {
     );
   });
 
+  it("makes whichever side stays a single piece the band, so a 1-vs-1 seam flips identity", async () => {
+    // 守る仕様(band identity): band を決めるのは side ラベルではなく「どちらの側がちょうど1枚か」。
+    // 側が1枚ずつの縫い目に3枚目を足すと、**足した側とは反対の側**が singleton として band になる。
+    // つまり同じ縫い目でも、3枚目をどちらの側に足すかで band identity(from)が入れ替わる。
+    //
+    // これは authoring の案内に直結する: 側が1枚ずつのとき「どちらの側でもよい」と案内すると、物理的な
+    // band を持つ側に足させてしまい、相手側が band と見なされた逆向きの band-seam が発行される
+    // (形としては singleton が残るので、診断でも check でも気づけない)。
+    const resolvedProject = await loadResolvedFixture("valid-blouse");
+    const body = resolvedProject.parts.body;
+    const sleeve = resolvedProject.parts.sleeve;
+    const bodyArmhole = body?.part.connectors?.armhole;
+    const sleeveArmhole = sleeve?.part.connectors?.armhole;
+    if (body === undefined || sleeve === undefined || bodyArmhole === undefined || sleeveArmhole === undefined) {
+      throw new Error("Expected valid-blouse body/sleeve armhole connectors.");
+    }
+
+    // 3枚目(back)がどちらの側に付くかだけを変えた2つの project を組む。
+    // 出発点は sleeve(side:sleeve, 1枚) と body(side:bodice, 1枚)の1対1。
+    const withBackOn = (backSide: string): ResolvedProject => ({
+      ...resolvedProject,
+      parts: {
+        sleeve: {
+          ...sleeve,
+          part: {
+            ...sleeve.part,
+            files: { ...sleeve.part.files, geometry: "sleeve.dxf" },
+            connectors: { armhole: { ...sleeveArmhole, side: "sleeve", path_ref: "sleeve-armhole" } }
+          }
+        },
+        body: {
+          ...body,
+          part: {
+            ...body.part,
+            files: { ...body.part.files, geometry: "body.dxf" },
+            connectors: { armhole: { ...bodyArmhole, side: "bodice", path_ref: "body-armhole" } }
+          }
+        },
+        back: {
+          ...body,
+          role: "back",
+          part: {
+            ...body.part,
+            files: { ...body.part.files, geometry: "body.dxf" },
+            connectors: { armhole: { ...bodyArmhole, side: backSide, path_ref: "back-armhole" } }
+          }
+        }
+      }
+    });
+
+    // back を bodice 側へ: sleeve が1枚のまま = sleeve が band。
+    const grewBodice = createSeamlintGeometryRequest(withBackOn("bodice"));
+    const bodiceCheck = grewBodice.request.checks[0];
+
+    expect(bodiceCheck?.kind).toBe("band-seam");
+    expect(bodiceCheck?.kind === "band-seam" ? bodiceCheck.from.partId : undefined).toBe("sleeve");
+    expect(
+      bodiceCheck?.kind === "band-seam"
+        ? (bodiceCheck.neighbours ?? []).map((neighbour) => neighbour.partId)
+        : []
+    ).toEqual(["back", "body"]);
+
+    // back を sleeve 側へ: sleeve 側が2枚になり、1枚で残った body が band と見なされる = identity が反転。
+    const grewSleeve = createSeamlintGeometryRequest(withBackOn("sleeve"));
+    const sleeveCheck = grewSleeve.request.checks[0];
+
+    expect(sleeveCheck?.kind).toBe("band-seam");
+    expect(sleeveCheck?.kind === "band-seam" ? sleeveCheck.from.partId : undefined).toBe("body");
+    expect(
+      sleeveCheck?.kind === "band-seam"
+        ? (sleeveCheck.neighbours ?? []).map((neighbour) => neighbour.partId)
+        : []
+    ).toEqual(["back", "sleeve"]);
+  });
+
   it("does not put notch_count on band neighbours (band edges are found by dart-folding, not notch)", async () => {
     // 守る仕様(band contract): band 接辺は Seamlint が各 neighbour の dart 畳み辺として発見するので、connector が
     // notch_count を宣言していても band-seam の neighbours には edgeSignature を載せない(BLOCK target のみ)。
