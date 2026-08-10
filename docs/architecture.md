@@ -90,6 +90,12 @@ packages/
 
 かつてここに `studio/` と `plugins/` を予約していたが、どちらも作らないことにした。GUI は独立アプリではなく VSCode 拡張として、既存の `loom diff --format json` と DXF を読む側に置く。plugin runtime は持たず、rule は core 内の registry に留める。
 
+### core の公開面
+
+`packages/core/src/index.ts` が core の契約である。ここに出したシンボルを外す・改名するのは破壊的変更として扱い、出していない内部ヘルパは自由に作り替えてよい。出す基準は5つ — コマンドが呼ぶ操作とその戻り値の型、report / diagnostic の形、呼び出し側が注入できる rule、schema とドメイン型、Seamlint / Truer との契約。読み取りの下請けのような内部専用ヘルパは、CLI から使えても出さない。
+
+「誰にも使われていない」ことは外す理由にならない。`PartDiffChange` は `PartDiffReport` の中身なので、落とすと読み手が `PartDiffReport["changes"][number]` と書く羽目になる。名前で呼べること自体が契約に含まれる。公開集合は `packages/core/test/public-api.test.ts` が一覧で固定していて、export を足すとその一覧を更新するまで落ちる。
+
 ## Core の責務
 
 `core` はドメインロジックを持つ。CLI 表示には依存しない。
