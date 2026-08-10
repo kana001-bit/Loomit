@@ -926,26 +926,49 @@ async function promptJoin(
   // という不変条件も壊れる。正しく参加するには「自分がどちらの側か」の宣言が要るが、それは wizard が訊いても
   // 正しく答えられない ── band は定義上ちょうど1枚なので band 側を選ぶ答えはほぼ常に誤りで、neighbour 側を
   // 選ぶことは和の不変条件を動かす設計判断になる。band seam を**新規に**張るときは side を `connectBand`
-  // (`loom connect --to`)が裏で書き、作者は触らない ── ただしそれは新規に限った話で、既存 join の拡張は
-  // どのコマンドも持っていない(下の注参照)。よってここでは選ばせず、存在と理由と実行できる直し方を示す。
+  // (`loom connect --to`)が裏で書き、作者は触らない。既存の縫い目への参加は `loom connect --join` が
+  // 受け持ち、side の指定と band を壊す側の拒否もそちらの guard が担う。よってここでは選ばせず、存在と
+  // 理由とそのコマンドを示す。
+  //
+  // type が参加者間で割れている縫い目も選ばせない。選ぶと「継いだ type」が宣言順で決まる任意の値になり、
+  // 割れを1枚ぶん広げてしまう(extendJoin も CONNECT_JOIN_TYPE_CONFLICT で同じ理由で拒否する)。
   const availableJoins = existingJoins.filter((join) => !chosenIds.has(join.id));
-  const selectableJoins = availableJoins.filter((join) => join.sides.length === 0);
+  const selectableJoins = availableJoins.filter(
+    (join) => join.sides.length === 0 && join.types.length <= 1
+  );
   const sidedJoins = availableJoins.filter((join) => join.sides.length > 0);
+  const conflictedJoins = availableJoins.filter(
+    (join) => join.sides.length === 0 && join.types.length > 1
+  );
+  // 実際に一覧へ出す id の集合。id 衝突の案内は「除外条件を書き写す」のでなく**この集合に居るか**で
+  // 分岐する ── 除外理由を1つ足したときに、案内側だけ古いままで「一覧から選べ」と嘘をつくのを防ぐ。
+  const selectableIds = new Set(selectableJoins.map((join) => join.id));
+
+  if (conflictedJoins.length > 0) {
+    notify(
+      "Joins whose participants disagree on the seam type are not offered here (there is no type to inherit):\n" +
+        conflictedJoins
+          .map(
+            (join) => `  ${join.id} (${join.roles.join(", ")}) — types: ${join.types.join(", ")}`
+          )
+          .join("\n") +
+        "\nMake those parts agree on one connector type, then join with loom connect --join.\n"
+    );
+  }
 
   // side 付きの縫い目は選べないが、存在は伝える(黙って消すと「候補に無い=無い」と誤解され、作者は同じ縫い目に
   // 別 id を振ってしまう)。
   //
-  // 行き先に `loom connect ... --as <既存id>` を出してはいけない。connectParts / connectBand は対象パーツが
-  // その id を既に宣言していると CONNECT_ID_ALREADY_DECLARED で止まるので、既存参加者を含めれば必ず失敗し、
-  // 含めなければ band の側が揃わない ── どう書いても実行できないコマンドになる(実測で確認)。既存 join を
-  // 拡張する口は今の `loom connect` に無いので、実行できる唯一の手順(part.loom に side 付きで書き足す)を出す。
+  // 行き先は `loom connect --join`(拡張モード)。`--as` の新規作成に既存 id を渡すと
+  // CONNECT_ID_ALREADY_DECLARED で止まるので、そちらを案内してはいけない。
   if (sidedJoins.length > 0) {
     notify(
       "Joins with sides (contiguous / band seams) cannot be joined here — loom add does not write a side:\n" +
         sidedJoins.map(formatSidedJoin).join("\n") +
-        "\nTo join one, add it to this part's part.loom by hand under connectors:, with the side shown\n" +
-        "above, then run loom check. (loom connect cannot extend an existing join — it stops with\n" +
-        "CONNECT_ID_ALREADY_DECLARED.)\n"
+        "\nTo join one, finish this add and run:\n" +
+        `  loom connect <role> --join ${sidedJoins[0]?.id ?? "<id>"} --side <side>\n` +
+        "It refuses a side that would break the seam (a band must stay one piece) and tells you which\n" +
+        "side to use instead.\n"
     );
   }
 
@@ -953,8 +976,8 @@ async function promptJoin(
   // 足さない)。side 付きしか無いときだけは、繋ぎたかった相手に繋げないと分かった直後なので、要らない join を
   // 発明させずに降りられる出口も出す。
   if (selectableJoins.length === 0) {
-    if (sidedJoins.length === 0) {
-      return promptNewJoin(prompter, notify, existingJoins, chosenIds);
+    if (sidedJoins.length === 0 && conflictedJoins.length === 0) {
+      return promptNewJoin(prompter, notify, existingJoins, chosenIds, selectableIds);
     }
 
     // default は skip に倒す。空 Enter や EOF でも(prompter.select はどちらでも default を返す)、繋げない
@@ -969,7 +992,7 @@ async function promptJoin(
       return undefined;
     }
 
-    return promptNewJoin(prompter, notify, existingJoins, chosenIds);
+    return promptNewJoin(prompter, notify, existingJoins, chosenIds, selectableIds);
   }
 
   // どの join がどのパーツのものかは select の番号一覧だけでは分からないため、先に宣言元 role と種類(type)付きで
@@ -1003,7 +1026,7 @@ async function promptJoin(
   }
 
   if (chosen === NAME_NEW_JOIN) {
-    return promptNewJoin(prompter, notify, existingJoins, chosenIds);
+    return promptNewJoin(prompter, notify, existingJoins, chosenIds, selectableIds);
   }
 
   // 既存 join を選んだら id と type を継ぐ(同じ縫い目なので種類も同じ)。相手と id が一致して check が
@@ -1020,10 +1043,11 @@ async function promptNewJoin(
   prompter: Prompter,
   notify: (text: string) => void,
   existingJoins: readonly ExistingJoin[],
-  chosenIds: ReadonlySet<string>
+  chosenIds: ReadonlySet<string>,
+  selectableIds: ReadonlySet<string>
 ): Promise<ChosenJoin> {
   const type = await promptSeamType(prompter, notify);
-  const id = await promptNewJoinId(prompter, notify, existingJoins, chosenIds, type);
+  const id = await promptNewJoinId(prompter, notify, existingJoins, chosenIds, selectableIds, type);
 
   return { id, type };
 }
@@ -1048,6 +1072,7 @@ async function promptNewJoinId(
   notify: (text: string) => void,
   existingJoins: readonly ExistingJoin[],
   chosenIds: ReadonlySet<string>,
+  selectableIds: ReadonlySet<string>,
   type: string
 ): Promise<string> {
   const suggested = suggestJoinId(type, existingJoins, chosenIds);
@@ -1072,7 +1097,7 @@ async function promptNewJoinId(
     const clash = existingJoins.find((join) => join.id === id);
 
     if (clash !== undefined) {
-      notify(formatJoinIdClash(id, clash));
+      notify(formatJoinIdClash(id, clash, selectableIds.has(id)));
       continue;
     }
 
@@ -1080,93 +1105,61 @@ async function promptNewJoinId(
   }
 }
 
-// side 付きの縫い目1本を、参加者と「足すならどの側か」つきで1行に出す。
+// side 付きの縫い目1本を、参加者と側ごとの内訳つきで示す。
 //
-// **どちらの側でもよい、ではない。** band seam は「片側がちょうど1枚(band)・反対側が複数枚(neighbours)」で
-// 成立し、createGeometryRequest の findBandShape は**ちょうど1枚の側**を探して band と判定する。1枚の側に
-// 足して両側とも複数枚になると band 形が消え、band-seam の実測が発行されなくなる
-// (SEAMLINT_CONNECTOR_SEAM_DEFERRED に落ちる)。しかも check は contiguous として健全のままなので、
-// 診断を見ても気づけない。よって足す先は選ばせず、安全な側を名指しする。
+// **どの側に足してよいかの判断は、ここでは持たない。** それは band の不変条件(band はちょうど1枚)に依存し、
+// 同じ規則を wizard の文面として書き写すと本体と drift する ── 実際そうなっていた。判断は
+// `loom connect --join` の guard(core の extendJoin)が持ち、間違った側は拒否して正しい側を名指しする。
+// ここは「どの縫い目があり、側がどう分かれているか」を見せて、その guard へ送るだけにする。
 function formatSidedJoin(join: ExistingJoin): string {
-  const head = `  ${join.id} [${join.type}] (${join.roles.join(", ")})`;
   const sides = join.sides.map((side) => `${side.side}: ${side.roles.join(", ")}`).join(" | ");
 
-  // まず「そもそも側の宣言が健全か」を見る。core の classifyJoinSides と同じ切り分けで、
-  //   - 参加者の一部しか side を宣言していない(mixed)
-  //   - 側が1種類だけ(one-side)
-  //   - 側が3種類以上(too-many-sides = CONNECTOR_JOIN_TOO_MANY_SIDES で error)
-  // はどれも既に不健全で、1枚足しても健全にならない。ここで「どちらの側に足すか」を案内すると、壊れた
-  // 構成を広げさせることになる。足す話をせず、先に直せと言う(直し方は loom check の診断が出す)。
-  const sidedRoleCount = join.sides.reduce((total, side) => total + side.roles.length, 0);
-
-  if (join.sides.length !== 2 || sidedRoleCount !== join.roles.length) {
-    return (
-      `${head}\n    sides: ${sides}\n` +
-      `    → this seam's sides are not healthy yet (loom check reports it); a contiguous seam needs ` +
-      `exactly two sides and every participant on one of them. Fix the sides first — adding a piece ` +
-      `here cannot repair them.`
-    );
-  }
-
-  // ここから先は側がちょうど2つ・全参加者がどちらかに属する健全な contiguous。
-  // 1枚だけの側 = いまの band。ここを増やすと band 形が消えるので、足すのは複数枚の側。
-  const singletons = join.sides.filter((side) => side.roles.length === 1);
-
-  if (singletons.length === 1) {
-    const band = singletons[0];
-    const neighbour = join.sides.find((side) => side !== band);
-
-    if (band !== undefined && neighbour !== undefined) {
-      return (
-        `${head}\n    sides: ${sides}\n` +
-        `    → use side: ${neighbour.side}. Side "${band.side}" is the band and must stay a single ` +
-        `piece; growing it drops the band-seam check.`
-      );
-    }
-  }
-
-  // 両側とも1枚。形の上ではどちらに足しても singleton が1つ残るが、**同価ではない**。band になるのは
-  // 「足さなかった側」なので、物理的な band を持つ側に足すと相手が band と見なされ、band-seam が逆向きに
-  // 発行される(from が入れ替わる)。side はただのラベルで Loomit は band identity を保持していないため、
-  // どちらが物理的な band かはデータから決められない。推測せず、作者に確かめさせる。
-  if (singletons.length === 2) {
-    return (
-      `${head}\n    sides: ${sides}\n` +
-      `    → both sides hold one piece, so Loomit cannot tell which one is the band. Add to the ` +
-      `side that does NOT hold the band: the side you leave alone becomes the band, so growing the ` +
-      `band's own side reverses the band-seam check.`
-    );
-  }
-
-  // 両側とも複数枚。band 形は既に無く(和が band へ一意に解けないので幾何は defer 済み)、足しても singleton は
-  // 生まれないので band identity が入れ替わる心配も無い。どちらの側でもよい、と言えるのはこの形だけ。
-  return (
-    `${head}\n    sides: ${sides}\n` +
-    `    → either side works: no side holds a single piece, so this is not a band seam and Seamlint ` +
-    `defers its geometry either way.`
-  );
+  return `  ${join.id} [${join.type}] (${join.roles.join(", ")})\n    sides: ${sides}`;
 }
 
 // 既存 id と衝突したときの案内。参加パーツ数で文言を分けない ── 何枚が参加していようと直し方は同じで、
 // 「その縫い目に参加したいなら一覧から選ぶ(type も継げる)、別の縫い目なら別 id を付ける」の2択になる。
 // 手打ちの同名をそのまま通さないのは、参加したいのか別の縫い目なのかが id だけでは区別できないため。
-// 分けるのは side の有無だけ。side 付きの縫い目は一覧に出ないので「一覧から選べ」は行き先として嘘になる。
-// 参加には side の宣言が要り、それを書けるコマンドが無い(既存 join は `loom connect` でも拡張できない)ので、
-// 上と同じ formatSidedJoin を使って側ごとの参加者と手編集の手順を示す。
-function formatJoinIdClash(id: string, clash: ExistingJoin): string {
+// **「一覧から選べ」と言えるのは、その縫い目が実際に一覧に出ているときだけ。** 候補から外している縫い目に
+// それを言うと、存在しない行き先へ送ることになる。
+//
+// そこで判定は **isSelectable(実際に一覧へ出した id の集合に居るか)** で行い、除外条件そのものを書き写さない。
+// 書き写すと、除外理由を1つ足したときにこちらだけ古いままになって嘘をつく(実際に side 付き・type 競合の
+// 2回そうなった)。下の理由分岐は「なぜ出していないか」を添えるための補足で、未知の理由に落ちても最後の
+// 汎用文が残る ── 詳しさは失うが、「一覧には無い」は嘘にならない。
+function formatJoinIdClash(id: string, clash: ExistingJoin, isSelectable: boolean): string {
   const roles = clash.roles.join(", ");
+
+  if (isSelectable) {
+    return (
+      `Join id "${id}" is already declared by ${roles}. ` +
+      "Pick it from the list to join that seam, or choose a distinct id for a different seam.\n"
+    );
+  }
 
   if (clash.sides.length > 0) {
     return (
       `Join id "${id}" is already a seam with sides (${roles}). It needs a side, so it cannot be ` +
       `declared here:\n${formatSidedJoin(clash)}\n` +
+      `Join it after this add with: loom connect <role> --join ${id} --side <side>. ` +
       "Choose a distinct id if you meant a different seam.\n"
     );
   }
 
+  if (clash.types.length > 1) {
+    return (
+      `Join id "${id}" is already declared by ${roles}, but they disagree on its type ` +
+      `(${clash.types.join(", ")}), so there is no type to inherit and it is not offered here. ` +
+      `Make those parts agree on one connector type, then join with ` +
+      `loom connect <role> --join ${id}. Choose a distinct id if you meant a different seam.\n`
+    );
+  }
+
+  // 一覧に出していないが、理由をここで説明できない(将来の除外理由)。行き先だけは実在するものを示す。
   return (
-    `Join id "${id}" is already declared by ${roles}. ` +
-    "Pick it from the list to join that seam, or choose a distinct id for a different seam.\n"
+    `Join id "${id}" is already declared by ${roles} and is not offered as a candidate here. ` +
+    `Join it after this add with: loom connect <role> --join ${id}. ` +
+    "Choose a distinct id if you meant a different seam.\n"
   );
 }
 

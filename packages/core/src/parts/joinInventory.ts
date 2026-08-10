@@ -26,7 +26,18 @@ import { resolveParts } from "../project/resolveParts.js";
 // 枚数から言えるのは1つだけ: roles.length === 1 は相手待ち(`CONNECTOR_JOIN_OPEN` の warning 対象)。
 export interface ExistingJoin {
   readonly id: string;
+  // 代表の type(最初に見た宣言元の値)。継承するならこれ。
   readonly type: string;
+  // この join に宣言されている type の全種類(重複なし・初出順)。**2つ以上なら縫い目の宣言そのものが
+  // 割れている** ── 「その縫い目が何か」で参加者の意見が食い違っている状態で、Seamlint も
+  // SEAMLINT_CONNECTOR_TYPE_MISMATCH を出して seam request を組まない。type は1つしか無いものと決めて
+  // 代表値を継ぐと、宣言順(loomit.yml の並び)次第で勝手にどちらかへ倒れるので、割れているかを見せる。
+  readonly types: readonly string[];
+  // この join に宣言されている notch_count の全種類(重複なし・初出順)。宣言していない参加者は数えない。
+  // **2つ以上なら食い違っている** ── 同じ縫い目なら合印の数も同じはずで、割れていると
+  // createGeometryRequest は notch 署名そのものを渡さない(SEAMLINT_CONNECTOR_NOTCH_COUNT_MISMATCH)。
+  // 署名が落ちると、同じ2 BLOCK を共有する複数 seam を Seamlint が辺ごとに区別できなくなる。
+  readonly notchCounts: readonly number[];
   readonly roles: readonly string[];
   // 側ごとの参加者。空なら coincident(重ね)= 参加は「同じ id を宣言する」だけで完結する。空でなければ
   // contiguous(連続2側・和で合う。armhole や band)で、**新しい参加者は自分がどちらの側に属すかも宣言
@@ -81,8 +92,25 @@ export async function collectExistingJoins(
       let entry = byJoinId.get(joinId);
 
       if (entry === undefined) {
-        entry = { type: connector.type, roles: [], sides: new Map() };
+        entry = {
+          type: connector.type,
+          types: [],
+          notchCounts: [],
+          roles: [],
+          sides: new Map()
+        };
         byJoinId.set(joinId, entry);
+      }
+
+      if (!entry.types.includes(connector.type)) {
+        entry.types.push(connector.type);
+      }
+
+      if (
+        connector.notch_count !== undefined &&
+        !entry.notchCounts.includes(connector.notch_count)
+      ) {
+        entry.notchCounts.push(connector.notch_count);
       }
 
       entry.roles.push(part.role);
@@ -114,6 +142,7 @@ export function combineJoins(
       readonly type: string;
       readonly roles: readonly string[];
       readonly sides?: readonly JoinSide[] | undefined;
+      readonly notchCount?: number | undefined;
     }
   >
 ): readonly ExistingJoin[] {
@@ -122,6 +151,8 @@ export function combineJoins(
   for (const join of base) {
     byJoinId.set(join.id, {
       type: join.type,
+      types: [...join.types],
+      notchCounts: [...join.notchCounts],
       roles: [...join.roles],
       sides: new Map(join.sides.map((entry) => [entry.side, [...entry.roles]]))
     });
@@ -131,8 +162,18 @@ export function combineJoins(
     let entry = byJoinId.get(joinId);
 
     if (entry === undefined) {
-      entry = { type: join.type, roles: [], sides: new Map() };
+      entry = { type: join.type, types: [], notchCounts: [], roles: [], sides: new Map() };
       byJoinId.set(joinId, entry);
+    }
+
+    if (join.notchCount !== undefined && !entry.notchCounts.includes(join.notchCount)) {
+      entry.notchCounts.push(join.notchCount);
+    }
+
+    // type の食い違いはベース側を代表に据えたまま和で記録する。合流で片方を捨てると、割れている事実が
+    // 候補一覧から消えてしまう。
+    if (!entry.types.includes(join.type)) {
+      entry.types.push(join.type);
     }
 
     for (const role of join.roles) {
@@ -155,6 +196,8 @@ export function combineJoins(
 
 interface JoinAccumulator {
   readonly type: string;
+  readonly types: string[];
+  readonly notchCounts: number[];
   readonly roles: string[];
   readonly sides: Map<string, string[]>;
 }
@@ -211,9 +254,11 @@ export function suggestJoinId(
 function sortJoins(byJoinId: ReadonlyMap<string, JoinAccumulator>): readonly ExistingJoin[] {
   return [...byJoinId.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([id, { type, roles, sides }]) => ({
+    .map(([id, { type, types, notchCounts, roles, sides }]) => ({
       id,
       type,
+      types,
+      notchCounts,
       roles,
       sides: [...sides.entries()]
         .sort(([left], [right]) => left.localeCompare(right))

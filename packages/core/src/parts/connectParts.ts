@@ -11,9 +11,12 @@ import { isSafePathSegment } from "../filesystem/pathWithin.js";
 import { readText } from "../filesystem/readText.js";
 import { writeFileAtomic } from "../filesystem/writeFileAtomic.js";
 import { loadProject } from "../project/loadProject.js";
+import { resolveBandShape } from "../schema/connectorSides.js";
 import { isDelimiterSafeIdentifier } from "../schema/joinIdentifier.js";
 import { partSchema } from "../schema/part.schema.js";
 import type { Connector, Part } from "../schema/part.schema.js";
+import { collectExistingJoins } from "./joinInventory.js";
+import type { ExistingJoin } from "./joinInventory.js";
 import { loadPartFile } from "./loadPartFile.js";
 
 // loom connect の core 実装。「どの2パーツが縫い合うか」を作者が宣言する後付け導線(loom add --yes で骨組みだけ
@@ -505,6 +508,334 @@ export async function connectBand(
     },
     diagnostics: []
   };
+}
+
+export interface ExtendJoinOptions {
+  // project を探す起点(通常は cwd)。
+  readonly projectPath: string;
+  // 縫い目に足すパーツの role。
+  readonly role: string;
+  // 参加する**既存の** join id。新規に張るのは connectParts / connectBand の仕事で、こちらは既にある
+  // 縫い目に1枚足す操作。id が存在しなければ CONNECT_JOIN_NOT_FOUND で止める(打ち間違いを新しい縫い目に
+  // 化けさせない)。
+  readonly id: string;
+  // どちらの側に属すか。side を持つ縫い目(contiguous / band)では**必須**。推論しないのは、side が
+  // 「どの unit に属すか」という作者にしか分からない宣言だから。side を持たない縫い目(coincident=重ね)
+  // に渡すと mixed を作ってしまうので、その場合は拒否する。
+  readonly side?: string;
+  readonly notchCount?: number;
+  readonly pathRef?: string;
+}
+
+export interface ExtendedJoin {
+  readonly id: string;
+  // 既存の宣言から継いだ種類ラベル(同じ縫い目なので種類も同じ)。
+  readonly type: string;
+  readonly notchCount: number | undefined;
+  readonly side: string | undefined;
+  readonly added: ConnectedSide;
+  // 足した後の参加 role(既存の宣言順＋末尾に今回の1枚)。
+  readonly participants: readonly string[];
+  // 足した結果 band に確定したパーツの role。band 形にならない縫い目では undefined。
+  // 1枚ずつの側に3枚目を足すと**ここで初めて band が決まる**ので、呼び出し側はこれを見せて
+  // 「意図した band か」を作者に確かめさせられる(Loomit には検証できない)。
+  readonly bandRole: string | undefined;
+  readonly projectFilePath: string;
+}
+
+// 既存の縫い目に part を1枚足す。`loom connect` の新規作成2種(pairwise / band)に対する第3の口で、
+// 「もう張ってある縫い目に参加する」を表す。新規作成が既存 id を黙って上書きしないためのガード
+// (CONNECT_ID_ALREADY_DECLARED)はそのまま残し、拡張はこの別入口で受ける。
+//
+// 書くのは1ファイルだけなので、connectParts / connectBand のような巻き戻しは要らない。
+export async function extendJoin(
+  options: ExtendJoinOptions
+): Promise<LoadFileResult<ExtendedJoin>> {
+  const loadedProjectResult = await loadProject(options.projectPath);
+
+  if (!loadedProjectResult.ok) {
+    return loadedProjectResult;
+  }
+
+  const { partFilePaths, projectFilePath } = loadedProjectResult.value.paths;
+  const filePath = partFilePaths[options.role];
+
+  if (filePath === undefined) {
+    return connectBandError(
+      "CONNECT_ROLE_NOT_FOUND",
+      `role "${options.role}" の part が登録されていません。 / No part is registered for role "${options.role}".`,
+      options.role,
+      ["Check the role spelling, or add the part first with loom add."]
+    );
+  }
+
+  // 既存の縫い目の台帳。1本でも part.loom が読めなければ ok:false で返る ── 側の枚数を数え損ねたまま
+  // band 判定をすると誤った側を許してしまうので、不完全な台帳では判断しない。
+  const inventory = await collectExistingJoins(options.projectPath);
+
+  if (!inventory.ok) {
+    return inventory;
+  }
+
+  const join = inventory.value.find((candidate) => candidate.id === options.id);
+
+  if (join === undefined) {
+    return connectBandError(
+      "CONNECT_JOIN_NOT_FOUND",
+      `join "${options.id}" はこのプロジェクトにありません。 / No join "${options.id}" exists in this project.`,
+      options.id,
+      [
+        "Check the id with loom check, or create the seam first with loom connect <a> <b> --as <id> (or --to for a band)."
+      ]
+    );
+  }
+
+  // 参加者どうしで type が食い違っている縫い目は、「その縫い目が何か」の宣言が既に割れている
+  // (Seamlint も SEAMLINT_CONNECTOR_TYPE_MISMATCH で seam request を組まない)。ここで代表値を継ぐと、
+  // どちらに倒れるかが loomit.yml の並び順で決まってしまい、割れを黙って1枚ぶん広げることになる。
+  if (join.types.length > 1) {
+    return connectBandError(
+      "CONNECT_JOIN_TYPE_CONFLICT",
+      `join "${join.id}" の type が参加者間で食い違っています(${join.types.join(", ")})。継ぐ値を決められません。 / Join "${join.id}" declares conflicting types across its participants (${join.types.join(", ")}), so there is no type to inherit.`,
+      join.id,
+      [
+        `Make every part that declares "${join.id}" use the same connector type, then join again. Until they agree, loom slnt check also refuses to build a seam request for it (SEAMLINT_CONNECTOR_TYPE_MISMATCH).`
+      ]
+    );
+  }
+
+  // 合印の数も、既に宣言されている値と食い違う値は書かせない。同じ縫い目なら合印の数も同じはずで、
+  // 割れていると createGeometryRequest は notch 署名そのものを渡さない
+  // (SEAMLINT_CONNECTOR_NOTCH_COUNT_MISMATCH)。署名が落ちると、同じ2 BLOCK を共有する複数 seam を
+  // Seamlint が辺ごとに区別できなくなる ── 書けてしまうと「宣言はしたのに識別に効かない」状態になる。
+  const conflictingNotch = join.notchCounts.filter((count) => count !== options.notchCount);
+
+  if (options.notchCount !== undefined && conflictingNotch.length > 0) {
+    // **既にこの縫い目の中で合印数が割れているときは「この値に合わせろ」と言ってはいけない。** どの値を
+    // 選んでも残りの値と食い違うので、案内どおり打ち直すたびに別の値を勧められて往復する。その場合は
+    // 既存の宣言を先に揃えさせる。合わせられるのは、既存の宣言が1種類に定まっているときだけ。
+    const fix =
+      join.notchCounts.length > 1
+        ? `This seam already declares different notch counts (${join.notchCounts.join(", ")}), so no value can match them all. Align connectors.${join.id}.notch_count across ${join.roles.join(", ")} first, then join.`
+        : `Use --notches ${conflictingNotch[0]} to match, or omit --notches.`;
+
+    return connectBandError(
+      "CONNECT_NOTCH_COUNT_CONFLICT",
+      `join "${join.id}" は既に別の合印数を宣言しているので、${options.notchCount} は書けません。 / Join "${join.id}" already declares a different notch count, so ${options.notchCount} cannot be written. (declared: ${join.notchCounts.join(", ")})`,
+      `${options.role}.${join.id}.notch_count`,
+      [
+        `${fix} A seam has the same notches on every piece; a mismatch makes Loomit drop the notch signature entirely (SEAMLINT_CONNECTOR_NOTCH_COUNT_MISMATCH), so Seamlint can no longer tell this seam from others sharing the same pieces.`
+      ]
+    );
+  }
+
+  const sideResult = resolveExtendSide(join, options.side);
+
+  if (!sideResult.ok) {
+    return sideResult;
+  }
+
+  // 読み・検証は書き込み前にすべて済ませる。ここで既に role がその id を宣言していれば
+  // CONNECT_ID_ALREADY_DECLARED になる(prepareSide が担当)。
+  const prepared = await prepareSide(filePath, options.role, options.id, options.pathRef);
+
+  if (!prepared.ok) {
+    return prepared;
+  }
+
+  // type は既存の宣言から継ぐ。同じ縫い目なので種類も同じで、訊き直すと同一 seam で分類が割れる。
+  const newPart = withConnector(
+    prepared.value.part,
+    options.id,
+    join.type,
+    prepared.value.pathRef,
+    options.notchCount,
+    sideResult.value
+  );
+
+  const validated = validatePart(newPart, options.role);
+
+  if (!validated.ok) {
+    return validated;
+  }
+
+  try {
+    await writeFileAtomic(filePath, stringify(validated.value));
+  } catch (error) {
+    return { ok: false, diagnostics: [connectWriteError(error, filePath)] };
+  }
+
+  return {
+    ok: true,
+    value: {
+      id: options.id,
+      type: join.type,
+      notchCount: options.notchCount,
+      side: sideResult.value,
+      added: {
+        role: options.role,
+        filePath,
+        pathRef: prepared.value.pathRef,
+        hasGeometrySource: prepared.value.hasGeometrySource,
+        hasDxfGeometry: prepared.value.hasDxfGeometry
+      },
+      participants: [...join.roles, options.role],
+      bandRole: bandRoleAfterExtend(join, sideResult.value, options.role),
+      projectFilePath
+    },
+    diagnostics: []
+  };
+}
+
+// 拡張時の side を決める(または拒否する)。返す値がそのまま connector に書かれる side。
+//
+// ここが「band を壊す追加」を止める関所。band 形が成立している縫い目では**1枚の側が band** なので、
+// そこへ足すと両側とも複数枚になり band 形が消える(findBandShape が見つけられず
+// SEAMLINT_CONNECTOR_SEAM_DEFERRED に落ちる)。しかも loom check は contiguous として健全のままなので、
+// 診断では気づけない ── だから助言でなくここで拒否する。
+function resolveExtendSide(
+  join: ExistingJoin,
+  requested: string | undefined
+): LoadFileResult<string | undefined> {
+  // side を1つも宣言していない縫い目 = coincident(重ね)。参加は id を宣言するだけで完結する。
+  // ここに side を書くと classifyJoinSides が mixed と見て CONNECTOR_JOIN_SIDES_INCOMPLETE になる。
+  if (join.sides.length === 0) {
+    if (requested !== undefined) {
+      return connectBandError(
+        "CONNECT_SIDE_UNEXPECTED",
+        `join "${join.id}" は側を持たない重ね(coincident)の縫い目なので、side は指定できません。 / Join "${join.id}" is a coincident (stacked) seam with no sides, so a side cannot be declared.`,
+        join.id,
+        [
+          "Drop --side. A stacked seam pairs on the shared id alone; adding a side to one participant would make the seam's sides incomplete."
+        ]
+      );
+    }
+
+    return { ok: true, value: undefined, diagnostics: [] };
+  }
+
+  const declaredCount = join.sides.reduce((total, side) => total + side.roles.length, 0);
+  const knownSides = join.sides.map((side) => side.side).join(", ");
+
+  // 側を宣言していない参加者が混ざっている(mixed)、または側が3つ以上。どちらも1枚足しても健全にならない
+  // ので、壊れた構成を広げさせず先に直させる。**側が1つだけ(one-side)はここに含めない** ── そちらは
+  // 「2つ目の側がまだ無い」だけで、参加者を1枚足して反対側を宣言すれば contiguous が完成する。
+  if (declaredCount !== join.roles.length || join.sides.length > 2) {
+    // 詳細(reason)は**英語のみ**。日英併記の文を閉じたあとに括弧で1回だけ足す ── ここを併記にすると
+    // `日本語 / English (日本語 / English)` と区切りが2つ出て、日英の切れ目が読めなくなる
+    // (testing-diagnostics の「Messages that carry a detail」)。
+    const reason =
+      join.sides.length > 2
+        ? `it declares ${join.sides.length} sides`
+        : "some participants declare no side";
+
+    return connectBandError(
+      "CONNECT_JOIN_SIDES_UNHEALTHY",
+      `join "${join.id}" の側の宣言が健全でないため、参加者を足せません。 / Join "${join.id}" does not have a healthy set of sides, so a participant cannot be added. (${reason})`,
+      join.id,
+      [
+        "A contiguous seam needs exactly two sides with every participant on one of them. Fix the sides (loom check reports them) before adding a piece."
+      ]
+    );
+  }
+
+  if (requested === undefined) {
+    // 側が1つだけなら、2つ目を名付けて完成させる道も案内する(既存の側しか出さないと、片側しか無い
+    // 縫い目を完成させる手が無いように読める)。
+    const choices =
+      join.sides.length === 1
+        ? `"${knownSides}", or a new label for the second side`
+        : `one of: ${knownSides}`;
+
+    return connectBandError(
+      "CONNECT_SIDE_REQUIRED",
+      `join "${join.id}" は側を持つ縫い目なので、どちらの側に属すかの指定が必要です。 / Join "${join.id}" is a seam with sides, so the new participant must declare which side it belongs to.`,
+      join.id,
+      [
+        `Pass --side with ${choices}. Loomit does not guess: a side says which unit the piece belongs to, and only the author knows.`
+      ]
+    );
+  }
+
+  // 側が1つだけの縫い目は、まだ contiguous として不完全。ここに足す参加者が2つ目の側を名乗れば完成し、
+  // 同じ側を名乗れば不完全なまま(loom check がそう報告する)。どちらも正当な途中経過なので通す。
+  // 側ラベルの文字列自体に意味は無い(classifyJoinSides は distinct な数だけを見る)ので、新しい名前を
+  // 受け付けても打ち間違いで壊れるものは無い。
+  if (join.sides.length === 1) {
+    return { ok: true, value: requested, diagnostics: [] };
+  }
+
+  const target = join.sides.find((side) => side.side === requested);
+
+  if (target === undefined) {
+    return connectBandError(
+      "CONNECT_SIDE_UNKNOWN",
+      `join "${join.id}" に側 "${requested}" はありません。 / Join "${join.id}" has no side "${requested}".`,
+      `${join.id}.${requested}`,
+      [
+        `Use one of the sides this seam already declares: ${knownSides}. A third side would make the seam join three units.`
+      ]
+    );
+  }
+
+  const shape = resolveBandShape(
+    join.sides.map((side) => ({ side: side.side, size: side.roles.length })),
+    join.roles.length
+  );
+
+  // band が確定している縫い目で、その band 側に足そうとした。band は定義上ちょうど1枚。
+  if (shape.kind === "band" && requested === shape.bandSide) {
+    const bandRole = target.roles.join(", ");
+
+    return connectBandError(
+      "CONNECT_BAND_SIDE_LOCKED",
+      `join "${join.id}" の側 "${requested}" は band(${bandRole})で、band はちょうど1枚でなければなりません。 / Side "${requested}" of join "${join.id}" is the band (${bandRole}), and a band must stay exactly one piece.`,
+      `${join.id}.${requested}`,
+      [
+        `Add to side "${shape.neighbourSide}" instead. Growing the band side leaves both sides with several pieces, so Loomit can no longer emit the band-seam check and the seam's length is never measured.`
+      ]
+    );
+  }
+
+  return { ok: true, value: requested, diagnostics: [] };
+}
+
+// 足した後に band になる role(決まらなければ undefined)。band 形は「ちょうど1枚で残った側」で決まるので、
+// 1枚ずつの側に3枚目を足した場合は**足さなかった側**が band になる。Loomit はどちらが物理的な band かを
+// 保持していないため検証できない ── 確定した結果を返して、呼び出し側が作者に見せられるようにする。
+function bandRoleAfterExtend(
+  join: ExistingJoin,
+  side: string | undefined,
+  role: string
+): string | undefined {
+  if (side === undefined) {
+    return undefined;
+  }
+
+  const sizes = join.sides.map((entry) => ({
+    side: entry.side,
+    size: entry.side === side ? entry.roles.length + 1 : entry.roles.length
+  }));
+
+  // 既存に無い側を名乗った(片側だけの縫い目に2つ目の側を足して完成させる)場合、その側に居るのは
+  // この1枚だけ。勘定に入れないと側が1つのままに見えて band を見落とす。
+  if (!join.sides.some((entry) => entry.side === side)) {
+    sizes.push({ side, size: 1 });
+  }
+
+  const shape = resolveBandShape(sizes, join.roles.length + 1);
+
+  if (shape.kind !== "band") {
+    return undefined;
+  }
+
+  // 既にあった側に足した場合その側は2枚以上になるので band にはなれない ── band 側が今回名乗った側と
+  // 一致するのは「新しい側にこの1枚だけが居る」ときだけで、そのとき band は足したパーツ自身。
+  if (shape.bandSide === side) {
+    return role;
+  }
+
+  return join.sides.find((entry) => entry.side === shape.bandSide)?.roles[0];
 }
 
 // band の入口検証で使う error 結果(false ブランチ)を1行で作る。

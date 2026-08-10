@@ -115,7 +115,14 @@ describe("collectExistingJoins", () => {
 
     expect(result.ok).toBe(true);
     expect(result.ok ? result.value : []).toEqual([
-      { id: "armhole", type: "armhole", roles: ["body", "sleeve"], sides: [] }
+      {
+        id: "armhole",
+        type: "armhole",
+        types: ["armhole"],
+        notchCounts: [],
+        roles: ["body", "sleeve"],
+        sides: []
+      }
     ]);
   });
 
@@ -144,8 +151,22 @@ describe("collectExistingJoins", () => {
       const result = await collectExistingJoins(root);
 
       expect(result.ok ? result.value : []).toEqual([
-        { id: "side", type: "side", roles: ["front", "back"], sides: [] },
-        { id: "waist", type: "waist", roles: ["front"], sides: [] }
+        {
+          id: "side",
+          type: "side",
+          types: ["side"],
+          notchCounts: [],
+          roles: ["front", "back"],
+          sides: []
+        },
+        {
+          id: "waist",
+          type: "waist",
+          types: ["waist"],
+          notchCounts: [],
+          roles: ["front"],
+          sides: []
+        }
       ]);
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -167,6 +188,8 @@ describe("collectExistingJoins", () => {
         {
           id: "waist",
           type: "waist",
+          types: ["waist"],
+          notchCounts: [],
           roles: ["waistband", "front", "back"],
           sides: [
             { side: "band", roles: ["waistband"] },
@@ -257,13 +280,22 @@ describe("collectExistingJoins", () => {
 });
 
 describe("combineJoins", () => {
-  const base: readonly ExistingJoin[] = [{ id: "side", type: "side", roles: ["front"], sides: [] }];
+  const base: readonly ExistingJoin[] = [
+    { id: "side", type: "side", types: ["side"], notchCounts: [], roles: ["front"], sides: [] }
+  ];
 
   it("adds the not-yet-persisted roles to a join already in the base", () => {
     // 守る仕様: 同じ id はベースと合流して roles の和になる。直前に足したパーツが宣言した join を、
     // ベースを読み直さずに次のパーツの候補へ載せられる。
     expect(combineJoins(base, new Map([["side", { type: "side", roles: ["back"] }]]))).toEqual([
-      { id: "side", type: "side", roles: ["front", "back"], sides: [] }
+      {
+        id: "side",
+        type: "side",
+        types: ["side"],
+        notchCounts: [],
+        roles: ["front", "back"],
+        sides: []
+      }
     ]);
   });
 
@@ -271,15 +303,23 @@ describe("combineJoins", () => {
     // 守る仕様: ベースを遅延ロードした結果、追加分のパーツが既にベースへ含まれていても roles は重複しない。
     // 重複すると roles.length を「何枚参加しているか」として読む呼び出し側の表示が水増しされる。
     expect(combineJoins(base, new Map([["side", { type: "side", roles: ["front"] }]]))).toEqual([
-      { id: "side", type: "side", roles: ["front"], sides: [] }
+      { id: "side", type: "side", types: ["side"], notchCounts: [], roles: ["front"], sides: [] }
     ]);
   });
 
-  it("keeps the base type when the added join disagrees", () => {
-    // 守る仕様: type はベース優先。同じ縫い目なら継承して一致するはずで、食い違ったときに後勝ちさせると
-    // 既にディスクにある宣言と候補一覧の表示がずれる。roles は type と関係なく和を取る。
+  it("keeps the base type as the representative but records that the types disagree", () => {
+    // 守る仕様: 代表の type はベース優先(後勝ちさせると、既にディスクにある宣言と表示がずれる)。ただし
+    // **食い違い自体は types に残す**。合流で片方を捨てると「割れている」事実が消え、呼び出し側は
+    // 宣言順で決まった任意の値を安心して継いでしまう(extendJoin はこれを見て継承を拒否する)。
     expect(combineJoins(base, new Map([["side", { type: "hem", roles: ["back"] }]]))).toEqual([
-      { id: "side", type: "side", roles: ["front", "back"], sides: [] }
+      {
+        id: "side",
+        type: "side",
+        types: ["side", "hem"],
+        notchCounts: [],
+        roles: ["front", "back"],
+        sides: []
+      }
     ]);
   });
 
@@ -291,6 +331,8 @@ describe("combineJoins", () => {
       {
         id: "waist",
         type: "waist",
+        types: ["waist"],
+        notchCounts: [],
         roles: ["waistband"],
         sides: [{ side: "band", roles: ["waistband"] }]
       }
@@ -300,6 +342,8 @@ describe("combineJoins", () => {
       {
         id: "waist",
         type: "waist",
+        types: ["waist"],
+        notchCounts: [],
         roles: ["waistband", "front"],
         sides: [{ side: "band", roles: ["waistband"] }]
       }
@@ -313,6 +357,8 @@ describe("combineJoins", () => {
       {
         id: "waist",
         type: "waist",
+        types: ["waist"],
+        notchCounts: [],
         roles: ["waistband"],
         sides: [{ side: "band", roles: ["waistband"] }]
       }
@@ -332,6 +378,8 @@ describe("combineJoins", () => {
       {
         id: "waist",
         type: "waist",
+        types: ["waist"],
+        notchCounts: [],
         roles: ["waistband", "front"],
         sides: [
           { side: "band", roles: ["waistband"] },
@@ -353,9 +401,9 @@ describe("combineJoins", () => {
         ])
       )
     ).toEqual([
-      { id: "hem", type: "hem", roles: ["front"], sides: [] },
-      { id: "side", type: "side", roles: ["front"], sides: [] },
-      { id: "waist", type: "waist", roles: ["front"], sides: [] }
+      { id: "hem", type: "hem", types: ["hem"], notchCounts: [], roles: ["front"], sides: [] },
+      { id: "side", type: "side", types: ["side"], notchCounts: [], roles: ["front"], sides: [] },
+      { id: "waist", type: "waist", types: ["waist"], notchCounts: [], roles: ["front"], sides: [] }
     ]);
   });
 
@@ -363,7 +411,7 @@ describe("combineJoins", () => {
     // 守る仕様: ベースの roles と sides をコピーしてから合流する。破壊すると、キャッシュしたベースを次の
     // 呼び出しで使い回す側で参加者や側が足すたびに増えていき、候補一覧の表示と導線が実態からずれる。
     const cached: readonly ExistingJoin[] = [
-      { id: "side", type: "side", roles: ["front"], sides: [] }
+      { id: "side", type: "side", types: ["side"], notchCounts: [], roles: ["front"], sides: [] }
     ];
 
     combineJoins(
@@ -373,7 +421,9 @@ describe("combineJoins", () => {
       ])
     );
 
-    expect(cached).toEqual([{ id: "side", type: "side", roles: ["front"], sides: [] }]);
+    expect(cached).toEqual([
+      { id: "side", type: "side", types: ["side"], notchCounts: [], roles: ["front"], sides: [] }
+    ]);
   });
 });
 
@@ -387,8 +437,15 @@ describe("suggestJoinId", () => {
     // 守る仕様: 2本目の side は別の縫い目なので別 id が要る。埋まっていれば _2, _3… と空きを探す。
     // 同じ id を再提案すると、作者が意図していない縫い目へ黙って参加させることになる。
     const joins: readonly ExistingJoin[] = [
-      { id: "side", type: "side", roles: ["front", "back"], sides: [] },
-      { id: "side_2", type: "side", roles: ["front"], sides: [] }
+      {
+        id: "side",
+        type: "side",
+        types: ["side"],
+        notchCounts: [],
+        roles: ["front", "back"],
+        sides: []
+      },
+      { id: "side_2", type: "side", types: ["side"], notchCounts: [], roles: ["front"], sides: [] }
     ];
 
     expect(suggestJoinId("side", joins, new Set())).toBe("side_3");
@@ -418,7 +475,14 @@ describe("suggestJoinId", () => {
   it("numbers the seam fallback too when seam itself is taken", () => {
     // 守る仕様: 倒した先の "seam" が埋まっていても、番号を振って空き id を返す(候補を出せずに詰まらない)。
     const joins: readonly ExistingJoin[] = [
-      { id: "seam", type: "1/4 inch topstitch", roles: ["front"], sides: [] }
+      {
+        id: "seam",
+        type: "1/4 inch topstitch",
+        types: ["1/4 inch topstitch"],
+        notchCounts: [],
+        roles: ["front"],
+        sides: []
+      }
     ];
 
     expect(suggestJoinId("1/4 inch topstitch", joins, new Set())).toBe("seam_2");
