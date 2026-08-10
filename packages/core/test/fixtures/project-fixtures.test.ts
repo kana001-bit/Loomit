@@ -41,8 +41,8 @@ describe("project fixtures", () => {
         {
           severity: "error",
           code: "FILE_READ_FAILED",
-          message:
-            "ファイルを読み込めませんでした。 / Could not read the file. (パスが見つかりません / path not found)",
+          // 詳細(errno の理由)は英語のまま括弧で1回だけ。日英の区切りは先頭の1つに保つ。
+          message: "ファイルを読み込めませんでした。 / Could not read the file. (path not found)",
           target: missingPartPath,
           suggestion: ["パスが正しいか確認してください。 / Check that the path is correct."]
         }

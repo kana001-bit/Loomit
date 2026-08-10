@@ -13,6 +13,10 @@ export interface FsErrorContext {
 }
 
 interface ErrnoDetail {
+  // 設計判断: reason は**英語のみ**。これは完成した文ではなく、日英併記の message を閉じたあとに括弧で
+  // 1回だけ足す「詳細」だから(testing-diagnostics の「Messages that carry a detail」)。ここを併記にすると
+  // `日本語 / English (日本語 / English)` と区切りが2つ出て、どちらが日英の切れ目か読めなくなる。
+  // 日本語の道案内は下の suggestion(併記のまま)が担うので、英語にしても日本語話者が迷子にはならない。
   readonly reason: string;
   readonly suggestion: readonly string[];
 }
@@ -34,31 +38,31 @@ function errnoDetail(errno: string | undefined): ErrnoDetail | undefined {
     case "EACCES":
     case "EPERM":
       return {
-        reason: "権限がありません / permission denied",
+        reason: "permission denied",
         suggestion: [
           "ファイルとディレクトリのアクセス権限を確認してください。 / Check file and directory permissions."
         ]
       };
     case "ENOSPC":
       return {
-        reason: "ディスクの空き容量が不足しています / no space left on device",
+        reason: "no space left on device",
         suggestion: ["空き容量を確保してから再実行してください。 / Free up disk space and try again."]
       };
     case "EROFS":
       return {
-        reason: "読み取り専用のファイルシステムです / read-only filesystem",
+        reason: "read-only filesystem",
         suggestion: ["書き込み可能な場所を指定してください。 / Choose a writable location."]
       };
     case "EEXIST":
       return {
-        reason: "すでに存在します / already exists",
+        reason: "already exists",
         suggestion: [
           "別の名前を使うか、既存のものを削除してください。 / Use another name, or remove the existing entry."
         ]
       };
     case "ENOENT":
       return {
-        reason: "パスが見つかりません / path not found",
+        reason: "path not found",
         suggestion: ["パスが正しいか確認してください。 / Check that the path is correct."]
       };
     default:
