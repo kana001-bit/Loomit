@@ -3,7 +3,11 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { listValDetailsFromFile, listValDetailsFromText } from "../../src/index.js";
+import {
+  flattenDetectedPieces,
+  listValDetailsFromFile,
+  listValDetailsFromText
+} from "../../src/index.js";
 
 describe("listValDetailsFromText", () => {
   it("lists detail piece names for each draw", () => {
@@ -52,6 +56,38 @@ describe("listValDetailsFromText", () => {
       ],
       totalDetails: 0
     });
+  });
+});
+
+describe("flattenDetectedPieces", () => {
+  it("flattens draws into a piece sequence that keeps the source order", () => {
+    // 守る仕様: 1着 = 1 .val = N ピースを N part に割る側(案B)はピースの列で回るので、draw の入れ子を
+    // (draw 名, ピース名)の平らな列に均す。draw の出現順・その中の detail 順を保つ ── 取り込み前に
+    // 見せた一覧と、実際に処理していく順が食い違わないため。
+    expect(
+      flattenDetectedPieces({
+        draws: [
+          { drawName: "bodice", details: ["front", "back"] },
+          { drawName: "sleeve", details: ["sleeve"] }
+        ],
+        totalDetails: 3
+      })
+    ).toEqual([
+      { drawName: "bodice", pieceName: "front" },
+      { drawName: "bodice", pieceName: "back" },
+      { drawName: "sleeve", pieceName: "sleeve" }
+    ]);
+  });
+
+  it("drops draws that have no detail pieces", () => {
+    // 守る仕様: detail が1つも無い draw はピース列に何も足さない。draw はあるが detail が0の .val
+    // (construction のみ)を「取り込むピースが無い」と判定できるのが、この空配列。
+    expect(
+      flattenDetectedPieces({
+        draws: [{ drawName: "blouse", details: [] }],
+        totalDetails: 0
+      })
+    ).toEqual([]);
   });
 });
 

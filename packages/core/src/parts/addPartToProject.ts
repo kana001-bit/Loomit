@@ -21,8 +21,15 @@ import type { Project } from "../schema/project.schema.js";
 // prompt を持ち込まない(core / CLI 分離: 対話は CLI、決定済みの値からの生成は core)。ユーザーは .val を
 // 置くだけで part.loom を手書きしなくてよい、という設計を成立させる入口。
 export interface AddPartConnectorInput {
-  // record key = join id。縫い目ごとに一意な rendezvous で、check は同じ id を宣言するパーツ同士をペアにする。
-  // type(種類ラベル)とは別軸: 同じ type の縫い目が複数あってよく、その区別は id が担う(id を潰すと over-pair する)。
+  // record key = join id。縫い目ごとに一意な rendezvous で、check は同じ id を宣言するパーツを1本の縫い目の
+  // 参加者として集める。type(種類ラベル)とは別軸: 同じ type の縫い目が複数あってよく、その区別は id が担う。
+  // id を潰すと**別々の縫い目が1本に合流する**(over-pair error は退役したので診断では現れず、assembly グラフが
+  // 黙って嘘になる)。
+  //
+  // ここで書けるのは side を持たない縫い目(coincident=重ね)だけ。side を持つ contiguous / band seam を
+  // **新規に**張るのは `connectBand`(`connectParts` は side を書かない pairwise 用)。どちらも**既存 join の
+  // 拡張はできない** ── 参加者が既にその id を宣言していると CONNECT_ID_ALREADY_DECLARED で止まるので、
+  // 既存の side 付き縫い目に1枚足すのは今のところ part.loom の手編集になる。
   readonly id: string;
   // connector.type = 縫い目の種類ラベル(例: "side" / "armhole")。ペアリングには使われない分類語。
   // 省略時は id にフォールバックする(id=type だった旧来の呼び出しと、type を分けない core 直呼びとの後方互換)。
