@@ -81,22 +81,14 @@ loom add [file.val] [--yes]
 - `type` は粗分類（例: `body`, `sleeve`）で、role とは別軸。同じ type のピースが複数あってよい。
 - `name` は part.loom のラベルで、パスにもキーにも使わない。安全 segment 制約は課さないので、空白や日本語も使える。
 - seam connector は「どの join（縫い合わせ先）に繋ぐか」を訊く。**`side` を宣言していない縫い目（重ね＝coincident）は、参加パーツ数にかかわらず全て候補に出る**（`id [type] (宣言している role — 相手待ち / N parts)`）。1本の縫い目に参加できるのは2枚までではないので、表地＋見返し＋裏地のような重ねは同じ join を選んで3枚目以降を足してよい。選べば id と種類（`type`）を継ぐ。候補に無い縫い目は「新しい join を名付ける」で作る。既存 id を新規 join の id として手打ちすると、参加したいのか別の縫い目なのかが区別できないため弾いて訊き直す（参加したいなら一覧から選ぶ）。
-- **`side` を宣言している縫い目（contiguous / band seam）は `loom add` の候補には出ない。** 参加するには「自分がどちらの側か」の宣言が要るが、`loom add` は `side` を書かない（band は定義上ちょうど1枚なので band 側を選ぶ答えはほぼ常に誤りで、neighbour 側に足すことは「和が band に等しい」という不変条件を動かす設計判断になる）。`side` 無しで id だけ足すと `CONNECTOR_JOIN_SIDES_INCOMPLETE` になる。存在は隠さず、id・参加 role・side を表示したうえで、**その part.loom に手で書き足す**手順を案内する:
+- **`side` を宣言している縫い目（contiguous / band seam）は `loom add` の候補には出ない。** 参加するには「自分がどちらの側か」の宣言が要るが、`loom add` は `side` を書かないため（`side` 無しで id だけ足すと `CONNECTOR_JOIN_SIDES_INCOMPLETE` になる）。存在は隠さず、id・参加 role・側ごとの内訳を表示したうえで、**参加用のコマンド**を案内する:
 
-  ```yaml
-  connectors:
-    waist:
-      type: waist
-      side: neighbour # 案内が名指しした側
+  ```text
+  loom connect <role> --join waist --side <side>
   ```
 
-  書き足したら `loom check` を実行する。**`loom connect` では既存 join を拡張できない** — 参加者がその id を既に宣言しているため `CONNECT_ID_ALREADY_DECLARED` で停止する（既存参加者を含めても含めなくても失敗する）。
-
-  **側は好きに選べない。** band になるのは side ラベルではなく「ちょうど1枚で残った側」で、`loom check` も診断も side の付け間違いを検出しない。案内は側ごとの参加者を表示したうえで、状況に応じて出し分ける:
-
-  - **片側1枚・反対側が複数枚**（典型的な band seam）— 複数枚の側を**名指しする**。1枚の側（band）を増やすと両側とも複数枚になり、band 形が消えて `band-seam` の実測が発行されなくなる（`SEAMLINT_CONNECTOR_SEAM_DEFERRED` に落ちる）。
-  - **両側とも1枚** — どちらでもよくはない。band になるのは**足さなかった側**なので、物理的な band を持つ側に足すと相手が band と見なされ、`band-seam` が逆向きに発行される。Loomit は band identity を保持していない（`side` はただのラベル）ため、どちらが band かはデータから決められない。**band を持たない側に足すこと**を案内し、判断は作者に委ねる。
-  - **それ以外**（両側とも複数枚・側が1つだけ・3側以上）— band 形が無いか成立しないので名指しできない。判断基準（1枚の側を増やさない）だけを示す。
+  どちらの側に足してよいかの判断は `loom connect --join` が持つ（band 側は拒否し、正しい側を名指しする）。`loom add` は判断を持たず、そのコマンドへ送るだけ。
+- **参加者が `type` で食い違っている縫い目も候補に出ない。** 継ぐべき値が決められないため（詳細は `loom connect` 節の `CONNECT_JOIN_TYPE_CONFLICT`）。全参加者の `type` を揃えてから `loom connect --join` で参加する。
 - 「Add a seam connector?」に yes と答えた後でも、join の選択で「`(skip — add no connector)`」を選べば connector 無しで add を終えられる。繋ぎたい相手が候補に無いとき（上の side 付き縫い目など）に、要らない join を発明せずに済ませるための出口。
 - 既存 join を集める段階で `loomit.yml` や登録済み `part.loom` が読めなかったときは、候補ゼロに畳まず診断を出して失敗する（exit 1、part は書かない）。空の候補一覧のまま進むと、既存の縫い目に繋いだつもりで別 id を作ってしまうため。
 - 質問はパイプでも与えられる（例: `loom add body.val < answers.txt`）。
@@ -106,20 +98,25 @@ loom add [file.val] [--yes]
 
 既に add 済みの part を「縫い合う」と宣言する。参加する各 `part.loom` に**同じ id の connector を書き込む**ので、`loom check` がその id でペアにし、`loom slnt check` が共有 seam を測れるようになる。`loom add --yes` で骨組みだけ作った後の配線工程。
 
-2つの形がある:
+3つの形がある:
 
 ```text
-loom connect <roleA> <roleB> --as <id> [options]          # 素の seam（2枚が端どうし）
+loom connect <roleA> <roleB> --as <id> [options]           # 素の seam（2枚が端どうし）
 loom connect <band> --to <n1> <n2>... --as <id> [options]  # band seam（1枚 対 複数枚）
+loom connect <role> --join <id> [--side <s>] [options]     # 既にある縫い目に1枚足す
 ```
 
 - **素の seam** — front↔back の脇線のように、2枚が端どうしで縫い合う。`side` は書かない。
 - **band seam** — 腰帯が前+後に、袖ぐりが前身頃+後身頃に縫い付くように、1枚の band が「長さの和がそれに等しい複数枚」に縫い合う。`--to` で複数枚を並べると、band 側/neighbour 側の `side` は**コマンドが裏で書く**（作者は `side` を触らない）。
+- **既存の縫い目に参加** — 裏地を腰の縫い目に足すように、既に張ってある縫い目へ1枚だけ加える。id と `type` は既存の宣言から**継ぐ**（同じ縫い目なので種類も同じ）ので `--as` / `--type` とは併用できない。側を持つ縫い目では `--side` が**必須**。
 
 オプション:
 
-- `--as <id>`（必須）— 縫い目の一意 id。参加 part 全部に同じ id が書かれ、それがペアの成立条件になる。
+- `--as <id>`（素の seam / band seam では必須）— 縫い目の一意 id。参加 part 全部に同じ id が書かれ、それがペアの成立条件になる。
 - `--to <roles...>` — band モードに切り替える。band が縫い付く neighbour ピース群（1枚以上）。
+- `--join <id>` — 参加モードに切り替える。足し先の**既存**の縫い目 id。存在しなければ `CONNECT_JOIN_NOT_FOUND` で止まる（打ち間違いを新しい縫い目に化けさせない）。
+- `--side <s>`（参加モード）— 足す part がどちらの側に属すか。側を持つ縫い目では必須で、Loomit は**推論しない**（どの unit に属すかは作者にしか分からない）。側を持たない重ね（coincident）に渡すと `CONNECT_SIDE_UNEXPECTED` で止まる。
+- `--path-ref <b>`（参加モード）— 足す part の測定用 DXF BLOCK 名。未指定なら `files.piece`。
 - `--type <type>` — 縫い目の種類ラベル（例: `side`, `armhole`）。ペアリングには使われない。未指定なら id にフォールバック。
 - `--notches <n>` — この seam の合印（notch）数（非負整数）。**その辺に落ちる全 passmark 種別（V・T・castle…）の合計を数える**（V だけ数えない。Seamlint が全レイヤの notch を読んで数を厳密一致で照合するため）。band モードでは neighbours 側に書く。同じピースを共有する複数 seam を Seamlint が辺ごとに区別するための識別子。
 - `--band-side <s>` / `--neighbour-side <s>` — band モードの side ラベル。既定は `band` / `neighbour`。値は2側が別なら任意（`classifyJoinSides` が2側の contiguous と見なせればよい）。
@@ -127,14 +124,21 @@ loom connect <band> --to <n1> <n2>... --as <id> [options]  # band seam（1枚 �
 
 補足:
 
-- **`loom connect` は縫い目を新しく張るコマンドで、既存の join は拡張できない。** 参加 part のいずれかがその id を既に宣言していると `CONNECT_ID_ALREADY_DECLARED` で停止する（既存参加者を含めても含めなくても失敗する）。既にある縫い目に1枚足すには、その part の `part.loom` に同じ id の connector を手で書き足す（contiguous / band seam なら `side` も付ける。どちらの側に足すかは `loom add` の案内を参照）。
-- **`side` を書くのは band モード（`--to`）だけ。** 素の seam（`loom connect <a> <b>`）は `side` を書かない ── 重ね（coincident）と同じ扱いで、ペアリングは共有 id が担う。
-- **「縫い合う」を表すのは side ではなく共有 id。** `side` は band のときだけ要る「この N枚は同じ側＝長さが足し算で1本の band に合う」の判別ラベルで、素の seam には付かない（重ね＝coincident と区別するため）。
+- **既にある縫い目に1枚足すのは `--join`。** 素の seam / band seam の形（`--as`）は縫い目を**新しく張る**ので、参加 part のいずれかがその id を既に宣言していると `CONNECT_ID_ALREADY_DECLARED` で停止する（既存の宣言を黙って上書きしないため）。入口を分けることで、このガードを残したまま参加できる。
+- **band 側は増やせない。** 参加モードで band 側（ちょうど1枚の側）を `--side` に指定すると `CONNECT_BAND_SIDE_LOCKED` で停止する。band を2枚にすると両側とも複数枚になり、`band-seam` の実測が発行されなくなる（`SEAMLINT_CONNECTOR_SEAM_DEFERRED` に落ちる）のに、`loom check` は contiguous として健全のままで気づけないため。本当に両側複数枚にしたいなら `part.loom` を手で編集する。
+- **側の構成が壊れている縫い目には足せない**（`CONNECT_JOIN_SIDES_UNHEALTHY`）。側が3つ以上ある、または side を宣言していない参加者が混ざっている場合。足りないのは新しい参加者ではなく既存の宣言なので、1枚足しても健全にならない。先に直す。
+- **側が1つだけの縫い目は、参加者を足して完成させられる。** `--side` に新しいラベルを渡すと2つ目の側になり contiguous が完成する（既存の側と同じラベルを渡せば、不完全なまま1枚増える）。側ラベルの文字列自体に意味は無く、`classifyJoinSides` は distinct な側の数だけを見る。
+- **参加者間で `type` が食い違う縫い目には足せない**（`CONNECT_JOIN_TYPE_CONFLICT`）。継ぐべき値が決められず、代表値を採ると `loomit.yml` の並び順で勝手にどちらかへ倒れるため。この状態は `loom slnt check` も `SEAMLINT_CONNECTOR_TYPE_MISMATCH` で seam request を組まない。先に全参加者の `type` を揃える。
+- **既に宣言されている合印数と食い違う `--notches` は書けない**（`CONNECT_NOTCH_COUNT_CONFLICT`）。1本の縫い目の合印数はどのピースでも同じで、割れていると Loomit は notch 署名そのものを渡さない（`SEAMLINT_CONNECTOR_NOTCH_COUNT_MISMATCH`）。署名が落ちると、同じピースを共有する複数の seam を Seamlint が辺ごとに区別できなくなる。`--notches` を省略するのは食い違いではない（後から足せる）。
+- **参加すると band が確定することがある。** 側が1枚ずつの縫い目は、まだ `band-seam` にならない（band-seam は参加3枚以上から）。そこへ3枚目を足すと、**足さなかった側**が1枚で残って band になる。Loomit は band identity を保持していないので検証はできないが、成功出力に確定した band を表示するので、意図と違えば気づける。
+- **素の seam（`loom connect <a> <b>`）は `side` を書かない。** 重ね（coincident）と同じ扱いで、ペアリングは共有 id が担う。`side` を書くのは band モード（`--to`、コマンドが裏で書く）と参加モード（`--join`、作者が `--side` で宣言する）の2つ。
+- **「縫い合う」を表すのは side ではなく共有 id。** `side` は contiguous な縫い目でだけ要る「この N枚は同じ側＝長さが足し算で合う」の判別ラベルで、素の seam には付かない（重ね＝coincident と区別するため）。
 - **辺（座標）は入力しない。** 人が渡すのはトークン（id / path_ref / notch_count）だけで、どの辺が共有縫い線かは Seamlint が幾何から発見する（`seam-edge` / `band-seam`）。
 - connector は複数 part を組む cross-part join 専用なので、同じ role 同士は接続できない（自己シームは Seamlint が測る）。
 - 実測まで行くには各 part に `files.geometry`（DXF）か `files.preview`（SVG）が要る。無い側は成功時に案内する。**band seam は band 接辺の和を測るため全側 DXF が要る**（SVG は辺分割できない）。
 - 例（素）: `loom connect front back --as outseam --notches 2`
 - 例（band）: `loom connect waistband --to front back --as waist --notches 2` → 3枚の part.loom に `connectors.waist` を書き（band=waistband、neighbours=front/back）、次に `loom slnt check` が `band-seam` を1本出す。
+- 例（参加）: `loom connect lining --join waist --side neighbour` → `lining` の part.loom に `connectors.waist`（`type` は継承、`side: neighbour`）を書き足す。band が `waistband` のままであることを出力で示す。
 
 ## `loom check`
 

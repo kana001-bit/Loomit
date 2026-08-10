@@ -48,13 +48,15 @@ export type {
   AddPartConnectorInput,
   AddPartToProjectOptions
 } from "./parts/addPartToProject.js";
-export { connectBand, connectParts } from "./parts/connectParts.js";
+export { connectBand, connectParts, extendJoin } from "./parts/connectParts.js";
 export type {
   ConnectBandOptions,
   ConnectedBand,
   ConnectedParts,
   ConnectedSide,
-  ConnectPartsOptions
+  ConnectPartsOptions,
+  ExtendedJoin,
+  ExtendJoinOptions
 } from "./parts/connectParts.js";
 export { loadPartFile } from "./parts/loadPartFile.js";
 export { loadProjectedPart, loadProjectedPartWithSource } from "./parts/loadProjectedPart.js";
@@ -78,6 +80,10 @@ export { buildProject, createBuildReport } from "./build/buildProject.js";
 export { collectCollidingPieceNames, findCollidingRoleNames } from "./parts/roleCollisions.js";
 export { collectExistingJoins, combineJoins, suggestJoinId } from "./parts/joinInventory.js";
 export type { ExistingJoin, JoinSide } from "./parts/joinInventory.js";
+// band 形の判定は authoring(どの側に足してよいか)と幾何 request の生成(band-seam を出すか)の両方が
+// 同じ問いを解くので、規則を1つだけ公開する。呼び出し側が独自に「1枚の側が band」を書き直さないため。
+export { resolveBandShape } from "./schema/connectorSides.js";
+export type { BandShape, JoinSideSize } from "./schema/connectorSides.js";
 export type {
   BuildAssetKind,
   BuildManifest,

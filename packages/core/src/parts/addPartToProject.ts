@@ -27,9 +27,9 @@ export interface AddPartConnectorInput {
   // 黙って嘘になる)。
   //
   // ここで書けるのは side を持たない縫い目(coincident=重ね)だけ。side を持つ contiguous / band seam を
-  // **新規に**張るのは `connectBand`(`connectParts` は side を書かない pairwise 用)。どちらも**既存 join の
-  // 拡張はできない** ── 参加者が既にその id を宣言していると CONNECT_ID_ALREADY_DECLARED で止まるので、
-  // 既存の side 付き縫い目に1枚足すのは今のところ part.loom の手編集になる。
+  // **新規に**張るのは `connectBand`(`connectParts` は side を書かない pairwise 用)で、**既にある縫い目に
+  // 1枚足す**のは `extendJoin`(`loom connect --join`)。新規作成の2つは既存 id を黙って上書きしないよう
+  // CONNECT_ID_ALREADY_DECLARED で止まるので、参加は入口を分けた extendJoin 側で受ける。
   readonly id: string;
   // connector.type = 縫い目の種類ラベル(例: "side" / "armhole")。ペアリングには使われない分類語。
   // 省略時は id にフォールバックする(id=type だった旧来の呼び出しと、type を分けない core 直呼びとの後方互換)。

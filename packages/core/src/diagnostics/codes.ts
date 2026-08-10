@@ -68,13 +68,29 @@ export const coreDiagnosticCodes = [
   "CONNECT_BAND_DUPLICATE_ROLE",
   "CONNECT_BAND_NO_NEIGHBOURS",
   "CONNECT_BAND_SIDE_CONFLICT",
+  // 既存の band を1枚から複数枚にする追加(band 形が消えて band-seam の実測が出なくなる)。
+  "CONNECT_BAND_SIDE_LOCKED",
   "CONNECT_ID_ALREADY_DECLARED",
   "CONNECT_ID_INVALID",
+  // 参加しようとした join がプロジェクトに無い(拡張モード)。
+  "CONNECT_JOIN_NOT_FOUND",
+  // 既に側の構成が壊れている縫い目への参加(側が3つ以上 / side 未宣言の参加者がいる)。
+  "CONNECT_JOIN_SIDES_UNHEALTHY",
+  // 参加者間で connector.type が食い違う縫い目への参加(継ぐ値を決められない)。
+  "CONNECT_JOIN_TYPE_CONFLICT",
+  // 既に宣言されている合印数と食い違う値での参加(書けても notch 署名が落ちる)。
+  "CONNECT_NOTCH_COUNT_CONFLICT",
   "CONNECT_ROLE_NOT_FOUND",
   "CONNECT_ROLLBACK_FAILED",
   "CONNECT_SAME_FILE",
   "CONNECT_SAME_ROLE",
   "CONNECT_SCHEMA_INVALID",
+  // side 付きの縫い目に --side なしで参加しようとした。
+  "CONNECT_SIDE_REQUIRED",
+  // side を持たない縫い目(coincident=重ね)に --side を渡した。
+  "CONNECT_SIDE_UNEXPECTED",
+  // その縫い目に存在しない側を指定した。
+  "CONNECT_SIDE_UNKNOWN",
   "CONNECT_WRITE_FAILED",
 
   // parts/ — loom add(.val の part 登録)

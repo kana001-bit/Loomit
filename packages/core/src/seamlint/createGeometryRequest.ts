@@ -5,7 +5,7 @@ import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { Diagnostic } from "../diagnostics/diagnostic.js";
 import type { ResolvedProject, ResolvedProjectPart } from "../project/resolveParts.js";
 import { normalizeConnectorPathRef } from "../schema/connectorPathRef.js";
-import { classifyJoinSides } from "../schema/connectorSides.js";
+import { classifyJoinSides, resolveBandShape } from "../schema/connectorSides.js";
 import { isDelimiterSafeIdentifier } from "../schema/joinIdentifier.js";
 import { resolveJoinedConnectorToleranceMm } from "../schema/connectorTolerance.js";
 import { indexConnectorRanges } from "../schema/connectorRanges.js";
@@ -433,9 +433,12 @@ function collectPartsByJoinId(resolvedProject: ResolvedProject): Map<string, Joi
   return new Map([...partsByJoinId.entries()].sort(([left], [right]) => left.localeCompare(right)));
 }
 
-// contiguous な縫い目の参加を band(1枚)と neighbours(N枚)に振り分ける。片側がちょうど1枚のときだけ band 形として
-// { band, neighbours } を返す。両側とも複数枚なら和が一意に band へ解けないので undefined(呼び出し側は defer に倒す)。
-// neighbours は role 昇順で安定させる(check id と neighbours 配列の順を決定的にする)。
+// contiguous な縫い目の参加を band(1枚)と neighbours(N枚)に振り分ける。band 形でなければ undefined
+// (呼び出し側は defer に倒す)。neighbours は role 昇順で安定させる(check id と neighbours 配列の順を
+// 決定的にする)。
+//
+// **どれが band かを決めるのは resolveBandShape(単一の正本)。** ここは側ごとに参加者を束ねて枚数を渡し、
+// 返ってきた側名で参加者を取り出すだけにする。同じ規則を authoring 側でも使うので、判定をここに書かない。
 function findBandShape(
   participants: readonly JoinParticipant[]
 ): { readonly band: JoinParticipant; readonly neighbours: JoinParticipant[] } | undefined {
@@ -443,26 +446,28 @@ function findBandShape(
 
   for (const participant of participants) {
     const side = participant.connector.side;
-    // contiguous は全参加が side を宣言している前提(classifyJoinSides)。念のため未宣言があれば band 形にしない。
+    // side 未宣言は側に数えない。resolveBandShape が participantCount との差から not-contiguous と判定する。
     if (side === undefined) {
-      return undefined;
+      continue;
     }
     const group = bySide.get(side) ?? [];
     group.push(participant);
     bySide.set(side, group);
   }
 
-  // contiguous は distinct side がちょうど2。片方が1枚なら band、もう片方(必ず2枚以上)が neighbours。
-  const groups = [...bySide.values()];
-  const bandGroup = groups.find((group) => group.length === 1);
-  const neighbourGroup = groups.find((group) => group.length !== 1);
+  const shape = resolveBandShape(
+    [...bySide.entries()].map(([side, group]) => ({ side, size: group.length })),
+    participants.length
+  );
 
-  if (bandGroup === undefined || neighbourGroup === undefined) {
+  if (shape.kind !== "band") {
     return undefined;
   }
 
-  const band = bandGroup[0];
-  if (band === undefined) {
+  const band = bySide.get(shape.bandSide)?.[0];
+  const neighbourGroup = bySide.get(shape.neighbourSide);
+
+  if (band === undefined || neighbourGroup === undefined) {
     return undefined;
   }
 
