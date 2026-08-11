@@ -24,4 +24,6 @@ Entry point for adding vitest tests and fixtures. Read the nearest existing test
 2. Choose placement and fixtures (testing-diagnostics.md: focused unit tests over domain objects, fixture tests over project directories under `packages/core/test/fixtures/`).
 3. For a check / diagnostic, write both a should-fire fixture and a must-not-fire fixture; for either/or behavior, test and comment both meanings.
 4. Keep `Diagnostic.code` assertions on the stable `UPPERCASE_SNAKE` code, not on display wording.
-5. Run `pnpm test` (vitest), or `pnpm --filter <pkg> test` while iterating. If you cannot run it, say why.
+5. If the test asserts guidance ("run X", "pick Y from the list"), follow it in the test and assert the outcome — printing a sentence and the sentence being true are different claims (testing-diagnostics.md: "Guidance Is Behavior").
+6. Before trusting a green test, check it can fail: a `not.toContain` for a string that never appears, or a batch loop where one guard catches every input, passes without testing anything (testing-diagnostics.md: "Tests That Pass Without Checking Anything").
+7. Run `pnpm test` (vitest), or `pnpm --filter <pkg> test` while iterating. If you cannot run it, say why.

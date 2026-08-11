@@ -24,6 +24,85 @@ it("compares length when both sides are measured", () => {
 });
 ```
 
+## Guidance Is Behavior
+
+A diagnostic's `suggestion`, and any prompt text that says "do this instead", names a **destination**:
+a command to run, an option to pick, a value to use. Asserting that the text was printed does not check
+that the destination exists. Those are two different claims, and only the second one helps the user.
+
+**Follow the guidance in the test, and assert that the diagnostic it was about no longer fires.**
+
+Exit code is too weak an outcome. A command can exit 0 and leave the original problem in place, and a
+guidance loop that swaps one suggestion for another can keep failing forever. "Arrived" means the
+thing the guidance was about is gone.
+
+```ts
+// Good: the printed recovery is executed, and the original refusal is gone afterwards.
+const required: RegisteredDiagnosticCode = "CONNECT_SIDE_REQUIRED";
+expect(codesOf(before.diagnostics)).toContain(required);
+
+await runCli(["node", "loom", "connect", "lining", "--join", "waist", "--side", "neighbour"], …);
+expect(codesOf(await recheck())).not.toContain(required);
+
+// Avoid: only proves the sentence is printed. A destination that always fails passes this.
+expect(stdout).toContain("run loom connect …");
+```
+
+**When the guidance cannot be executed** — "check file permissions", anything needing an external tool,
+a network, or a destructive step — assert that the destination *exists* instead: the command is in the
+CLI's registered commands, the option is in the parser's option set, the value is in the set actually
+offered. Do not skip the assertion because you cannot run it; an unasserted destination is exactly the
+one that rots.
+
+Both halves are the same rule as the implementation one: **branch on the real state, never on a copy of
+the rule.** `formatJoinIdClash` takes the set of ids actually offered and asks whether this id is in it,
+instead of re-deriving why it was excluded. Prose that copied the old conditions goes stale silently
+when a new exclusion reason is added; a membership check follows along.
+
+Real failures this rule would have caught (all shipped green):
+
+| Guidance | Reality |
+|---|---|
+| `loom connect … --as <existing id>` | always fails with `CONNECT_ID_ALREADY_DECLARED` |
+| "Pick it from the list" | the join was excluded from that list |
+| "use `--notches 3` to match" | following it answers "use 2", which answers "use 3" |
+
+## Tests That Pass Without Checking Anything
+
+Two shapes recur. Both stay green while testing nothing.
+
+**A negative assertion for a string that never appears anyway.** `not.toContain("X")` passes when the
+code can never emit `X` — a typo, or a rename that left the test behind. Do not rely on a one-time
+manual check; a ritual leaves nothing behind six months later. **Pin the name through the union so a
+rename is a compile error**, the same trick `doctorReport.ts` uses to make `TS2367` catch a lost
+explanation:
+
+```ts
+// Renaming or misspelling the code fails to compile (TS2820), instead of silently passing.
+const missing: RegisteredDiagnosticCode = "CONNECTOR_MISSING";
+expect(codesOf(report.diagnostics)).not.toContain(missing);
+
+// Avoid: a bare string. After a rename this asserts the absence of a code that no longer exists.
+expect(stdout).not.toContain("CONNECTOR_MISSING");
+```
+
+The union only covers codes. When the negative assertion is about wording or a format that has no
+union, reproduce the broken state once, look at the real output, and record in the test comment what
+you saw — so the next reader knows the assertion was not vacuous when it was written.
+
+**A batch loop where one branch swallows the rest.** Running several inputs through one function and
+asserting a property of each is only as good as the branches actually reached. If an earlier guard
+catches every input, the loop proves one branch.
+
+```ts
+// Pin which paths were exercised, not just the property. This caught a fixture where a
+// three-sided seam made every input fail the health check before reaching the side guards.
+// Sorted on both sides: which paths ran is the point, their order is not a contract.
+expect(refusals.flatMap((r) => codesOf(r.diagnostics)).sort()).toEqual(
+  ["CONNECT_SIDE_REQUIRED", "CONNECT_SIDE_UNKNOWN", …].sort()
+);
+```
+
 ## Fixture Tests
 
 `loom check` reliability depends on fixture tests. Use realistic project-shaped fixtures under `packages/core/test/fixtures/`.
@@ -123,7 +202,16 @@ message: `Seamlint を実行できませんでした: ${runResult.message} / Loo
 
 The second rule is pinned by `never interpolates the same detail into both halves of a bilingual message`
 in `packages/core/test/diagnostics/diagnostic-codes.test.ts`. It scans line by line, so a template split
-across lines slips past it — review still matters.
+across lines slips past it.
+
+That gap is a property of scanning source text, not something review can be trusted to close — the same
+nesting was shipped twice, once in `fsError.ts` and again in `connectParts.ts` right after fixing it. The
+scan cannot see a bilingual string that arrives through a variable at all. Making the bad shape
+unrepresentable is what would actually close it: a builder that takes the Japanese sentence, the English
+sentence, and the detail as **separate arguments** cannot interpolate the detail into both halves, the
+same way `createDiagnostic` taking `RegisteredDiagnostic` closes the code vocabulary. Not built yet; until
+then a runtime check on the finished message is the cheaper guard — count the `" / "` separators over a
+function's whole refusal surface at once, rather than per message (`extend-join.test.ts` does this).
 
 `Diagnostic.target` should use a stable reference. Current formats:
 
@@ -152,5 +240,6 @@ Before finishing work:
 - Confirm the active `docs/work/implementation-plan.md` slice.
 - Confirm the slice's completion criteria.
 - Run the relevant unit or fixture tests.
-- Run `pnpm typecheck` and `pnpm test` when available.
+- Run `pnpm typecheck` **and** `pnpm test`. Both exist; run them separately. vitest does not typecheck,
+  so a green `pnpm test` regularly sits on top of a failing `pnpm typecheck`.
 - If checks cannot run, state why.
