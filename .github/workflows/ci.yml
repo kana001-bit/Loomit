@@ -62,11 +62,17 @@ jobs:
       #   - process.argv がコマンドまで届くこと
       #   - runCli の戻り値が process.exitCode に載ること
       #
-      # 守らないものも書いておく(過信しないため)。`node <path>` と明示起動しているので、
-      # package.json#bin の解決も shebang も**使われない** ── どちらを壊しても、この e2e は緑のまま通る
-      # (実際に確かめた)。外部ツール(slnt / tru)の spawn 経路も呼ばないので、Windows の
-      # PATH/PATHEXT 自前解決や cmd.exe 引用はここでは検証されない(そちらは spawnResolvedProcess の
-      # 単体テストが受け持つ)。両 OS で回すのは、spawn と exit code の扱い自体が OS 差を持つため。
+      # `node <path>` と明示起動する以上、上の3つでは package.json#bin も shebang も使われない。
+      # そこは bin-entry.e2e.test.ts が別に受け持つ: bin.loom が dist/main.js と同一を指すこと、
+      # shebang 行が src から dist まで残ること、そして POSIX では node を介さず直接起動できること
+      # (Windows は .js を直接 exec できないので、その 1 件だけ ubuntu leg で走る)。
+      #
+      # 守らないものも書いておく(過信しないため)。`pnpm link --global` してから PATH 越しに `loom` を
+      # 叩く経路そのもの(npm が生成する shim と実行ビットの付与)は、グローバル環境を汚さないため
+      # 検証していない ── 上の 3 件はその手前までを固める。外部ツール(slnt / tru)の spawn 経路も
+      # 呼ばないので、Windows の PATH/PATHEXT 自前解決や cmd.exe 引用はここでは検証されない
+      # (そちらは spawnResolvedProcess の単体テストが受け持つ)。
+      # 両 OS で回すのは、spawn と exit code の扱い自体が OS 差を持つため。
       #
       # `test:e2e` は自前で `pnpm -r build` を含むので上の Build と重複するが、開発者がローカルで打つのと
       # 同じコマンドを CI も走らせるほうを優先する(CI 専用の派生コマンドを増やして乖離させない)。
