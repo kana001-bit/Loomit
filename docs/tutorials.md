@@ -24,19 +24,27 @@ CLI は大きく4種類の作業を支える。
 
 ## 準備
 
+npm から入れる場合（Node.js 24+ が必要）:
+
+```bash
+npm install -g loomit
+```
+
+リポジトリのソースから動かす場合:
+
 ```bash
 pnpm install
 pnpm build
 ```
 
-以降の例では、build 済みの CLI を `node packages/cli/dist/main.js` で呼ぶ。
+以降の例では `loom` で呼ぶ。ソースから動かしているときは `pnpm loom` に読み替える。なお例で指すファイルはこのリポジトリの中にあるので、そのまま実行するには clone が要る。
 
 ## 例1: プロジェクトを検証する
 
 fixture project を検証する。
 
 ```bash
-node packages/cli/dist/main.js check packages/core/test/fixtures/valid-blouse
+loom check packages/core/test/fixtures/valid-blouse
 ```
 
 ```text
@@ -55,13 +63,13 @@ connector 長が許容差に収まり、requirement の寸法条件も満たす�
 パーツの2つの版を比較し、座標や blob ではなくドメインの変更として差分を読む。
 
 ```bash
-node packages/cli/dist/main.js diff bodice-v1.part.loom bodice-v2.part.loom
+loom diff examples/waist-dart/bodice-v1.part.loom examples/waist-dart/bodice-v2.part.loom
 ```
 
 ```text
 Loomit diff: changed
-From: bodice@v1 (body)
-To:   bodice@v2 (body)
+From: bodice-front@fitted (body)
+To:   bodice-front@fitted (body)
 
 Summary:
   silhouette impact: medium
@@ -69,11 +77,15 @@ Summary:
   connection risk:   none
   prototype notes:   none
 
+Recheck Hints:
+  part role: body
+  connectors: none
+  requirements: none
+
 Changes:
   [modified] dart waist_front
     - width_mm: 30 -> 35
     - intake_length_mm: 110 -> 120
-    - legs.right_ref: val:point#bodice/Right -> val:point#bodice/RightMoved
 ```
 
 Summary は「この試作ブランチを残すか捨てるか」を素早く判断するための要約シグナルであり、正確な計測ではない。個々の変更は Changes に出る。

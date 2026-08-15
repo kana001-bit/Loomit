@@ -8,7 +8,7 @@ A Git-inspired CLI for pattern making — it reads a diff as a sewing decision, 
 
 ## What is Loomit?
 
-Loomit is a local-first CLI that brings a Git-inspired workflow to pattern making. It focuses on managing design iterations, validating compatibility, tracking meaningful changes, and reusing pattern parts, while leaving CAD editing to external tools such as Valentina (a pattern CAD tool).
+Loomit is a local-first CLI that brings a Git-inspired workflow to pattern making. It focuses on managing design iterations, validating compatibility, and tracking meaningful changes, while leaving CAD editing to external tools such as Valentina (a pattern CAD tool).
 
 In sewing, problems often surface too late — parts that do not match once sewn, prototypes redone over small changes, and losing track of what changed and why. Loomit makes prototyping more intentional, explainable, and less wasteful.
 
@@ -20,10 +20,10 @@ _Making clothes? Start with [Vision](docs/vision.md). Building on it? See [Archi
 
 A pattern part is plain text, so it lives in an ordinary Git repository. Where `git diff` shows you which lines moved, `loom diff` reads the same two revisions and tells you what the change *does to the garment* — so a commit is a sewing decision ("take in the waist dart"), not a blob of coordinates.
 
-The change below takes in a waist dart. You can read `volume change: reduced` and `connection risk: none` (the part still sews to its neighbours) — after `pnpm install && pnpm build`:
+The change below takes in a waist dart. You can read `volume change: reduced` and `connection risk: none` (the part still sews to its neighbours):
 
 ```console
-$ node packages/cli/dist/main.js diff examples/waist-dart/bodice-v1.part.loom examples/waist-dart/bodice-v2.part.loom
+$ loom diff examples/waist-dart/bodice-v1.part.loom examples/waist-dart/bodice-v2.part.loom
 Loomit diff: changed
 From: bodice-front@fitted (body)
 To:   bodice-front@fitted (body)
@@ -46,6 +46,23 @@ Changes:
 ```
 
 `connection risk: none` means the parts still sew together after the change. The same reading works across Git history (`loom diff main..HEAD --part body`). It is one slice of a larger goal — version control for pattern making — but it runs today, from a fresh clone, with no Valentina or `.val`.
+
+## Install
+
+Requires Node.js 24+.
+
+```console
+npm install -g loomit
+loom --help
+```
+
+Loomit measures structure. To also measure geometry and propose corrections, install the other two tools — `loom` finds them on your `PATH`, so no configuration is needed:
+
+```console
+npm install -g seamlint @kana001-bit/truer
+```
+
+The bundled examples shown here live in this repository, so clone it to run them yourself. To work from source instead, see [Quick Start](#quick-start-from-source).
 
 ## The three tools
 
@@ -72,7 +89,7 @@ Early, local-first, and honest about scope:
 Before cutting any fabric, check that a garment's parts still sew together. The bundled `examples/blouse` has a body and a sleeve whose armholes match:
 
 ```console
-$ node packages/cli/dist/main.js check examples/blouse
+$ loom check examples/blouse
 Loomit check: ok
 
 Compatibility:
@@ -93,9 +110,9 @@ Loomit is a pnpm monorepo. `loomit-core` holds the domain logic — schema valid
 
 Loomit is built with AI coding agents, directed by me. The design, architecture, domain modeling, and every judgment call are mine; the agents write the code under rules I set. Those rules live in [`AGENTS.md`](AGENTS.md) — my engineering conventions, written down so the agents follow them (for example: `core` never depends on the CLI; `variant` is not compared as a version; `length_mm` always means the finished measurement). The reasoning behind the design — including decisions I later reversed, and why — is recorded in [Design History](docs/design-history.md).
 
-## Quick Start
+## Quick Start (from source)
 
-Requirements: Node.js 24+ and `pnpm`.
+To hack on Loomit rather than just use it. Requirements: Node.js 24+ and `pnpm`.
 
 ```bash
 pnpm install
@@ -103,10 +120,10 @@ pnpm build
 pnpm test
 ```
 
-Then try it on a bundled example — no Valentina or `.val` required (`pnpm loom` is a shortcut for `node packages/cli/dist/main.js`):
+Then try it on a bundled example — no Valentina or `.val` required (`pnpm loom` runs the CLI without installing it globally):
 
 ```console
-$ node packages/cli/dist/main.js diff examples/waist-dart/bodice-v1.part.loom examples/waist-dart/bodice-v2.part.loom
+$ pnpm loom diff examples/waist-dart/bodice-v1.part.loom examples/waist-dart/bodice-v2.part.loom
 ```
 
 Command usage and worked examples are in the [Tutorials](docs/tutorials.md).
