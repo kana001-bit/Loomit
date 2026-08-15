@@ -1,4 +1,4 @@
-// @loomit/core の公開面。
+// loomit-core の公開面。
 //
 // ここに出したシンボルは「消費者に対する契約」になる。外す・改名するのは破壊的変更として扱い、
 // 逆にここに出ていないモジュール内部のヘルパは自由に作り替えてよい。その線引きを表すのがこのファイル。
@@ -17,7 +17,7 @@
 //
 // 公開集合は packages/core/test/public-api.test.ts が一覧で固定している。export を足す/外すときは
 // その一覧も更新する(通るまで気づかない、が起きないように)。
-export const corePackageName = "@loomit/core";
+export const corePackageName = "loomit-core";
 
 // --- プロジェクト操作 -------------------------------------------------------
 // project / part の作成・読み込み・書き込みと、build の出力集約。CLI コマンドの入口になる操作。

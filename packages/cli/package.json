@@ -1,5 +1,5 @@
 {
-  "name": "@loomit/cli",
+  "name": "loomit",
   "version": "0.1.0",
   "type": "module",
   "bin": {
@@ -12,7 +12,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@loomit/core": "workspace:*"
+    "loomit-core": "workspace:*"
   },
   "description": "Version control for sewing patterns: meaningful diffs of Valentina .val projects",
   "engines": {

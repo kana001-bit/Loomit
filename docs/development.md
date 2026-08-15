@@ -39,7 +39,7 @@ node /abs/path/to/Loomit/packages/cli/dist/main.js init
 どのディレクトリでも実 `loom` コマンドとして使いたい場合は global link を張る(rebuild で反映)。
 
 ```bash
-pnpm --filter @loomit/cli build
+pnpm --filter loomit build
 cd packages/cli && pnpm link --global   # loom がどこでも使える / 解除: pnpm unlink --global
 ```
 

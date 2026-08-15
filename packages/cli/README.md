@@ -1,13 +1,13 @@
-# @loomit/cli
+# loomit
 
 A Git-inspired CLI for pattern making — it reads a diff as a sewing decision, not a blob of coordinates.
 
-This package provides the `loom` command. It is a thin adapter that formats the diagnostics produced by [`@loomit/core`](https://www.npmjs.com/package/@loomit/core) as text or JSON.
+This package provides the `loom` command. It is a thin adapter that formats the diagnostics produced by [`loomit-core`](https://www.npmjs.com/package/loomit-core) as text or JSON.
 
 ## Install
 
 ```console
-npm install -g @loomit/cli
+npm install -g loomit
 loom --help
 ```
 

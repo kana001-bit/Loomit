@@ -2,8 +2,8 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { loadPrototypeNotesFile } from "@loomit/core";
-import type { PrototypeNote } from "@loomit/core";
+import { loadPrototypeNotesFile } from "loomit-core";
+import type { PrototypeNote } from "loomit-core";
 import { describe, expect, it } from "vitest";
 
 import { runNoteCommand } from "../src/commands/note.js";

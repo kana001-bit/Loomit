@@ -1,4 +1,4 @@
-import type { MovementTestReport } from "@loomit/core";
+import type { MovementTestReport } from "loomit-core";
 import { formatDiagnosticsText } from "./diagnosticsText.js";
 
 export function formatMovementTestText(report: MovementTestReport): string {

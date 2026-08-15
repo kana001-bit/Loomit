@@ -7,11 +7,11 @@ import {
   loadPrototypeNotesFile,
   resolveParts,
   suggestTests
-} from "@loomit/core";
+} from "loomit-core";
 import { formatTestSuggestionsJson } from "../formatters/testSuggestionsJson.js";
 import { formatTestSuggestionsText } from "../formatters/testSuggestionsText.js";
-import type { LoadedProject, TestSuggestionReport } from "@loomit/core";
-import type { PrototypeNotes } from "@loomit/core";
+import type { LoadedProject, TestSuggestionReport } from "loomit-core";
+import type { PrototypeNotes } from "loomit-core";
 
 export type SuggestTestsOutputFormat = "text" | "json";
 

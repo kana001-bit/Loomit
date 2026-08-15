@@ -7,10 +7,10 @@ import {
   loadPrototypeNotesFile,
   resolveParts,
   runMovementTest
-} from "@loomit/core";
+} from "loomit-core";
 import { formatMovementTestJson } from "../formatters/movementTestJson.js";
 import { formatMovementTestText } from "../formatters/movementTestText.js";
-import type { LoadedProject, MovementTestReport, PrototypeNotes } from "@loomit/core";
+import type { LoadedProject, MovementTestReport, PrototypeNotes } from "loomit-core";
 
 export type MovementTestOutputFormat = "text" | "json";
 

@@ -1,4 +1,4 @@
-import type { CheckReport } from "@loomit/core";
+import type { CheckReport } from "loomit-core";
 import { formatDiagnosticsText } from "./diagnosticsText.js";
 
 export function formatCheckText(report: CheckReport): string {

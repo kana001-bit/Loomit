@@ -254,7 +254,7 @@ in a file that is not on it fails the test** — that is the part a type could n
 transitional entry point stays available to new code forever.
 
 **Do not stub `createDiagnostic` out with something that does not match the real one.** Mocks bypass the
-type checker, so a `vi.mock("@loomit/core", …)` whose `createDiagnostic` behaves differently lets a test
+type checker, so a `vi.mock("loomit-core", …)` whose `createDiagnostic` behaves differently lets a test
 build a diagnostic production could never produce. Nothing catches that but review.
 
 ## Report Compatibility

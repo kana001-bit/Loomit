@@ -10,7 +10,7 @@ import {
   type Diagnostic,
   type ReportStatus,
   type ResolvedProject
-} from "@loomit/core";
+} from "loomit-core";
 
 import { formatTruerRequestJson } from "../formatters/truerRequestJson.js";
 import { formatTruerRequestText } from "../formatters/truerRequestText.js";

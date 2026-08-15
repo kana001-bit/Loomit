@@ -1,7 +1,7 @@
 import { relative } from "node:path";
 
-import { addPrototypeNote, loadProject } from "@loomit/core";
-import type { AddedPrototypeNote, AddPrototypeNoteInput } from "@loomit/core";
+import { addPrototypeNote, loadProject } from "loomit-core";
+import type { AddedPrototypeNote, AddPrototypeNoteInput } from "loomit-core";
 import { formatDiagnosticsText } from "../formatters/diagnosticsText.js";
 import { createReadlinePrompter, EndOfInputError } from "../prompter.js";
 import type { Prompter } from "../prompter.js";

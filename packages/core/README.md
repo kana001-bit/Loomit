@@ -1,15 +1,15 @@
-# @loomit/core
+# loomit-core
 
 The domain layer of [Loomit](https://github.com/kana001-bit/Loomit), a Git-inspired toolchain for pattern making.
 
 This package holds schema validation, compatibility / fit / movement rules, semantic diff, and the structured report shape. It has no dependency on the CLI, so it can be embedded in other tools.
 
-Looking for the `loom` command? Install [`@loomit/cli`](https://www.npmjs.com/package/@loomit/cli) instead.
+Looking for the `loom` command? Install [`loomit`](https://www.npmjs.com/package/loomit) instead.
 
 ## Install
 
 ```console
-npm install @loomit/core
+npm install loomit-core
 ```
 
 ## Contracts

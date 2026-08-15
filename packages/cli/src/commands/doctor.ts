@@ -4,7 +4,7 @@ import {
   loadProject,
   resolveParts,
   runChecks
-} from "@loomit/core";
+} from "loomit-core";
 import { formatDoctorJson } from "../formatters/doctorJson.js";
 import { formatDoctorText } from "../formatters/doctorText.js";
 

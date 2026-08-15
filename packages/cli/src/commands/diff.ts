@@ -10,7 +10,7 @@ import {
   type ProjectedPartSource,
   type PrototypeNotes,
   type ValSourceDiffSummary
-} from "@loomit/core";
+} from "loomit-core";
 import { access } from "node:fs/promises";
 import { join, resolve } from "node:path";
 

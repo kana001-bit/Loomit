@@ -1,4 +1,4 @@
-import { forkProject } from "@loomit/core";
+import { forkProject } from "loomit-core";
 import { formatDiagnosticsText } from "../formatters/diagnosticsText.js";
 
 export interface ForkCommandOptions {

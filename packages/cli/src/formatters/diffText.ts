@@ -1,4 +1,4 @@
-import { CONTENTS_ATTRIBUTE, type PartDiffReport, type ValSourceChange } from "@loomit/core";
+import { CONTENTS_ATTRIBUTE, type PartDiffReport, type ValSourceChange } from "loomit-core";
 
 import { formatDiagnosticsText } from "./diagnosticsText.js";
 

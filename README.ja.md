@@ -87,7 +87,7 @@ sleeve の `length_mm` を 481 にして再実行すると、不一致は「×�
 
 ## For Developers
 
-Loomit は pnpm monorepo です。`@loomit/core` がドメインロジック（schema 検証、compatibility / fit / movement ルール、semantic diff、構造化レポート）を持ち、CLI には依存しません。`@loomit/cli` は core の診断を text / JSON に整形する薄い adapter です。TypeScript + Zod schema + Vitest で書かれています。責務境界は [Architecture](docs/architecture.md)、ドメインモデルは [Core Concepts](docs/core-concepts.ja.md) を参照してください。
+Loomit は pnpm monorepo です。`loomit-core` がドメインロジック（schema 検証、compatibility / fit / movement ルール、semantic diff、構造化レポート）を持ち、CLI には依存しません。`loomit` は core の診断を text / JSON に整形する薄い adapter です。TypeScript + Zod schema + Vitest で書かれています。責務境界は [Architecture](docs/architecture.md)、ドメインモデルは [Core Concepts](docs/core-concepts.ja.md) を参照してください。
 
 ## How This Was Built
 
