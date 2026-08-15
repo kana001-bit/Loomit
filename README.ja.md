@@ -8,7 +8,7 @@ _English version: [`README.md`](README.md)_
 
 ## What is Loomit?
 
-Loomit は、型紙づくりに Git ライクなワークフローを持ち込むローカルファースト CLI です。設計の反復管理、互換性の検証、意味のある変更の記録、パーツの再利用に注力し、CAD 編集は Valentina（型紙 CAD）のような外部ツールに任せます。
+Loomit は、型紙づくりに Git ライクなワークフローを持ち込むローカルファースト CLI です。設計の反復管理、互換性の検証、意味のある変更の記録に注力し、CAD 編集は Valentina（型紙 CAD）のような外部ツールに任せます。
 
 服作りでは、問題が見つかるのが遅すぎることがよくあります——縫うと合わないパーツ、小さな変更のたびの試作やり直し、何をなぜ変えたか分からなくなる、など。Loomit は試作を、より意図的で、説明可能で、無駄の少ないものにします。
 
@@ -20,10 +20,10 @@ _作る人は [Vision](docs/vision.md) から。開発者は [Architecture](docs
 
 型紙のパーツはプレーンテキストなので、普通の Git リポジトリの中に置けます。そして `git diff` が「どの行が動いたか」を見せるのに対し、`loom diff` は同じ2版を読み、その変更が**服に何をするか**を答えます——だからコミットは座標の塊ではなく「ウエストのダーツを詰めた」という縫製の判断になります。
 
-下の例はウエストのダーツを詰めた変更です。読み取れるのは `volume change: reduced`（ボリューム減）と `connection risk: none`（縫い合わせは維持）です（初回は `pnpm install && pnpm build`）:
+下の例はウエストのダーツを詰めた変更です。読み取れるのは `volume change: reduced`（ボリューム減）と `connection risk: none`（縫い合わせは維持）です:
 
 ```console
-$ node packages/cli/dist/main.js diff examples/waist-dart/bodice-v1.part.loom examples/waist-dart/bodice-v2.part.loom
+$ loom diff examples/waist-dart/bodice-v1.part.loom examples/waist-dart/bodice-v2.part.loom
 Loomit diff: changed
 From: bodice-front@fitted (body)
 To:   bodice-front@fitted (body)
@@ -46,6 +46,23 @@ Changes:
 ```
 
 `connection risk: none` は、変更後もパーツがまだ縫い合わさることを意味します。同じ読み取りは Git の履歴に対しても働きます（`loom diff main..HEAD --part body`）。これは「型紙のバージョン管理」という大きな目標の一部ですが、**クローン直後から、Valentina も `.val` も無しで今日動く**一部です。
+
+## Install
+
+Node.js 24+ が必要です。
+
+```console
+npm install -g loomit
+loom --help
+```
+
+Loomit が測るのは構造です。幾何の測定と修正提案まで含めるなら、残り2つも入れます。`loom` は `PATH` から見つけるので設定は要りません:
+
+```console
+npm install -g seamlint @kana001-bit/truer
+```
+
+ここで見せている example はこのリポジトリの中にあるので、自分で動かすには clone してください。ソースから動かす場合は [Quick Start](#quick-start-from-source) を参照。
 
 ## The three tools
 
@@ -72,7 +89,7 @@ Loomit は型紙ツールチェーンの3分の1で、それぞれ仕事は1つ�
 布を裁つ前に、一着のパーツがまだ縫い合わせられるかを確認します。同梱の `examples/blouse` は、armhole（袖ぐり）が合う body と sleeve を持っています:
 
 ```console
-$ node packages/cli/dist/main.js check examples/blouse
+$ loom check examples/blouse
 Loomit check: ok
 
 Compatibility:
@@ -93,9 +110,9 @@ Loomit は pnpm monorepo です。`loomit-core` がドメインロジック（sc
 
 Loomit は、私がディレクションし、AI コーディングエージェントに実装させて作っています。設計・アーキテクチャ・ドメインモデリング、そしてすべての判断は私のもので、エージェントは私が定めたルールの下でコードを書いています。そのルールは [`AGENTS.md`](AGENTS.md)——明文化した私の設計規約——にまとまっています（例: `core` は CLI に依存しない / `variant` はバージョンとして比較しない / `length_mm` は常に仕上がり寸法）。設計の理由、そして後から覆した判断とその理由は [Design History](docs/design-history.md) に記録しています。
 
-## Quick Start
+## Quick Start (from source)
 
-必要なもの: Node.js 24+ と `pnpm`。
+Loomit 自体に手を入れる場合の手順です。必要なもの: Node.js 24+ と `pnpm`。
 
 ```bash
 pnpm install
@@ -103,10 +120,10 @@ pnpm build
 pnpm test
 ```
 
-その後は同梱の example で試せます（Valentina も `.val` も不要。`pnpm loom` は `node packages/cli/dist/main.js` のショートカットです）:
+その後は同梱の example で試せます（Valentina も `.val` も不要。`pnpm loom` はグローバルに入れずに CLI を動かすショートカットです）:
 
 ```console
-$ node packages/cli/dist/main.js diff examples/waist-dart/bodice-v1.part.loom examples/waist-dart/bodice-v2.part.loom
+$ pnpm loom diff examples/waist-dart/bodice-v1.part.loom examples/waist-dart/bodice-v2.part.loom
 ```
 
 コマンドの使い方と実行例は [Tutorials](docs/tutorials.md) にあります。
