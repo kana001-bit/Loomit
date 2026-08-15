@@ -40,7 +40,7 @@ describe("project path resolution", () => {
           severity: "error",
           code: "PROJECT_ROOT_NOT_FOUND",
           message: "loomit.yml が見つかりませんでした。/ Could not find loomit.yml.",
-          target: startPath,
+          target: { kind: "text", value: startPath },
           suggestion: [
             "Loomit プロジェクト内で実行するか、loomit.yml の場所を確認してください。/ Run inside a Loomit project or check where loomit.yml is located."
           ]

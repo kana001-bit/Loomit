@@ -43,7 +43,7 @@ export function runMovementTest(
           severity: "error",
           code: "MOVEMENT_TEST_UNSUPPORTED",
           message: `動作テストのシナリオ "${scenario}" にはまだ対応していません。 / Movement test scenario "${scenario}" is not supported yet.`,
-          target: scenario,
+          target: { kind: "text", value: scenario },
           suggestion: ['Use a supported scenario such as "arm-raise".']
         })
       ]

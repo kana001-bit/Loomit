@@ -73,7 +73,7 @@ describe("loadPrototypeNotesFile", () => {
           code: "PROTOTYPE_NOTES_SCHEMA_INVALID",
           message:
             "試作メモファイルの形式が schema と一致しません。/ The prototype notes file does not match the schema.",
-          target: filePath,
+          target: { kind: "text", value: filePath },
           suggestion: ["問題の場所: notes.0 / Problem path: notes.0"]
         }
       ]

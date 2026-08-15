@@ -72,6 +72,32 @@ describe("runCli", () => {
     expect(output.stderr).toEqual([]);
   });
 
+  it("prints the diagnostic target in the text report", async () => {
+    // 守る仕様: text 出力の 1 行目は `  [severity] CODE target`。**target がここに出ることを固定する。**
+    //
+    // 既存のテストは CONNECTOR_LENGTH_MISMATCH という code が出ることしか見ていなかったので、target を
+    // 落としても空にしても緑のまま通っていた。診断の構造化(Diagnostic.target を DiagnosticSubject に
+    // 置換する作業)で表示が変わっていないことを確かめられるのは、この行を実際に読むテストだけ。
+    const output = createOutputCollector();
+    const exitCode = await runCli(
+      ["node", "loom", "check", join(fixturesRoot, "length-mismatch")],
+      {
+        cwd: workspaceRoot,
+        io: output.io
+      }
+    );
+
+    expect(exitCode).toBe(1);
+    expect(output.stdout.join("")).toContain(
+      "  [error] CONNECTOR_LENGTH_MISMATCH sleeve.armhole\n"
+    );
+    // フィールドを指す診断は、対象と項目の間も点でつながって出る。
+    expect(output.stdout.join("")).toContain(
+      "  [error] REQUIREMENT_RANGE_UNSATISFIED sleeve.armhole.length_mm\n"
+    );
+    expect(output.stderr).toEqual([]);
+  });
+
   it("runs doctor with text output for an invalid project", async () => {
     // 守る仕様: 不正な project の doctor は text 出力で "error" と平易文の問題説明を出し exit 1。
     const output = createOutputCollector();
@@ -484,7 +510,7 @@ describe("runCli", () => {
       expect(report.diagnostics).toContainEqual(
         expect.objectContaining({
           code: "PROTOTYPE_NOTES_SCHEMA_INVALID",
-          target: join(toProject, "notes/prototype-notes.yml")
+          target: { kind: "text", value: join(toProject, "notes/prototype-notes.yml") }
         })
       );
       expect(output.stderr).toEqual([]);
@@ -544,7 +570,7 @@ describe("runCli", () => {
       expect(report.diagnostics).toContainEqual(
         expect.objectContaining({
           code: "PROJECT_PATH_NOT_FOUND",
-          target: missingChild
+          target: { kind: "text", value: missingChild }
         })
       );
       expect(output.stderr).toEqual([]);

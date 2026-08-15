@@ -91,7 +91,7 @@ export async function runMatchCommand(
           severity: "error",
           code: "MATCH_SAME_ROLE",
           message: `同じパーツ "${parsedArgs.roleA}" 同士は match できません。縫い目は異なるパーツ同士を繋ぎます。 / Cannot match part "${parsedArgs.roleA}" to itself; a seam joins parts to each other, not a part to itself.`,
-          target: parsedArgs.roleA,
+          target: { kind: "text", value: parsedArgs.roleA },
           suggestion: ["異なる2つの part role を渡してください。 / Give two distinct part roles."]
         })
       ]),
@@ -128,7 +128,7 @@ export async function runMatchCommand(
           severity: "error",
           code: "MATCH_ROLE_NOT_FOUND",
           message: `role ${missingRoles.map((role) => `"${role}"`).join(" / ")} のパーツが登録されていません。 / No part is registered for role ${missingRoles.map((role) => `"${role}"`).join(" / ")}.`,
-          target: missingRoles.join(", "),
+          target: { kind: "text", value: missingRoles.join(", ") },
           suggestion: [
             "role の綴りを確認するか、loom add で先にパーツを足してください。登録済みパーツは loom check で確認できます。 / Check the role spelling, or add the part first with loom add."
           ]
@@ -151,7 +151,7 @@ export async function runMatchCommand(
         severity: "error",
         code: "MATCH_NO_SEAM",
         message: `"${parsedArgs.roleA}" と "${parsedArgs.roleB}" は縫い合うと宣言されていません。 / "${parsedArgs.roleA}" and "${parsedArgs.roleB}" are not declared to sew together.`,
-        target: `${parsedArgs.roleA}/${parsedArgs.roleB}`,
+        target: { kind: "text", value: `${parsedArgs.roleA}/${parsedArgs.roleB}` },
         suggestion: [
           `loom connect ${parsedArgs.roleA} ${parsedArgs.roleB} --as <id> で縫い合うと宣言してください。 / Declare the seam with loom connect ${parsedArgs.roleA} ${parsedArgs.roleB} --as <id>.`
         ]
@@ -311,7 +311,7 @@ function seamlintRunnerErrorDiagnostic(runResult: {
     message: notFound
       ? `Seamlint 実行ファイルが見つからず、縫い目を測れませんでした。 / Loomit could not find the Seamlint executable to measure the seam. (${runResult.message})`
       : `Seamlint を実行できませんでした。 / Loomit could not run Seamlint. (${runResult.message})`,
-    target: "seamlint",
+    target: { kind: "text", value: "seamlint" },
     suggestion: notFound
       ? ["\"slnt\" を PATH に置くか、--slnt <path> で実行ファイルを指定してください。 / Install Seamlint on PATH, or pass --slnt <path>."]
       : ["Seamlint が \"slnt check-request --json\" を受け付けて動くか確認してください。 / Check that Seamlint runs and accepts \"slnt check-request --json\"."]

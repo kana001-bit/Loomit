@@ -72,7 +72,7 @@ export async function addPrototypeNote(
           code: "PROTOTYPE_NOTES_UNREADABLE",
           message:
             "既存の試作ノートを確認できませんでした。 / Could not determine whether the prototype notes file exists.",
-          target: notesFilePath,
+          target: { kind: "text", value: notesFilePath },
           suggestion: ["Check the project path and filesystem permissions."]
         })
       ]
@@ -113,7 +113,7 @@ export async function addPrototypeNote(
           code: "PROTOTYPE_NOTE_ADD_SCHEMA_INVALID",
           message:
             "追加しようとした試作ノートが schema に合っていません。 / The prototype note to add does not match the schema.",
-          target: notesFilePath,
+          target: { kind: "text", value: notesFilePath },
           suggestion: [parsed.error.issues.map((issue) => issue.message).join("; ")]
         })
       ]
@@ -132,7 +132,7 @@ export async function addPrototypeNote(
           code: "PROTOTYPE_NOTE_ADD_FAILED",
           message:
             "試作ノートを組み立てられませんでした。 / The prototype note could not be constructed.",
-          target: notesFilePath
+          target: { kind: "text", value: notesFilePath }
         })
       ]
     };
@@ -150,7 +150,7 @@ export async function addPrototypeNote(
           code: "PROTOTYPE_NOTE_ADD_FAILED",
           message:
             "試作ノートを書き込めませんでした。 / Could not write the prototype note.",
-          target: notesFilePath,
+          target: { kind: "text", value: notesFilePath },
           suggestion: ["Check the project path and filesystem permissions."]
         })
       ]

@@ -519,7 +519,13 @@ describe("loadProjectedPart (piece scope)", () => {
           code: diagnostic.code,
           target: diagnostic.target
         }))
-      ).toEqual([{ code: "PART_SOURCE_VAL_PIECE_NOT_FOUND", target: "frnt" }]);
+      ).toEqual([
+        {
+          code: "PART_SOURCE_VAL_PIECE_NOT_FOUND",
+          // この emit 箇所はまだ piece 名を string で渡しているので `{ kind: "text" }` に畳まれる。
+          target: { kind: "text", value: "frnt" }
+        }
+      ]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

@@ -14,7 +14,7 @@ export async function loadProfileFile(filePath: string): Promise<LoadFileResult<
 
   const parseResult = parseYamlText(readResult.value, {
     invalidCode: "PROFILE_YAML_INVALID",
-    target: filePath
+    target: { kind: "text", value: filePath }
   });
 
   if (!parseResult.ok) {
@@ -24,6 +24,6 @@ export async function loadProfileFile(filePath: string): Promise<LoadFileResult<
   return validateSchema(profileSchema, parseResult.value, {
     invalidCode: "PROFILE_SCHEMA_INVALID",
     invalidMessage: "Profile file does not match the schema.",
-    target: filePath
+    target: { kind: "text", value: filePath }
   });
 }

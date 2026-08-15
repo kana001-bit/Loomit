@@ -29,7 +29,7 @@ export async function findProjectRoot(startPath: string): Promise<LoadFileResult
           describeFsError(accessState.error, {
             code: "PROJECT_ROOT_ACCESS_FAILED",
             message: "loomit.yml にアクセスできませんでした。 / Could not access loomit.yml.",
-            target: projectFilePath,
+            target: { kind: "text", value: projectFilePath },
             suggestion: ["Check read permissions for loomit.yml and its parent directory."]
           })
         ]
@@ -46,7 +46,7 @@ export async function findProjectRoot(startPath: string): Promise<LoadFileResult
             severity: "error",
             code: "PROJECT_ROOT_NOT_FOUND",
             message: "loomit.yml が見つかりませんでした。/ Could not find loomit.yml.",
-            target: startPath,
+            target: { kind: "text", value: startPath },
             suggestion: [
               "Loomit プロジェクト内で実行するか、loomit.yml の場所を確認してください。/ Run inside a Loomit project or check where loomit.yml is located."
             ]

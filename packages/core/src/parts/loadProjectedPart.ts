@@ -183,7 +183,7 @@ async function loadProjected(
             code: "PART_SOURCE_VAL_PIECE_UNDECLARED",
             message:
               "files.piece が未宣言のため、source.val から射影したダーツ・合印を型紙ピース単位に絞れませんでした。他のピースのものが混ざっている可能性があります。 / files.piece is not declared, so darts and notches projected from source.val could not be scoped to one pattern piece; features from other pieces may be included.",
-            target: filePath,
+            target: { kind: "text", value: filePath },
             suggestion: [
               "part.loom の files.piece に、この part が対応する .val の detail 名(= DXF export の BLOCK 名)を宣言してください。 / Declare the .val detail name (the DXF export block name) for this part in files.piece."
             ]
@@ -204,7 +204,7 @@ async function loadProjected(
             "files.piece に宣言した piece(detail)が source.val に見つからないため、ダーツ・合印を射影できませんでした。 / Could not find the piece (detail) declared in files.piece inside source.val, so no darts or notches were projected.",
           // target は piece 名。この code の既存の出どころ(collectEdgeOccurrencesFromVal)と同じ形式に揃える ──
           // 同じ code で target の形が2つあると、code をキーに target を読む消費側が壊れる。
-          target: piece,
+          target: { kind: "text", value: piece },
           suggestion: [
             "files.piece が .val の detail 名(= DXF BLOCK 名)と一致しているか確認してください。 / Check that files.piece matches a detail name (the DXF block name) in the .val."
           ]

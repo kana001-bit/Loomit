@@ -32,7 +32,7 @@ describe("check report", () => {
           severity: "error",
           code: "CONNECTOR_LENGTH_MISMATCH",
           message: "Connector lengths differ beyond tolerance.",
-          target: "sleeve.armhole"
+          target: { kind: "connector", role: "sleeve", connectorId: "armhole" }
         }
       ]
     });

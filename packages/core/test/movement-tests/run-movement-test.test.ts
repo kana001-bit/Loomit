@@ -26,7 +26,7 @@ describe("runMovementTest", () => {
         severity: "warning",
         code: "ARM_RAISE_FITTED_ARMHOLE_RISK",
         message: "袖付きで袖ぐりが fitted なブラウスは、腕を上げる動作でも確認したほうがよいです。 / Fitted armholes on sleeved blouses should be checked with an arm raise test.",
-        target: "arm-raise",
+        target: { kind: "text", value: "arm-raise" },
         suggestion: [
           "Try raising both arms and check whether the bodice lifts or the sleeve cap restricts movement."
         ]
@@ -43,7 +43,7 @@ describe("runMovementTest", () => {
             severity: "warning",
             code: "ARM_RAISE_FITTED_ARMHOLE_RISK",
             message: "袖付きで袖ぐりが fitted なブラウスは、腕を上げる動作でも確認したほうがよいです。 / Fitted armholes on sleeved blouses should be checked with an arm raise test.",
-            target: "arm-raise",
+            target: { kind: "text", value: "arm-raise" },
             suggestion: [
               "Try raising both arms and check whether the bodice lifts or the sleeve cap restricts movement."
             ]
@@ -67,7 +67,7 @@ describe("runMovementTest", () => {
         severity: "warning",
         code: "ARM_RAISE_FITTED_ARMHOLE_RISK",
         message: "袖付きで袖ぐりが fitted なブラウスは、腕を上げる動作でも確認したほうがよいです。 / Fitted armholes on sleeved blouses should be checked with an arm raise test.",
-        target: "arm-raise",
+        target: { kind: "text", value: "arm-raise" },
         suggestion: [
           "Try raising both arms and check whether the bodice lifts or the sleeve cap restricts movement."
         ]
@@ -76,7 +76,7 @@ describe("runMovementTest", () => {
         severity: "warning",
         code: "MOVEMENT_TEST_PROTOTYPE_NOTE_RISK",
         message: '過去の試作ノート "note-2026-06-28-armhole" が、この動作テストに該当しています。 / Previous prototype note "note-2026-06-28-armhole" matched this movement test.',
-        target: "note-2026-06-28-armhole",
+        target: { kind: "text", value: "note-2026-06-28-armhole" },
         suggestion: ["armhole tight when raising arms"]
       }
     ]);
@@ -90,7 +90,7 @@ describe("runMovementTest", () => {
           severity: "warning",
           code: "MOVEMENT_TEST_PROTOTYPE_NOTE_RISK",
           message: '過去の試作ノート "note-2026-06-28-armhole" が、この動作テストに該当しています。 / Previous prototype note "note-2026-06-28-armhole" matched this movement test.',
-          target: "note-2026-06-28-armhole",
+          target: { kind: "text", value: "note-2026-06-28-armhole" },
           suggestion: ["armhole tight when raising arms"]
         }
       ]
@@ -109,7 +109,7 @@ describe("runMovementTest", () => {
           severity: "error",
           code: "MOVEMENT_TEST_UNSUPPORTED",
           message: '動作テストのシナリオ "squat" にはまだ対応していません。 / Movement test scenario "squat" is not supported yet.',
-          target: "squat",
+          target: { kind: "text", value: "squat" },
           suggestion: ['Use a supported scenario such as "arm-raise".']
         }
       ],
@@ -131,7 +131,8 @@ describe("runMovementTest", () => {
             severity: "warning",
             code: "X_MOVEMENT_TEST_CUSTOM_NOTE",
             message: `Custom rule matched ${context.scenario}.`,
-            target: context.scenario
+            // scenario 名はプロジェクト構造上の位置を持たない自由語なので text。
+            target: { kind: "text", value: context.scenario }
           }
         ];
 
@@ -157,7 +158,7 @@ describe("runMovementTest", () => {
           severity: "warning",
           code: "X_MOVEMENT_TEST_CUSTOM_NOTE",
           message: "Custom rule matched arm-raise.",
-          target: "arm-raise"
+          target: { kind: "text", value: "arm-raise" }
         }
       ],
       scenario: "arm-raise",
@@ -172,7 +173,7 @@ describe("runMovementTest", () => {
               severity: "warning",
               code: "X_MOVEMENT_TEST_CUSTOM_NOTE",
               message: "Custom rule matched arm-raise.",
-              target: "arm-raise"
+              target: { kind: "text", value: "arm-raise" }
             }
           ]
         }

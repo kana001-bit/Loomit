@@ -67,7 +67,7 @@ describe("projectNotchesFromValText", () => {
     expect(result.notches).toEqual({});
     expect(result.diagnostics).toHaveLength(1);
     expect(result.diagnostics[0]?.code).toBe("PART_SOURCE_VAL_NOTCH_UNSUPPORTED");
-    expect(result.diagnostics[0]?.target).toBe("fixture.val#bodice/hem/60");
+    expect(result.diagnostics[0]?.target).toEqual({ kind: "text", value: "fixture.val#bodice/hem/60" });
   });
 
   it("ignores paths that are not seams", () => {
@@ -361,7 +361,7 @@ describe("projectNotchesFromValText", () => {
     });
     expect(result.diagnostics).toHaveLength(1);
     expect(result.diagnostics[0]?.code).toBe("PART_SOURCE_VAL_NOTCH_DUPLICATE_PIECE");
-    expect(result.diagnostics[0]?.target).toBe("fixture.val#front");
+    expect(result.diagnostics[0]?.target).toEqual({ kind: "text", value: "fixture.val#front" });
   });
 
   it("treats piece names differing only in case as duplicates (Seamlint matches case-insensitively)", () => {
@@ -396,7 +396,7 @@ describe("projectNotchesFromValText", () => {
     });
     expect(result.diagnostics).toHaveLength(1);
     expect(result.diagnostics[0]?.code).toBe("PART_SOURCE_VAL_NOTCH_DUPLICATE_PIECE");
-    expect(result.diagnostics[0]?.target).toBe("fixture.val#front");
+    expect(result.diagnostics[0]?.target).toEqual({ kind: "text", value: "fixture.val#front" });
   });
 
   it("assigns distinct order to multiple same-type passmarks in one piece", () => {

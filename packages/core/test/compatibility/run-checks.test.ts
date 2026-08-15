@@ -95,7 +95,7 @@ describe("runChecks", () => {
             code: "CONNECTOR_LENGTH_MISMATCH",
             message:
               "コネクタの仕上がり線の長さが許容差を超えています。/ Connector finished seam lengths exceed the tolerance.",
-            target: "sleeve.armhole",
+            target: { kind: "connector", role: "sleeve", connectorId: "armhole" },
             suggestion: [
               "body.armhole and sleeve.armhole differ by 11mm; allowed tolerance is 3mm."
             ]
@@ -120,7 +120,11 @@ describe("runChecks", () => {
             code: "REQUIREMENT_RANGE_UNSATISFIED",
             message:
               "要求条件の範囲を満たしていません。/ The requirement range is not satisfied.",
-            target: "sleeve.armhole.length_mm",
+            target: {
+              kind: "field",
+              within: { kind: "connector", role: "sleeve", connectorId: "armhole" },
+              path: ["length_mm"]
+            },
             suggestion: [
               "sleeve.armhole.length_mm is 480, but expected min 466, max 472."
             ]
@@ -145,7 +149,11 @@ describe("runChecks", () => {
             code: "REQUIREMENT_RANGE_UNSATISFIED",
             message:
               "要求条件の範囲を満たしていません。/ The requirement range is not satisfied.",
-            target: "body.armhole.length_mm",
+            target: {
+              kind: "field",
+              within: { kind: "connector", role: "body", connectorId: "armhole" },
+              path: ["length_mm"]
+            },
             suggestion: [
               "body.armhole.length_mm is 469, but expected min 477, max 483."
             ]
@@ -228,7 +236,8 @@ describe("runChecks", () => {
           code: "CONNECTOR_LENGTH_UNMEASURED",
           message:
             "コネクタの仕上がり線の長さが未測定のため、接続整合を確認できません。/ Connector finished seam length is unmeasured; cannot verify the seam fit.",
-          target: "sleeve.armhole",
+          // 未測定が片側だけなら many で包まず、その 1 件をそのまま指す(combineDiagnosticSubjects の規則)。
+          target: { kind: "connector", role: "sleeve", connectorId: "armhole" },
           suggestion: [
             "Run `loom slnt check` to have Seamlint measure the seam, or set a declared length_mm on sleeve.armhole."
           ]
@@ -283,7 +292,11 @@ describe("runChecks", () => {
           code: "CONNECTOR_LENGTH_UNMEASURED",
           message:
             "要求条件の参照先コネクタの length_mm が未測定のため、条件を確認できません。/ The connector referenced by the requirement has an unmeasured length_mm; cannot check the requirement.",
-          target: "sleeve.armhole.length_mm",
+          target: {
+            kind: "field",
+            within: { kind: "connector", role: "sleeve", connectorId: "armhole" },
+            path: ["length_mm"]
+          },
           suggestion: [
             "Run `loom slnt check` to have Seamlint measure the seam, or set a declared length_mm on sleeve.armhole."
           ]
@@ -327,7 +340,11 @@ describe("runChecks", () => {
           code: "CONNECTOR_MISSING",
           message:
             "要求条件の参照先コネクタが見つかりません。/ Could not find the connector referenced by the requirement.",
-          target: "sleeve.armhole.length_mm",
+          target: {
+            kind: "field",
+            within: { kind: "connector", role: "sleeve", connectorId: "armhole" },
+            path: ["length_mm"]
+          },
           suggestion: [
             'Add connector "armhole" to part "sleeve", or update the requirement target.'
           ]
@@ -417,7 +434,7 @@ describe("runChecks", () => {
           code: "CONNECTOR_JOIN_OPEN",
           message:
             "コネクタの縫い合わせ相手がいません(1つのパーツだけが宣言)。/ Connector join has no mate; only one part declares it.",
-          target: "body.armhole",
+          target: { kind: "connector", role: "body", connectorId: "armhole" },
           suggestion: [
             'Add a part that also declares connector "armhole", fix a mismatched id, or if "armhole" is an internal (self) seam, check it in Seamlint instead of declaring a connector.'
           ]
@@ -498,7 +515,8 @@ describe("runChecks", () => {
           expect.objectContaining({
             severity: "error",
             code: "CONNECTOR_JOIN_TOO_MANY_SIDES",
-            target: "armhole"
+            // 縫い目そのものを指す(part には紐づかない)。
+            target: { kind: "join", joinId: "armhole" }
           })
         ]
       })
@@ -544,7 +562,13 @@ describe("runChecks", () => {
           expect.objectContaining({
             severity: "warning",
             code: "CONNECTOR_UNIT_DISCONNECTED",
-            target: "armhole.bodice"
+            // string 時代は "armhole.bodice" で、`{role}.{connectorId}` と字面が同じだった。
+            // 構造では join "armhole" の側 "bodice" として、connector とは別物であることが読める。
+            target: {
+              kind: "field",
+              within: { kind: "join", joinId: "armhole" },
+              path: ["bodice"]
+            }
           })
         ]
       })

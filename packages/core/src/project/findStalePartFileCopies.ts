@@ -140,7 +140,7 @@ async function readForComparison(
             code: "PART_FILE_COMPARE_READ_FAILED",
             message:
               "コピー比較のためのファイルを読めませんでした(この比較は省略)。 / Could not read a file for copy comparison; this comparison was skipped.",
-            target: filePath,
+            target: { kind: "text", value: filePath },
             suggestion: [
               "ファイルの読み取り権限を確認してください。 / Check read permissions for the file."
             ]

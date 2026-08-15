@@ -34,7 +34,7 @@ describe("doctor report", () => {
         title: "Connector Length Mismatch",
         detail:
           "body.armhole is 469mm and sleeve.armhole is 480mm. The difference is 11mm, but the allowed tolerance is 3mm.",
-        target: "sleeve.armhole",
+        target: { kind: "connector", role: "sleeve", connectorId: "armhole" },
         suggestion: [
           "body.armhole and sleeve.armhole differ by 11mm; allowed tolerance is 3mm."
         ],
@@ -49,7 +49,11 @@ describe("doctor report", () => {
         title: "Requirement Range Unsatisfied",
         detail:
           "body.requires.sleeve.armhole.length_mm requires sleeve.armhole.length_mm to be at least 466 and at most 472, but the actual value is 480.",
-        target: "sleeve.armhole.length_mm",
+        target: {
+          kind: "field",
+          within: { kind: "connector", role: "sleeve", connectorId: "armhole" },
+          path: ["length_mm"]
+        },
         suggestion: [
           "sleeve.armhole.length_mm is 480, but expected min 466, max 472."
         ],
@@ -64,7 +68,11 @@ describe("doctor report", () => {
         title: "Requirement Range Unsatisfied",
         detail:
           "sleeve.requires.body.armhole.length_mm requires body.armhole.length_mm to be at least 477 and at most 483, but the actual value is 469.",
-        target: "body.armhole.length_mm",
+        target: {
+          kind: "field",
+          within: { kind: "connector", role: "body", connectorId: "armhole" },
+          path: ["length_mm"]
+        },
         suggestion: [
           "body.armhole.length_mm is 469, but expected min 477, max 483."
         ],
@@ -104,7 +112,7 @@ describe("doctor report", () => {
       title: "Connector Join Open",
       detail:
         "body.armhole is declared by only one part, so it has no seam partner to sew to. A seam is sewn by at least two parts: add the mating part, fix a mismatched join id, or move an internal (self) seam to Seamlint.",
-      target: "body.armhole",
+      target: { kind: "connector", role: "body", connectorId: "armhole" },
       suggestion: [
         'Add a part that also declares connector "armhole", fix a mismatched id, or if "armhole" is an internal (self) seam, check it in Seamlint instead of declaring a connector.'
       ],
@@ -153,7 +161,7 @@ describe("doctor report", () => {
       title: "Connector Join Too Many Sides",
       detail:
         'Connector "armhole" declares more than two sides (bodice, collar, sleeve). A seam joins exactly two sides (units); use distinct connector ids for separate seams, or regroup the parts into two sides.',
-      target: "armhole",
+      target: { kind: "join", joinId: "armhole" },
       suggestion: [
         'Connector "armhole" declares 3 sides (bodice, collar, sleeve); a seam joins exactly two sides. Use distinct connector ids for separate seams, or regroup the parts into two sides.'
       ],

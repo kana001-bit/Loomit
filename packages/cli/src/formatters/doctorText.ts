@@ -1,3 +1,4 @@
+import { formatDiagnosticSubject } from "@loomit/core";
 import type { DoctorReport } from "@loomit/core";
 
 export function formatDoctorText(report: DoctorReport): string {
@@ -10,7 +11,7 @@ export function formatDoctorText(report: DoctorReport): string {
       lines.push(`  [${finding.code}] ${finding.title}`);
 
       if (finding.target !== undefined) {
-        lines.push(`    target: ${finding.target}`);
+        lines.push(`    target: ${formatDiagnosticSubject(finding.target)}`);
       }
 
       if (finding.source !== undefined) {

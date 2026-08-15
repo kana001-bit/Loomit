@@ -43,7 +43,7 @@ describe("project fixtures", () => {
           code: "FILE_READ_FAILED",
           // 詳細(errno の理由)は英語のまま括弧で1回だけ。日英の区切りは先頭の1つに保つ。
           message: "ファイルを読み込めませんでした。 / Could not read the file. (path not found)",
-          target: missingPartPath,
+          target: { kind: "text", value: missingPartPath },
           suggestion: ["パスが正しいか確認してください。 / Check that the path is correct."]
         }
       ]

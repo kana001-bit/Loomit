@@ -104,7 +104,7 @@ function describeValDetailsReadError(error: unknown, filePath: string): Diagnost
       code: "PART_SOURCE_VAL_READ_FAILED",
       message:
         "取り込み元 .val の detail 一覧を読めませんでした。 / Could not read the .val detail list.",
-      target: filePath,
+      target: { kind: "text", value: filePath },
       suggestion: [
         "ファイルの読み取り権限を確認してください。 / Check read permissions for the .val file."
       ]
@@ -117,7 +117,7 @@ function describeValDetailsReadError(error: unknown, filePath: string): Diagnost
       code: "PART_SOURCE_VAL_READ_FAILED",
       message:
         "取り込み元 .val の detail 一覧を読めませんでした。 / Could not read the .val detail list.",
-      target: filePath,
+      target: { kind: "text", value: filePath },
       suggestion: ["ファイルの場所を確認してください。 / Check that the .val path is correct."]
     });
   }
@@ -127,7 +127,7 @@ function describeValDetailsReadError(error: unknown, filePath: string): Diagnost
     code: "PART_SOURCE_VAL_READ_FAILED",
     message:
       "取り込み元 .val の detail 一覧を読めませんでした。 / Could not read the .val detail list.",
-    target: filePath,
+    target: { kind: "text", value: filePath },
     suggestion: [
       "ファイルの内容と読み取り権限を確認してください。 / Check the file contents and read permissions."
     ]

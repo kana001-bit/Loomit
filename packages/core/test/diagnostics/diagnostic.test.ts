@@ -15,7 +15,7 @@ describe("diagnostics", () => {
       code: "PROJECT_SCHEMA_INVALID",
       message:
         "プロジェクトファイルの形式が正しくありません。 / The project file format is invalid.",
-      target: "loomit.yml",
+      target: { kind: "file", path: "loomit.yml" },
       suggestion: ["schema フィールドを確認してください。"]
     });
 
@@ -24,7 +24,7 @@ describe("diagnostics", () => {
       code: "PROJECT_SCHEMA_INVALID",
       message:
         "プロジェクトファイルの形式が正しくありません。 / The project file format is invalid.",
-      target: "loomit.yml",
+      target: { kind: "file", path: "loomit.yml" },
       suggestion: ["schema フィールドを確認してください。"]
     });
   });
@@ -43,20 +43,20 @@ describe("diagnostics", () => {
         severity: "info",
         code: "UNREGISTERED_VAL_SOURCE",
         message: "未登録の .val があります。 / A .val is not registered as a part.",
-        target: "parts/sleeve.val"
+        target: { kind: "file", path: "parts/sleeve.val" }
       },
       {
         severity: "warning",
         code: "PART_GEOMETRY_STALE",
         message: "DXF が .val より古いままです。 / The DXF is older than the .val.",
-        target: "parts/sleeve.dxf"
+        target: { kind: "file", path: "parts/sleeve.dxf" }
       },
       {
         severity: "error",
         code: "CONNECTOR_LENGTH_MISMATCH",
         message:
           "袖ぐりの仕上がり線の長さが許容差を超えています。 / The finished armhole seam length exceeds the tolerance.",
-        target: "sleeve.armhole"
+        target: { kind: "connector", role: "sleeve", connectorId: "armhole" }
       }
     ];
 
@@ -70,7 +70,7 @@ describe("diagnostics", () => {
         severity: "warning",
         code: "PART_GEOMETRY_STALE",
         message: "DXF が .val より古いままです。 / The DXF is older than the .val.",
-        target: "parts/sleeve.dxf"
+        target: { kind: "file", path: "parts/sleeve.dxf" }
       }
     ]);
 
@@ -81,7 +81,7 @@ describe("diagnostics", () => {
           severity: "warning",
           code: "PART_GEOMETRY_STALE",
           message: "DXF が .val より古いままです。 / The DXF is older than the .val.",
-          target: "parts/sleeve.dxf"
+          target: { kind: "file", path: "parts/sleeve.dxf" }
         }
       ]
     });

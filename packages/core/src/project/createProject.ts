@@ -45,7 +45,7 @@ export async function createProject(
           code: "PROJECT_TARGET_UNREADABLE",
           message:
             "この場所が既存の Loomit プロジェクトか確認できませんでした。/ Could not determine whether this location is already a Loomit project.",
-          target: projectFilePath,
+          target: { kind: "text", value: projectFilePath },
           suggestion: ["Check the target path and filesystem permissions."]
         })
       ]
@@ -61,7 +61,7 @@ export async function createProject(
           code: "PROJECT_ALREADY_EXISTS",
           message:
             "この場所はすでに Loomit プロジェクトです。/ This location is already a Loomit project.",
-          target: projectFilePath,
+          target: { kind: "text", value: projectFilePath },
           suggestion: ["Run this in a directory without a loomit.yml, or remove the existing project file."]
         })
       ]
@@ -112,7 +112,7 @@ export async function createProject(
           code: "PROJECT_CREATE_FAILED",
           message:
             "Loomit プロジェクトを作成できませんでした。/ Could not create the Loomit project.",
-          target: projectRoot,
+          target: { kind: "text", value: projectRoot },
           suggestion: ["Check the target path and filesystem permissions."]
         })
       ]

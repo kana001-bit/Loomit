@@ -275,7 +275,7 @@ function runnerErrorDiagnostic(runResult: {
     message: notFound
       ? `幾何チェックを実行する Seamlint の実行ファイルが見つかりませんでした。 / Loomit could not find the Seamlint executable to run the geometry check. (${runResult.message})`
       : `幾何チェックのための Seamlint を実行できませんでした。 / Loomit could not run Seamlint for the geometry check. (${runResult.message})`,
-    target: "seamlint",
+    target: { kind: "text", value: "seamlint" },
     suggestion: notFound
       ? ["Install Seamlint so \"slnt\" is on PATH, or pass --slnt <path> to point at the executable."]
       : ["Check that the Seamlint executable runs and accepts \"slnt check-request --json\"."]

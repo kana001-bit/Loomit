@@ -18,6 +18,7 @@ import type { Connector, Part } from "../schema/part.schema.js";
 import { collectExistingJoins } from "./joinInventory.js";
 import type { ExistingJoin } from "./joinInventory.js";
 import { loadPartFile } from "./loadPartFile.js";
+import type { DiagnosticSubject } from "../diagnostics/subject.js";
 
 // loom connect の core 実装。「どの2パーツが縫い合うか」を作者が宣言する後付け導線(loom add --yes で骨組みだけ
 // 作った後の工程)。connector = 複数パーツを組む cross-part join 専用(design-history)なので、同じ id を両パーツの
@@ -75,7 +76,7 @@ export async function connectParts(
           severity: "error",
           code: "CONNECT_SAME_ROLE",
           message: `パーツ "${options.roleA}" 同士は connect できません。コネクタは異なるパーツ同士を繋ぎます。 / Cannot connect part "${options.roleA}" to itself; a connector joins parts to each other, not a part to itself.`,
-          target: options.roleA,
+          target: { kind: "text", value: options.roleA },
           suggestion: [
             "Give two distinct part roles. A self-seam (two edges of one piece) is measured by Seamlint, not declared as a connector."
           ]
@@ -96,7 +97,7 @@ export async function connectParts(
           severity: "error",
           code: "CONNECT_ID_INVALID",
           message: `コネクタ id "${options.id}" は使えません。"/" "\\" ":" "." "__" を含まない1つのトークンにしてください("." と ".." も不可)。 / Connector id "${options.id}" is not usable: it must be a single token without "/", "\\", ":", ".", or "__" (and not "." or "..").`,
-          target: options.id,
+          target: { kind: "text", value: options.id },
           suggestion: [
             'Use a simple id like "outseam" or "armhole". Seamlint reserves those characters to build seam ids, so an id with them would be silently dropped by loom slnt check.'
           ]
@@ -130,7 +131,7 @@ export async function connectParts(
           severity: "error",
           code: "CONNECT_ROLE_NOT_FOUND",
           message: `role ${missingRoles.map((role) => `"${role}"`).join(" / ")} の part が登録されていません。 / No part is registered for role ${missingRoles.map((role) => `"${role}"`).join(" or ")}.`,
-          target: missingRoles.join(", "),
+          target: { kind: "text", value: missingRoles.join(", ") },
           suggestion: [
             "Check the role spelling, or add the part first with loom add. Run loom check to list registered parts."
           ]
@@ -154,7 +155,7 @@ export async function connectParts(
           severity: "error",
           code: "CONNECT_SAME_FILE",
           message: `role "${options.roleA}" と "${options.roleB}" が同じ part.loom に解決されるため、実体は1つのパーツです。コネクタは異なるパーツ同士を繋ぎます。 / Roles "${options.roleA}" and "${options.roleB}" resolve to the same part.loom, so they are one physical part; a connector joins distinct parts.`,
-          target: filePathA,
+          target: { kind: "text", value: filePathA },
           suggestion: [
             "Point each role at its own part.loom in loomit.yml, or connect two distinct parts."
           ]
@@ -234,7 +235,7 @@ export async function connectParts(
           describeFsError(rollbackError, {
             code: "CONNECT_ROLLBACK_FAILED",
             message: `コネクタ "${options.id}" を "${options.roleA}" に書きましたが、"${options.roleB}" への書き込みも "${options.roleA}" の巻き戻しもできませんでした。片側だけが縫い目を宣言した状態です。 / Wrote connector "${options.id}" to "${options.roleA}" but could not write "${options.roleB}" or undo "${options.roleA}", so only one side declares the seam.`,
-            target: filePathA,
+            target: { kind: "text", value: filePathA },
             suggestion: [
               `Remove connectors.${options.id} from ${options.roleA}'s part.loom by hand, then run loom connect again.`
             ]
@@ -318,7 +319,7 @@ export async function connectBand(
     return connectBandError(
       "CONNECT_BAND_SIDE_CONFLICT",
       `Band side and neighbour side are both "${bandSide}"; a band seam needs two distinct sides.`,
-      bandSide,
+      { kind: "text", value: bandSide },
       ["Use different --band-side and --neighbour-side labels (defaults: band / neighbour)."]
     );
   }
@@ -327,7 +328,7 @@ export async function connectBand(
     return connectBandError(
       "CONNECT_BAND_NO_NEIGHBOURS",
       `Band "${options.bandRole}" has no neighbours to sew to.`,
-      options.bandRole,
+      { kind: "text", value: options.bandRole },
       ["List at least one neighbour part after --to (the pieces whose edges add up to the band)."]
     );
   }
@@ -345,7 +346,7 @@ export async function connectBand(
     return connectBandError(
       "CONNECT_BAND_DUPLICATE_ROLE",
       `Roles ${duplicated.map((role) => `"${role}"`).join(", ")} appear more than once; a band and each neighbour must be distinct parts.`,
-      duplicated.join(", "),
+      { kind: "text", value: duplicated.join(", ") },
       ["Give the band and each neighbour a distinct role. A part cannot be both the band and a neighbour."]
     );
   }
@@ -355,7 +356,7 @@ export async function connectBand(
     return connectBandError(
       "CONNECT_ID_INVALID",
       `Connector id "${options.id}" is not usable: it must be a single token without "/", "\\", ":", ".", or "__" (and not "." or "..").`,
-      options.id,
+      { kind: "text", value: options.id },
       ['Use a simple id like "waist" or "armhole". Seamlint reserves those characters to build seam ids.']
     );
   }
@@ -374,7 +375,7 @@ export async function connectBand(
     return connectBandError(
       "CONNECT_ROLE_NOT_FOUND",
       `No part is registered for role ${missingRoles.map((role) => `"${role}"`).join(" or ")}.`,
-      missingRoles.join(", "),
+      { kind: "text", value: missingRoles.join(", ") },
       ["Check the role spelling, or add the part first with loom add. Run loom check to list registered parts."]
     );
   }
@@ -397,7 +398,7 @@ export async function connectBand(
         return connectBandError(
           "CONNECT_SAME_FILE",
           `Roles "${a.role}" and "${b.role}" resolve to the same part.loom, so they are one physical part; a band joins distinct parts.`,
-          a.filePath,
+          { kind: "text", value: a.filePath },
           ["Point each role at its own part.loom in loomit.yml, or connect distinct parts."]
         );
       }
@@ -461,7 +462,7 @@ export async function connectBand(
             describeFsError(rollbackError, {
               code: "CONNECT_ROLLBACK_FAILED",
               message: `コネクタ "${options.id}" を "${done.role}" に書きましたが、band を完了することも巻き戻すこともできませんでした。その part.loom には縫い目の宣言が残っています。 / Wrote connector "${options.id}" to "${done.role}" but could not finish the band or undo it, so its part.loom still declares the seam.`,
-              target: done.filePath,
+              target: { kind: "text", value: done.filePath },
               suggestion: [
                 `Remove connectors.${options.id} from ${done.role}'s part.loom by hand, then run loom connect again.`
               ]
@@ -489,7 +490,7 @@ export async function connectBand(
     return connectBandError(
       "CONNECT_ROLE_NOT_FOUND",
       `No part is registered for role "${options.bandRole}".`,
-      options.bandRole,
+      { kind: "text", value: options.bandRole },
       ["Check the role spelling, or add the part first with loom add."]
     );
   }
@@ -564,7 +565,7 @@ export async function extendJoin(
     return connectBandError(
       "CONNECT_ROLE_NOT_FOUND",
       `role "${options.role}" の part が登録されていません。 / No part is registered for role "${options.role}".`,
-      options.role,
+      { kind: "text", value: options.role },
       ["Check the role spelling, or add the part first with loom add."]
     );
   }
@@ -583,7 +584,7 @@ export async function extendJoin(
     return connectBandError(
       "CONNECT_JOIN_NOT_FOUND",
       `join "${options.id}" はこのプロジェクトにありません。 / No join "${options.id}" exists in this project.`,
-      options.id,
+      { kind: "text", value: options.id },
       [
         "Check the id with loom check, or create the seam first with loom connect <a> <b> --as <id> (or --to for a band)."
       ]
@@ -597,7 +598,7 @@ export async function extendJoin(
     return connectBandError(
       "CONNECT_JOIN_TYPE_CONFLICT",
       `join "${join.id}" の type が参加者間で食い違っています(${join.types.join(", ")})。継ぐ値を決められません。 / Join "${join.id}" declares conflicting types across its participants (${join.types.join(", ")}), so there is no type to inherit.`,
-      join.id,
+      { kind: "text", value: join.id },
       [
         `Make every part that declares "${join.id}" use the same connector type, then join again. Until they agree, loom slnt check also refuses to build a seam request for it (SEAMLINT_CONNECTOR_TYPE_MISMATCH).`
       ]
@@ -622,7 +623,7 @@ export async function extendJoin(
     return connectBandError(
       "CONNECT_NOTCH_COUNT_CONFLICT",
       `join "${join.id}" は既に別の合印数を宣言しているので、${options.notchCount} は書けません。 / Join "${join.id}" already declares a different notch count, so ${options.notchCount} cannot be written. (declared: ${join.notchCounts.join(", ")})`,
-      `${options.role}.${join.id}.notch_count`,
+      { kind: "text", value: `${options.role}.${join.id}.notch_count` },
       [
         `${fix} A seam has the same notches on every piece; a mismatch makes Loomit drop the notch signature entirely (SEAMLINT_CONNECTOR_NOTCH_COUNT_MISMATCH), so Seamlint can no longer tell this seam from others sharing the same pieces.`
       ]
@@ -704,7 +705,7 @@ function resolveExtendSide(
       return connectBandError(
         "CONNECT_SIDE_UNEXPECTED",
         `join "${join.id}" は側を持たない重ね(coincident)の縫い目なので、side は指定できません。 / Join "${join.id}" is a coincident (stacked) seam with no sides, so a side cannot be declared.`,
-        join.id,
+        { kind: "text", value: join.id },
         [
           "Drop --side. A stacked seam pairs on the shared id alone; adding a side to one participant would make the seam's sides incomplete."
         ]
@@ -732,7 +733,7 @@ function resolveExtendSide(
     return connectBandError(
       "CONNECT_JOIN_SIDES_UNHEALTHY",
       `join "${join.id}" の側の宣言が健全でないため、参加者を足せません。 / Join "${join.id}" does not have a healthy set of sides, so a participant cannot be added. (${reason})`,
-      join.id,
+      { kind: "text", value: join.id },
       [
         "A contiguous seam needs exactly two sides with every participant on one of them. Fix the sides (loom check reports them) before adding a piece."
       ]
@@ -750,7 +751,7 @@ function resolveExtendSide(
     return connectBandError(
       "CONNECT_SIDE_REQUIRED",
       `join "${join.id}" は側を持つ縫い目なので、どちらの側に属すかの指定が必要です。 / Join "${join.id}" is a seam with sides, so the new participant must declare which side it belongs to.`,
-      join.id,
+      { kind: "text", value: join.id },
       [
         `Pass --side with ${choices}. Loomit does not guess: a side says which unit the piece belongs to, and only the author knows.`
       ]
@@ -771,7 +772,7 @@ function resolveExtendSide(
     return connectBandError(
       "CONNECT_SIDE_UNKNOWN",
       `join "${join.id}" に側 "${requested}" はありません。 / Join "${join.id}" has no side "${requested}".`,
-      `${join.id}.${requested}`,
+      { kind: "text", value: `${join.id}.${requested}` },
       [
         `Use one of the sides this seam already declares: ${knownSides}. A third side would make the seam join three units.`
       ]
@@ -790,7 +791,7 @@ function resolveExtendSide(
     return connectBandError(
       "CONNECT_BAND_SIDE_LOCKED",
       `join "${join.id}" の側 "${requested}" は band(${bandRole})で、band はちょうど1枚でなければなりません。 / Side "${requested}" of join "${join.id}" is the band (${bandRole}), and a band must stay exactly one piece.`,
-      `${join.id}.${requested}`,
+      { kind: "text", value: `${join.id}.${requested}` },
       [
         `Add to side "${shape.neighbourSide}" instead. Growing the band side leaves both sides with several pieces, so Loomit can no longer emit the band-seam check and the seam's length is never measured.`
       ]
@@ -842,7 +843,7 @@ function bandRoleAfterExtend(
 function connectBandError(
   code: RegisteredDiagnosticCode,
   message: string,
-  target: string,
+  target: DiagnosticSubject,
   suggestion: readonly string[]
 ): { readonly ok: false; readonly diagnostics: readonly Diagnostic[] } {
   return {
@@ -907,7 +908,7 @@ async function prepareSide(
           severity: "error",
           code: "CONNECT_ID_ALREADY_DECLARED",
           message: `パーツ "${role}" はすでにコネクタ "${id}" を宣言しています。 / Part "${role}" already declares a connector "${id}".`,
-          target: `${role}.${id}`,
+          target: { kind: "text", value: `${role}.${id}` },
           suggestion: [
             `Use a different --as id, or edit ${role}'s part.loom if you meant to change the existing connector.`
           ]
@@ -987,7 +988,7 @@ function validatePart(part: Part, role: string): LoadFileResult<Part> {
           severity: "error",
           code: "CONNECT_SCHEMA_INVALID",
           message: `更新後の "${role}" の part.loom が schema に合っていません。 / The updated part.loom for "${role}" does not match the schema.`,
-          target: `parts.${role}`,
+          target: { kind: "text", value: `parts.${role}` },
           suggestion: [parsed.error.issues.map((issue) => issue.message).join("; ")]
         })
       ]
@@ -1002,7 +1003,7 @@ function connectWriteError(error: unknown, filePath: string): Diagnostic {
     code: "CONNECT_WRITE_FAILED",
     message:
       "コネクタを part.loom に書き込めませんでした。 / Could not write the connector into the part.loom.",
-    target: filePath,
+    target: { kind: "text", value: filePath },
     suggestion: ["Check filesystem permissions for the part directory."]
   });
 }

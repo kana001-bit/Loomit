@@ -17,7 +17,7 @@ export async function loadPartFile(filePath: string): Promise<LoadFileResult<Par
 
   const parseResult = parseYamlText(readResult.value, {
     invalidCode: "PART_YAML_INVALID",
-    target: filePath
+    target: { kind: "text", value: filePath }
   });
 
   if (!parseResult.ok) {
@@ -28,6 +28,6 @@ export async function loadPartFile(filePath: string): Promise<LoadFileResult<Par
     invalidCode: "PART_SCHEMA_INVALID",
     invalidMessage:
       "パーツファイルの形式が schema と一致しません。 / The part file does not match the schema.",
-    target: filePath
+    target: { kind: "text", value: filePath }
   });
 }

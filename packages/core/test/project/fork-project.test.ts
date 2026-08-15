@@ -160,7 +160,7 @@ describe("forkProject", () => {
             code: "PROJECT_ALREADY_EXISTS",
             message:
               "fork 先のパスはすでに存在します。/ The fork target path already exists.",
-            target: targetPath,
+            target: { kind: "text", value: targetPath },
             suggestion: ["Choose a new directory, or remove the existing one before forking."]
           }
         ]
@@ -198,7 +198,7 @@ describe("forkProject", () => {
             code: "PROJECT_FORK_TARGET_INSIDE_SOURCE",
             message:
               "fork 先を fork 元プロジェクトの内側には作成できません。/ The fork target cannot be inside the source project.",
-            target: targetPath,
+            target: { kind: "text", value: targetPath },
             suggestion: ["Choose a target directory outside the source project."]
           }
         ]

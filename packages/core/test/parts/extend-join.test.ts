@@ -453,7 +453,10 @@ describe("extendJoin", () => {
       });
 
       expect(result.ok).toBe(false);
-      expect(result.diagnostics[0]?.target).toBe("lining.seam.notch_count");
+      expect(result.diagnostics[0]?.target).toEqual({
+        kind: "text",
+        value: "lining.seam.notch_count"
+      });
     } finally {
       await rm(root, { recursive: true, force: true });
     }

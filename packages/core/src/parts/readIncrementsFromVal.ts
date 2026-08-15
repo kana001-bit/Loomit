@@ -74,7 +74,7 @@ export async function readIncrementsFromValFile(
           code: "PART_SOURCE_VAL_READ_FAILED",
           message:
             "source.val から increments を読み取れませんでした。 / Could not read increments from source.val.",
-          target: filePath,
+          target: { kind: "text", value: filePath },
           suggestion: [
             "source.val の読み取り権限を確認してください。 / Check read permissions for source.val."
           ]

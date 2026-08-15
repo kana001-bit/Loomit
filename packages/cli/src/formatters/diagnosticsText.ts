@@ -1,4 +1,5 @@
-import type { Diagnostic } from "@loomit/core";
+import { formatDiagnosticSubject } from "@loomit/core";
+import type { Diagnostic, DiagnosticSubject } from "@loomit/core";
 
 export function formatDiagnosticsText(diagnostics: readonly Diagnostic[]): readonly string[] {
   return diagnostics.flatMap((diagnostic) => {
@@ -15,6 +16,6 @@ export function formatDiagnosticsText(diagnostics: readonly Diagnostic[]): reado
   });
 }
 
-function formatTarget(target: string | undefined): string {
-  return target === undefined ? "" : ` ${target}`;
+function formatTarget(target: DiagnosticSubject | undefined): string {
+  return target === undefined ? "" : ` ${formatDiagnosticSubject(target)}`;
 }

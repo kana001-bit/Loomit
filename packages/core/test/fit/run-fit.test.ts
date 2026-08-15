@@ -83,7 +83,7 @@ describe("runFit", () => {
           severity: "error",
           code: "FIT_EASE_NEGATIVE",
           message: "服の仕上がりバストが、体のバスト寸法より小さくなっています。 / Garment finished bust is smaller than the body bust measurement.",
-          target: "body.measurements.finished.bust_width_mm",
+          target: { kind: "text", value: "body.measurements.finished.bust_width_mm" },
           suggestion: ["Body bust is 84cm, garment bust is 82cm, ease is -2cm."]
         }
       ]
@@ -102,7 +102,7 @@ describe("runFit", () => {
         severity: "warning",
         code: "FIT_EASE_LOW",
         message: "服の仕上がりバストのゆとりが少なめです。 / Garment finished bust ease is low.",
-        target: "body.measurements.finished.bust_width_mm",
+        target: { kind: "text", value: "body.measurements.finished.bust_width_mm" },
         suggestion: [
           "Body bust is 84cm, garment bust is 88cm, ease is 4cm; suggested minimum is 6cm."
         ]
@@ -135,7 +135,7 @@ describe("runFit", () => {
           severity: "warning",
           code: "FIT_EASE_LOW",
           message: "服の仕上がりウエストのゆとりが少なめです。 / Garment finished waist ease is low.",
-          target: "body.measurements.finished.waist_width_mm",
+          target: { kind: "text", value: "body.measurements.finished.waist_width_mm" },
           suggestion: [
             "Body waist is 66cm, garment waist is 68cm, ease is 2cm; suggested minimum is 4cm."
           ]
@@ -158,7 +158,8 @@ describe("runFit", () => {
             severity: "warning",
             code: "X_FIT_CUSTOM_LENGTH_NOTE",
             message: "Custom length preference should be reviewed.",
-            target: "profile.preferences.length"
+            // 注入された rule も構造で対象を指す(公開契約なので string は受けない)。
+            target: { kind: "field", path: ["profile", "preferences", "length"] }
           }
         ];
 
@@ -201,7 +202,7 @@ describe("runFit", () => {
               severity: "warning",
               code: "X_FIT_CUSTOM_LENGTH_NOTE",
               message: "Custom length preference should be reviewed.",
-              target: "profile.preferences.length"
+              target: { kind: "field", path: ["profile", "preferences", "length"] }
             }
           ]
         }

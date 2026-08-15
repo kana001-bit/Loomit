@@ -3,10 +3,11 @@ import { parseDocument } from "yaml";
 import type { RegisteredDiagnosticCode } from "../diagnostics/codes.js";
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { LoadFileResult } from "./loadFileResult.js";
+import type { DiagnosticSubject } from "../diagnostics/subject.js";
 
 interface ParseYamlTextOptions {
   readonly invalidCode: RegisteredDiagnosticCode;
-  readonly target: string;
+  readonly target: DiagnosticSubject;
 }
 
 // 意図的に unknown を返す: 外部の YAML 入力は、使う前に schema loader で検証する必要がある。

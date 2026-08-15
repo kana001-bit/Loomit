@@ -111,7 +111,7 @@ describe("createProject", () => {
             code: "PROJECT_ALREADY_EXISTS",
             message:
               "この場所はすでに Loomit プロジェクトです。/ This location is already a Loomit project.",
-            target: projectFilePath,
+            target: { kind: "text", value: projectFilePath },
             suggestion: [
               "Run this in a directory without a loomit.yml, or remove the existing project file."
             ]

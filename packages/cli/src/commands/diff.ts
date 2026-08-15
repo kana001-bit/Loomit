@@ -455,7 +455,7 @@ async function resolveProjectPartPaths(
               severity: "error",
               code: "PROJECT_PATH_NOT_FOUND",
               message: `project のパスが存在しません: ${entry.projectPath} / Project path does not exist: ${entry.projectPath}.`,
-              target: entry.projectPath,
+              target: { kind: "text", value: entry.projectPath },
               suggestion: [
                 "Pass an existing Loomit project directory for each side of the diff."
               ]
@@ -464,7 +464,7 @@ async function resolveProjectPartPaths(
               severity: "error",
               code: "PROJECT_PATH_ACCESS_FAILED",
               message: `project のパスにアクセスできませんでした: ${entry.projectPath} / Could not access project path: ${entry.projectPath}.`,
-              target: entry.projectPath,
+              target: { kind: "text", value: entry.projectPath },
               suggestion: ["Check read permissions for the project directory."]
             })
       )
@@ -502,7 +502,7 @@ async function resolveProjectPartPaths(
                 severity: "error",
                 code: "PROJECT_PART_ROLE_NOT_FOUND",
                 message: `project に part role "${partRole}" が定義されていません。 / Project does not define part role "${partRole}".`,
-                target: fromProjectResult.value.paths.projectFilePath,
+                target: { kind: "text", value: fromProjectResult.value.paths.projectFilePath },
                 suggestion: [`Add parts.${partRole}, or choose an existing project role.`]
               })
             ]
@@ -513,7 +513,7 @@ async function resolveProjectPartPaths(
                 severity: "error",
                 code: "PROJECT_PART_ROLE_NOT_FOUND",
                 message: `project に part role "${partRole}" が定義されていません。 / Project does not define part role "${partRole}".`,
-                target: toProjectResult.value.paths.projectFilePath,
+                target: { kind: "text", value: toProjectResult.value.paths.projectFilePath },
                 suggestion: [`Add parts.${partRole}, or choose an existing project role.`]
               })
             ]

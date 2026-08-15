@@ -378,7 +378,7 @@ interface Diagnostic {
   severity: "info" | "warning" | "error";
   code: DiagnosticCode;        // 語彙の正本は diagnostics/codes.ts
   message: string;             // 日本語 / English の併記
-  target?: string;
+  target?: DiagnosticSubject;  // 構造の正本は diagnostics/subject.ts
   suggestion?: readonly string[];
 }
 ```
@@ -386,6 +386,12 @@ interface Diagnostic {
 `code` は `string` ではなく、登録済みコードの union である。新しい診断はレジストリに追記しないとコンパイルが通らない。
 
 > **なぜ列挙するか。** 以前は 100 個以上の裸のリテラルが各モジュールに散っていて、`doctorReport` が文字列比較で発行元と繋がっていた。発行側の綴りを変えても型エラーが出ず、説明が黙って消えうる。union にすると、その暗黙のリンクがコンパイラに見える。実際、集約して初めて grep では数えられていなかった 13 個が見つかった。
+
+`target` も同じ理由で構造である。**「プロジェクトの中のどれについてか」を判別可能ユニオンで持ち、表示用の文字列は formatter が組む。**
+
+> **なぜ構造にするか。** 以前は `string` で、形式の一覧が散文にしか無かった。実測すると 11 種類の形が出ていて、`{role}.{connector-id}` と `{join-id}.{side}` は**どちらも2セグメントで区別できず**、消費側は `code` を見ないと形を決められなかった。複数の対象は `", "` 結合で1本に潰れており、分割しても元に戻せない。パスは絶対と相対が混在していた。`--format json` を読む側にとっては、これらは黙って誤った分岐をする材料になる。
+
+**移行のための string 受け口は公開 API に置かない。** 一時的にでも `createDiagnostic` が string を受けると、それは公開シグネチャの一部になり、あとで外すのが「今は正しくコンパイルできている呼び出し」を壊す破壊的変更になる。まだ構造化していない箇所は呼び出し側で `{ kind: "text", value: … }` と書き、その一覧を `diagnostic-text-targets.test.ts` が固定する(一覧に無いファイルで `text` を使うと落ちる)。したがって **JSON に出る形は移行の進み具合によらず常に1つ**で、消費側は `target.kind` で分岐できる。
 
 CLI はこれをテキストに整形し、CI は JSON と exit code を使う。表示だけの文言差は formatter 側に置き、core の report を CLI の都合で作り替えない。report のフィールド改名は breaking change として扱う。
 

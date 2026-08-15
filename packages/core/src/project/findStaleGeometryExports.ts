@@ -143,7 +143,7 @@ async function readModifiedTime(
             code: "PART_GEOMETRY_FRESHNESS_READ_FAILED",
             message:
               "更新時刻を読めなかったため、DXF が .val より古いかを判定できませんでした。 / Could not read a modification time, so Loomit could not tell whether the DXF is older than the .val.",
-            target: filePath,
+            target: { kind: "text", value: filePath },
             suggestion: [
               "ファイルの読み取り権限を確認してください。 / Check read permissions for the file."
             ]

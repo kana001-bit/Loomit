@@ -1,4 +1,6 @@
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
+import { combineDiagnosticSubjects, formatDiagnosticSubject } from "../diagnostics/subject.js";
+import type { DiagnosticSubject } from "../diagnostics/subject.js";
 import type { ResolvedProject, ResolvedProjectPart } from "../project/resolveParts.js";
 import { classifyJoinSides } from "../schema/connectorSides.js";
 import { resolveJoinedConnectorToleranceMm } from "../schema/connectorTolerance.js";
@@ -137,8 +139,20 @@ function compareConnectorLength(input: {
 }): CompatibilityResult {
   const differenceMm = Math.abs(input.fromLengthMm - input.toLengthMm);
   const toleranceMm = input.toleranceMm;
-  const fromTarget = `${input.fromPart.role}.${input.connectorId}`;
-  const toTarget = `${input.toPart.role}.${input.connectorId}`;
+  // 表示文字列は subject から導出する。両方を手で書くと片方だけ直したときに黙って食い違う
+  // (CompatibilityResult.from/to はまだ string の契約なので、そちらには畳んだ形を渡す)。
+  const fromSubject: DiagnosticSubject = {
+    kind: "connector",
+    role: input.fromPart.role,
+    connectorId: input.connectorId
+  };
+  const toSubject: DiagnosticSubject = {
+    kind: "connector",
+    role: input.toPart.role,
+    connectorId: input.connectorId
+  };
+  const fromTarget = formatDiagnosticSubject(fromSubject);
+  const toTarget = formatDiagnosticSubject(toSubject);
   const diagnostics =
     differenceMm <= toleranceMm
       ? []
@@ -148,7 +162,7 @@ function compareConnectorLength(input: {
             code: "CONNECTOR_LENGTH_MISMATCH",
             message:
               "コネクタの仕上がり線の長さが許容差を超えています。/ Connector finished seam lengths exceed the tolerance.",
-            target: toTarget,
+            target: toSubject,
             suggestion: [
               `${fromTarget} and ${toTarget} differ by ${differenceMm}mm; allowed tolerance is ${toleranceMm}mm.`
             ]
@@ -180,13 +194,26 @@ function buildUnmeasuredConnectorResult(input: {
   readonly toPart: ResolvedProjectPart;
   readonly toConnector: Connector;
 }): CompatibilityResult {
-  const fromTarget = `${input.fromPart.role}.${input.connectorId}`;
-  const toTarget = `${input.toPart.role}.${input.connectorId}`;
-  // 未測定なのがどちら側か(両方のこともある)を具体的に示す。
-  const unmeasured = [
-    input.fromConnector.length_mm === undefined ? fromTarget : undefined,
-    input.toConnector.length_mm === undefined ? toTarget : undefined
-  ].filter((target): target is string => target !== undefined);
+  const fromSubject: DiagnosticSubject = {
+    kind: "connector",
+    role: input.fromPart.role,
+    connectorId: input.connectorId
+  };
+  const toSubject: DiagnosticSubject = {
+    kind: "connector",
+    role: input.toPart.role,
+    connectorId: input.connectorId
+  };
+  const fromTarget = formatDiagnosticSubject(fromSubject);
+  const toTarget = formatDiagnosticSubject(toSubject);
+  // 未測定なのがどちら側か(両方のこともある)を具体的に示す。呼び出し側が「どちらかが未測定」を
+  // 確かめてから呼ぶので、ここは必ず1件以上になる。
+  const unmeasured: readonly DiagnosticSubject[] = [
+    input.fromConnector.length_mm === undefined ? fromSubject : undefined,
+    input.toConnector.length_mm === undefined ? toSubject : undefined
+  ].filter((subject) => subject !== undefined);
+  // 1件ならそれ自身、2件なら many。0件(呼び出し側の guard 上ありえない)は undefined = 対象なしになる。
+  const unmeasuredSubject = combineDiagnosticSubjects(unmeasured);
 
   return createCompatibilityResult({
     from: fromTarget,
@@ -198,9 +225,9 @@ function buildUnmeasuredConnectorResult(input: {
         code: "CONNECTOR_LENGTH_UNMEASURED",
         message:
           "コネクタの仕上がり線の長さが未測定のため、接続整合を確認できません。/ Connector finished seam length is unmeasured; cannot verify the seam fit.",
-        target: unmeasured.join(", "),
+        ...(unmeasuredSubject === undefined ? {} : { target: unmeasuredSubject }),
         suggestion: [
-          `Run \`loom slnt check\` to have Seamlint measure the seam, or set a declared length_mm on ${unmeasured.join(" and ")}.`
+          `Run \`loom slnt check\` to have Seamlint measure the seam, or set a declared length_mm on ${unmeasured.map(formatDiagnosticSubject).join(" and ")}.`
         ]
       })
     ]
@@ -398,7 +425,8 @@ function rolesConnectedWithinSide(
 }
 
 function buildOpenJoinResult(joinId: string, role: string): CompatibilityResult {
-  const target = `${role}.${joinId}`;
+  const subject: DiagnosticSubject = { kind: "connector", role, connectorId: joinId };
+  const target = formatDiagnosticSubject(subject);
 
   return createCompatibilityResult({
     from: target,
@@ -410,7 +438,7 @@ function buildOpenJoinResult(joinId: string, role: string): CompatibilityResult 
         code: "CONNECTOR_JOIN_OPEN",
         message:
           "コネクタの縫い合わせ相手がいません(1つのパーツだけが宣言)。/ Connector join has no mate; only one part declares it.",
-        target,
+        target: subject,
         suggestion: [
           `Add a part that also declares connector "${joinId}", fix a mismatched id, or if "${joinId}" is an internal (self) seam, check it in Seamlint instead of declaring a connector.`
         ]
@@ -445,7 +473,7 @@ function buildSidesIncompleteResult(joinId: string, suggestion: string): Compati
         code: "CONNECTOR_JOIN_SIDES_INCOMPLETE",
         message:
           "contiguous な縫い目の側の宣言が不完全です。/ Contiguous seam has an incomplete set of sides.",
-        target: joinId,
+        target: { kind: "join", joinId },
         suggestion: [suggestion]
       })
     ]
@@ -464,7 +492,7 @@ function buildTooManySidesResult(joinId: string, sides: readonly string[]): Comp
         code: "CONNECTOR_JOIN_TOO_MANY_SIDES",
         message:
           "1本の縫い目が3つ以上の側を繋いでいます。/ A seam joins more than two sides.",
-        target: joinId,
+        target: { kind: "join", joinId },
         suggestion: [
           `Connector "${joinId}" declares ${sides.length} sides (${sides.join(", ")}); a seam joins exactly two sides. Use distinct connector ids for separate seams, or regroup the parts into two sides.`
         ]
@@ -479,7 +507,14 @@ function buildUnitDisconnectedResult(
   side: string,
   roles: readonly string[]
 ): CompatibilityResult {
-  const target = `${joinId}.${side}`;
+  // string 時代はこれが `${role}.${connectorId}` と同じ 2 セグメントで、消費側は code を見ないと
+  // どちらか決められなかった。構造では join の中の側として持つ(表示は従来どおり `${joinId}.${side}`)。
+  const subject: DiagnosticSubject = {
+    kind: "field",
+    within: { kind: "join", joinId },
+    path: [side]
+  };
+  const target = formatDiagnosticSubject(subject);
 
   return createCompatibilityResult({
     from: target,
@@ -491,7 +526,7 @@ function buildUnitDisconnectedResult(
         code: "CONNECTOR_UNIT_DISCONNECTED",
         message:
           "unit と宣言した側のピースが、他の縫い目で繋がっていません。/ Parts grouped as one side are not joined into a unit by other seams.",
-        target,
+        target: subject,
         suggestion: [
           `Side "${side}" of connector "${joinId}" groups ${roles.join(", ")} as one unit, but they are not connected by other seams. Declare the seams that join them, or split them across connectors.`
         ]
@@ -518,7 +553,14 @@ function checkRequirement(
   requirementPath: string,
   requirement: Requirement
 ): CompatibilityResult {
-  const sourceTarget = `${sourcePart.role}.requires.${requirementPath}`;
+  // requirementPath は `requires` マップのキーそのもの(`sleeve.armhole.length_mm` のように点を含む)。
+  // 1つのキーなので段に割らず、1 セグメントとして持つ。
+  const sourceSubject: DiagnosticSubject = {
+    kind: "field",
+    within: { kind: "part", role: sourcePart.role },
+    path: ["requires", requirementPath]
+  };
+  const sourceTarget = formatDiagnosticSubject(sourceSubject);
   const parsedPath = parseConnectorRequirementPath(requirementPath);
 
   if (parsedPath === undefined) {
@@ -533,7 +575,7 @@ function checkRequirement(
           code: "REQUIREMENT_TARGET_INVALID",
           message:
             "要求条件の参照先を解釈できません。/ Could not understand the requirement target.",
-          target: sourceTarget,
+          target: sourceSubject,
           suggestion: ['Use a target path like "sleeve.armhole.length_mm".']
         })
       ]
@@ -541,7 +583,12 @@ function checkRequirement(
   }
 
   const targetPart = resolvedProject.parts[parsedPath.role];
-  const resolvedTarget = `${parsedPath.role}.${parsedPath.connectorId}.${parsedPath.property}`;
+  const resolvedSubject: DiagnosticSubject = {
+    kind: "field",
+    within: { kind: "connector", role: parsedPath.role, connectorId: parsedPath.connectorId },
+    path: [parsedPath.property]
+  };
+  const resolvedTarget = formatDiagnosticSubject(resolvedSubject);
 
   if (targetPart === undefined) {
     return createCompatibilityResult({
@@ -555,7 +602,7 @@ function checkRequirement(
           code: "REQUIREMENT_TARGET_MISSING",
           message:
             "要求条件の参照先パーツが見つかりません。/ Could not find the part referenced by the requirement.",
-          target: sourceTarget,
+          target: sourceSubject,
           suggestion: [`Add project part "${parsedPath.role}", or update the requirement target.`]
         })
       ]
@@ -576,7 +623,7 @@ function checkRequirement(
           code: "CONNECTOR_MISSING",
           message:
             "要求条件の参照先コネクタが見つかりません。/ Could not find the connector referenced by the requirement.",
-          target: resolvedTarget,
+          target: resolvedSubject,
           suggestion: [
             `Add connector "${parsedPath.connectorId}" to part "${parsedPath.role}", or update the requirement target.`
           ]
@@ -605,7 +652,7 @@ function checkRequirement(
               code: "CONNECTOR_LENGTH_UNMEASURED",
               message:
                 "要求条件の参照先コネクタの length_mm が未測定のため、条件を確認できません。/ The connector referenced by the requirement has an unmeasured length_mm; cannot check the requirement.",
-              target: resolvedTarget,
+              target: resolvedSubject,
               suggestion: [
                 `Run \`loom slnt check\` to have Seamlint measure the seam, or set a declared length_mm on ${parsedPath.role}.${parsedPath.connectorId}.`
               ]
@@ -615,7 +662,7 @@ function checkRequirement(
               code: "REQUIREMENT_PROPERTY_UNSUPPORTED",
               message:
                 "要求条件の参照先プロパティはまだ検証できません。/ The requirement target property is not supported yet.",
-              target: sourceTarget,
+              target: sourceSubject,
               suggestion: ['Use a supported connector property such as "length_mm".']
             })
       ]
@@ -630,7 +677,7 @@ function checkRequirement(
           code: "REQUIREMENT_RANGE_UNSATISFIED",
           message:
             "要求条件の範囲を満たしていません。/ The requirement range is not satisfied.",
-          target: resolvedTarget,
+          target: resolvedSubject,
           suggestion: [
             `${resolvedTarget} is ${String(actualValue)}, but expected ${formatRequirement(requirement)}.`
           ]

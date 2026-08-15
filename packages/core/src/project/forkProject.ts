@@ -47,7 +47,7 @@ export async function forkProject(
           code: "PROJECT_FORK_TARGET_INSIDE_SOURCE",
           message:
             "fork 先を fork 元プロジェクトの内側には作成できません。/ The fork target cannot be inside the source project.",
-          target: targetProjectRoot,
+          target: { kind: "text", value: targetProjectRoot },
           suggestion: ["Choose a target directory outside the source project."]
         })
       ]
@@ -66,7 +66,7 @@ export async function forkProject(
           code: "PROJECT_FORK_TARGET_UNREADABLE",
           message:
             "fork 先が既に存在するか確認できませんでした。/ Could not determine whether the fork target already exists.",
-          target: targetProjectRoot,
+          target: { kind: "text", value: targetProjectRoot },
           suggestion: ["Check the target path and filesystem permissions."]
         })
       ]
@@ -82,7 +82,7 @@ export async function forkProject(
           code: "PROJECT_ALREADY_EXISTS",
           message:
             "fork 先のパスはすでに存在します。/ The fork target path already exists.",
-          target: targetProjectRoot,
+          target: { kind: "text", value: targetProjectRoot },
           suggestion: ["Choose a new directory, or remove the existing one before forking."]
         })
       ]
@@ -121,7 +121,7 @@ export async function forkProject(
         describeFsError(error, {
           code: "PROJECT_FORK_FAILED",
           message: "Loomit プロジェクトを fork できませんでした。/ Could not fork the Loomit project.",
-          target: targetProjectRoot,
+          target: { kind: "text", value: targetProjectRoot },
           suggestion: ["Check the source path, target path, and filesystem permissions."]
         })
       ]

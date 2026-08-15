@@ -42,7 +42,7 @@ export async function collectProjectReadinessDiagnostics(
         code: "PROJECT_HAS_NO_PARTS",
         message:
           "まだ part が1つも追加されていません。 / No parts have been added to this project yet.",
-        target: projectFilePath,
+        target: { kind: "text", value: projectFilePath },
         suggestion: [
           firstUnregistered === undefined
             ? "Add a Valentina .val as a part first: loom add <file.val>"
@@ -62,7 +62,7 @@ export async function collectProjectReadinessDiagnostics(
         severity: "warning",
         code: "UNREGISTERED_VAL_SOURCE",
         message: `未登録の .val があります: ${source.relativePath} / A .val under parts/ is not registered as a part: ${source.relativePath}`,
-        target: source.path,
+        target: { kind: "text", value: source.path },
         suggestion:
           source.duplicateOf === undefined
             ? [`Register it as a part: loom add ${source.relativePath}`]
@@ -94,7 +94,7 @@ export async function collectProjectReadinessDiagnostics(
         message:
           `part 内の files.${copy.field} が project root の同名ファイルと一致しません。Loomit は root 側を読むため、この part コピーは使われません: ${pair}` +
           ` / The part's files.${copy.field} does not match the same-named file at the project root. Loomit reads the project root file, so this part copy is unused: ${pair}`,
-        target: copy.copyPath,
+        target: { kind: "text", value: copy.copyPath },
         suggestion: [
           `If ${copy.originRelativePath} is the original, delete the unused copy at ${copy.copyRelativePath}.`,
           `If the copy holds the version you want, update ${copy.originRelativePath} instead — edits to the copy have no effect.`,
@@ -125,7 +125,7 @@ export async function collectProjectReadinessDiagnostics(
         message:
           `幾何ファイル(DXF)が .val より ${age} 古いままです。測定は書き出し済みの幾何に対して行われます: ${pair}` +
           ` / The geometry file (DXF) is ${age} older than the .val it is exported from. Measurements run against the exported geometry, not the .val: ${pair}`,
-        target: stale.geometryPath,
+        target: { kind: "text", value: stale.geometryPath },
         suggestion: [
           `If you changed the drafting, re-export ${stale.geometryRelativePath} from Valentina before measuring — otherwise loom slnt check reports the old geometry.`,
           `If the .val edit does not move any geometry (renaming a point, moving a label), this is expected and can be ignored.`

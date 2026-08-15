@@ -38,7 +38,7 @@ export async function materializeSeamlintGeometry(
           // 読めなくなる(seamlintCheck / match / truerPropose と同じ規律)。
           message:
             `パーツ "${part.partId}" の幾何ソース "${part.geometrySource}" を読めなかったため、Seamlint に渡す縫い目の幾何を埋め込めませんでした。 / Loomit could not read geometry source "${part.geometrySource}" for part "${part.partId}", so it could not inline the seam geometry for Seamlint. (${errorMessage(error)})`,
-          target: part.geometrySource,
+          target: { kind: "text", value: part.geometrySource },
           suggestion: [
             `Check that "${part.geometrySource}" exists and is readable before running loom slnt check.`
           ]

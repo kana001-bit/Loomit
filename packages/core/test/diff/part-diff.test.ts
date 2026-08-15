@@ -721,7 +721,7 @@ describe("diffParts", () => {
       code: "PART_SOURCE_VAL_READ_FAILED",
       message:
         "source.val からダーツを読み取れませんでした。 / Could not read darts from source.val.",
-      target: "from.val"
+      target: { kind: "file", path: "from.val" }
     };
 
     const report = diffParts(part, part, { inputDiagnostics: [inputDiagnostic] });
