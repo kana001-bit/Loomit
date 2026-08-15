@@ -61,7 +61,7 @@ export function collectEdgeOccurrencesFromValText(
           code: "PART_SOURCE_VAL_PIECE_NOT_FOUND",
           message:
             "指定した piece(detail)が .val に見つからないため、辺の occurrence を集められませんでした。 / Could not find the given piece (detail) in the .val, so no edge occurrences were collected.",
-          target: options.piece,
+          target: { kind: "text", value: options.piece },
           suggestion: [
             "files.piece が .val の detail 名(= DXF BLOCK 名)と一致しているか確認してください。 / Check that files.piece matches a detail name (the DXF block name) in the .val."
           ]
@@ -81,7 +81,7 @@ export function collectEdgeOccurrencesFromValText(
         code: "PART_SOURCE_VAL_DUPLICATE_PIECE",
         message:
           "同じ名前の detail(型紙ピース)が複数あります。piece 名は DXF BLOCK の identity として一意である必要があるため、最初の detail の occurrence だけを採用しました。 / Found more than one detail with the same name; piece names must be unique because they identify DXF blocks, so only the first detail's occurrences were kept.",
-        target: options.piece,
+        target: { kind: "text", value: options.piece },
         suggestion: [
           "各型紙ピースの detail 名を .val 全体で一意にしてください。 / Give every pattern piece a detail name that is unique across the .val."
         ]
@@ -98,7 +98,7 @@ export function collectEdgeOccurrencesFromValText(
         code: "PART_SOURCE_VAL_CALCULATION_MISSING",
         message:
           "piece(detail)は見つかりましたが、その draw に <calculation> が無いため辺の occurrence を集められませんでした。 / Found the piece (detail) but its draw has no <calculation>, so no edge occurrences were collected.",
-        target: options.piece,
+        target: { kind: "text", value: options.piece },
         suggestion: [
           "完全な Valentina .val(製図の <calculation> を含む)を書き出しているか確認してください。 / Check that a complete Valentina .val (including the drafting <calculation>) was exported."
         ]

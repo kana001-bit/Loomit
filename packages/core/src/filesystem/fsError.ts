@@ -1,13 +1,14 @@
 import type { RegisteredDiagnosticCode } from "../diagnostics/codes.js";
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { RegisteredDiagnostic } from "../diagnostics/diagnostic.js";
+import type { DiagnosticSubject } from "../diagnostics/subject.js";
 
 export interface FsErrorContext {
   /** 操作に対する安定した diagnostic code(例: "PROJECT_CREATE_FAILED")。語彙の正本は codes.ts。 */
   readonly code: RegisteredDiagnosticCode;
   /** 失敗した操作を説明する日英併記のベースメッセージ。 */
   readonly message: string;
-  readonly target: string;
+  readonly target: DiagnosticSubject;
   /** errno を特定できないときに使うフォールバックの suggestion。 */
   readonly suggestion?: readonly string[];
 }

@@ -55,7 +55,7 @@ export async function readValSource(
           severity: "warning",
           code: "PART_SOURCE_VAL_READ_FAILED",
           message: "source.val を読み取れませんでした。 / Could not read source.val.",
-          target: sourceFilePath,
+          target: { kind: "text", value: sourceFilePath },
           suggestion: [
             "source.val の読み取り権限を確認してください。 / Check read permissions for source.val."
           ]

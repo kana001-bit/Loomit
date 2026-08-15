@@ -135,7 +135,7 @@ function createEaseDiagnostics(
         severity: "error",
         code: "FIT_EASE_NEGATIVE",
         message: `服の仕上がり${rule.labelJa}が、体の${rule.labelJa}寸法より小さくなっています。 / Garment finished ${rule.label} is smaller than the body ${rule.label} measurement.`,
-        target: `${rule.partRole}.measurements.finished.${rule.finishedMeasurementKey}`,
+        target: { kind: "text", value: `${rule.partRole}.measurements.finished.${rule.finishedMeasurementKey}` },
         suggestion: [
           `Body ${rule.label} is ${context.bodyMeasurementCm}cm, garment ${rule.label} is ${context.garmentMeasurementCm}cm, ease is ${easeCm}cm.`
         ]
@@ -149,7 +149,7 @@ function createEaseDiagnostics(
         severity: "warning",
         code: "FIT_EASE_LOW",
         message: `服の仕上がり${rule.labelJa}のゆとりが少なめです。 / Garment finished ${rule.label} ease is low.`,
-        target: `${rule.partRole}.measurements.finished.${rule.finishedMeasurementKey}`,
+        target: { kind: "text", value: `${rule.partRole}.measurements.finished.${rule.finishedMeasurementKey}` },
         suggestion: [
           `Body ${rule.label} is ${context.bodyMeasurementCm}cm, garment ${rule.label} is ${context.garmentMeasurementCm}cm, ease is ${easeCm}cm; suggested minimum is ${rule.minimumEaseCm}cm.`
         ]

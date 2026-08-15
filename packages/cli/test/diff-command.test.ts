@@ -17,6 +17,9 @@ vi.mock("node:fs/promises", () => ({
 }));
 
 vi.mock("@loomit/core", () => ({
+  // 本体の createDiagnostic は入力をそのまま返す(型で code と target を絞るだけ)ので、恒等で写しになる。
+  // **mock は型検査をすり抜ける**ため、ここで本体と違う振る舞いを書くと、production が決して作れない形の
+  // 診断をテストが組み立ててしまう。本体の実装が変わったらここも合わせる。
   createDiagnostic: (diagnostic: unknown) => diagnostic,
   diffParts: mocks.diffParts,
   getErrno: (error: unknown) => {
@@ -117,7 +120,10 @@ describe("runDiffCommand", () => {
           severity: "error",
           code: "FILE_READ_FAILED",
           message: "Could not read the file. (permission denied)",
-          target: toNotesPath,
+          // 本物の loadPrototypeNotesFile が返す形に合わせる。この emit 箇所はまだパスを string で
+          // 渡していて createDiagnostic が `{ kind: "text" }` に畳むので、mock も畳んだ後の形を返す
+          // (mock は型検査をすり抜けるため、生の string を置くと契約違反の値を作れてしまう)。
+          target: { kind: "text" as const, value: toNotesPath },
           suggestion: ["Check file and directory permissions."]
         }
       ]
@@ -196,7 +202,7 @@ describe("runDiffCommand", () => {
     expect(report.diagnostics).toContainEqual(
       expect.objectContaining({
         code: "FILE_READ_FAILED",
-        target: toNotesPath
+        target: { kind: "text", value: toNotesPath }
       })
     );
     expect(stderr).toEqual([]);
@@ -243,7 +249,7 @@ describe("runDiffCommand", () => {
     expect(report.diagnostics).toContainEqual(
       expect.objectContaining({
         code: "PROJECT_PATH_ACCESS_FAILED",
-        target: toProjectPath
+        target: { kind: "text", value: toProjectPath }
       })
     );
     // 権限拒否を「存在しない」と誤案内しないこと。

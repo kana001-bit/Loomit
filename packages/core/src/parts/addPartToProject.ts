@@ -16,6 +16,7 @@ import { loadProject } from "../project/loadProject.js";
 import { partSchema } from "../schema/part.schema.js";
 import type { Connector, Part } from "../schema/part.schema.js";
 import type { Project } from "../schema/project.schema.js";
+import type { DiagnosticSubject } from "../diagnostics/subject.js";
 
 // 対話ウィザード(CLI 側)が集めた回答を受け取り、part.loom を「生成」する純粋な書き込み。ここには
 // prompt を持ち込まない(core / CLI 分離: 対話は CLI、決定済みの値からの生成は core)。ユーザーは .val を
@@ -112,7 +113,7 @@ export async function addPartToProject(
           code: "PART_ADD_SEGMENT_INVALID",
           message:
             "part の role はパス区切りを含まない1つの segment にしてください。 / Project part role must be a single path segment.",
-          target: role,
+          target: { kind: "text", value: role },
           suggestion: ["Use a role without path separators, \"..\", or an absolute path."]
         })
       ]
@@ -150,7 +151,7 @@ export async function addPartToProject(
           code: "PART_ADD_TARGET_ESCAPES_ROOT",
           message:
             "part の書き込み先が project root の外を指しています。 / The part target would write outside the project root.",
-          target: partDirectory,
+          target: { kind: "text", value: partDirectory },
           suggestion: ["Use a role without path separators, \"..\", or an absolute path."]
         })
       ]
@@ -168,7 +169,7 @@ export async function addPartToProject(
           severity: "error",
           code: "PART_ADD_ALREADY_REGISTERED",
           message: `role "${role}" の part はすでに登録されています。 / Project already has a part for role "${role}".`,
-          target: `parts.${role}`,
+          target: { kind: "text", value: `parts.${role}` },
           suggestion: ["Choose another role, or edit the existing part."]
         })
       ]
@@ -187,7 +188,7 @@ export async function addPartToProject(
           code: "PART_ADD_DIRECTORY_UNREADABLE",
           message:
             "取り込み先の part ディレクトリが既に存在するか確認できませんでした。/ Could not determine whether a part directory already exists at the target.",
-          target: partDirectory,
+          target: { kind: "text", value: partDirectory },
           suggestion: ["Check the project path and filesystem permissions."]
         })
       ]
@@ -203,7 +204,7 @@ export async function addPartToProject(
           code: "PART_ADD_DIRECTORY_EXISTS",
           message:
             "書き込み先に part ディレクトリがすでに存在します。 / A part directory already exists at the target.",
-          target: partDirectory,
+          target: { kind: "text", value: partDirectory },
           suggestion: ["Choose another role, or remove the existing part directory."]
         })
       ]
@@ -266,7 +267,7 @@ export async function addPartToProject(
           code: "PART_ADD_FAILED",
           message:
             "part を project に追加できませんでした。 / Could not add the part to the project.",
-          target: partDirectory,
+          target: { kind: "text", value: partDirectory },
           suggestion: ["Check the .val path, project path, and filesystem permissions."]
         })
       ]
@@ -375,6 +376,9 @@ async function planValSource(
   }
 
   const target = join(projectRoot, basename(valPath));
+  // 診断で指すときの形。まだ構造化していないパスなので未分類として持つ(`{ kind: "file" }` へ上げるのは
+  // パス正規化(project 相対 posix)と一緒にやる)。target 自体はファイル操作にも使うので文字列のまま。
+  const targetSubject: DiagnosticSubject = { kind: "text", value: target };
   const existence = await checkPathExistence(target);
 
   if (existence.kind === "inaccessible") {
@@ -385,7 +389,7 @@ async function planValSource(
           code: "PART_ADD_SOURCE_TARGET_UNREADABLE",
           message:
             "取り込み先に同名ファイルがあるか確認できませんでした。/ Could not determine whether a file with the same name already exists at the import target.",
-          target,
+          target: targetSubject,
           suggestion: ["Check the project path and filesystem permissions."]
         })
       ]
@@ -424,7 +428,7 @@ async function planValSource(
             code: "PART_ADD_SOURCE_TARGET_UNREADABLE",
             message:
               "取り込み先の同名ファイルを読めず、同じものか判定できませんでした。/ Could not read the existing file at the import target to compare it with the source.",
-            target,
+            target: targetSubject,
             suggestion: ["Check read permissions, or move the existing file out of the way."]
           })
         ]
@@ -439,7 +443,7 @@ async function planValSource(
             severity: "error",
             code: "PART_ADD_SOURCE_TARGET_CONFLICT",
             message: `project root に同名の別ファイルが既にあります: ${basename(valPath)} / A different file with the same name already exists at the project root: ${basename(valPath)}`,
-            target,
+            target: targetSubject,
             suggestion: [
               "Rename the .val being added, or remove the existing file if it is no longer needed."
             ]
@@ -480,7 +484,7 @@ async function resolveRealPath(
         describeFsError(error, {
           code: context.code,
           message: context.message,
-          target: path,
+          target: { kind: "text", value: path },
           suggestion: ["Check the path and filesystem permissions."]
         })
       ]
@@ -495,7 +499,7 @@ function escapesProjectDiagnostic(path: string, subject: string): Diagnostic {
     severity: "error",
     code: "PART_ADD_SOURCE_ESCAPES_PROJECT",
     message: `${subject}が project 内の symlink で、実体が project の外にあります。/ ${subject} is a symlink inside the project whose target lies outside the project.`,
-    target: path,
+    target: { kind: "text", value: path },
     suggestion: [
       "Pass the real path of the .val so Loomit can import a copy into the project, or replace the symlink with the file itself."
     ]
@@ -538,7 +542,7 @@ export async function checkValSourceExists(valPath: string): Promise<Diagnostic 
         code: "PART_ADD_SOURCE_UNREADABLE",
         message:
           "取り込む .val ソースにアクセスできませんでした。/ The .val source to add could not be accessed.",
-        target: resolved,
+        target: { kind: "text", value: resolved },
         suggestion: ["Check the path to the .val file and filesystem permissions."]
       });
     }
@@ -548,7 +552,7 @@ export async function checkValSourceExists(valPath: string): Promise<Diagnostic 
       code: "PART_ADD_SOURCE_NOT_FOUND",
       message:
         "取り込もうとした .val が見つかりませんでした。 / The .val source to add was not found.",
-      target: resolved,
+      target: { kind: "text", value: resolved },
       suggestion: ["Check the path to the .val file."]
     });
   }
@@ -559,7 +563,7 @@ export async function checkValSourceExists(valPath: string): Promise<Diagnostic 
       code: "PART_ADD_SOURCE_NOT_A_FILE",
       message:
         "取り込む .val ソースが通常のファイルではありません(ディレクトリ等)。/ The .val source to add is not a regular file (for example, a directory).",
-      target: resolved,
+      target: { kind: "text", value: resolved },
       suggestion: ["Point loom add at a .val file, not a directory."]
     });
   }
@@ -599,7 +603,7 @@ function buildPart(
           code: "PART_ADD_SCHEMA_INVALID",
           message:
             "生成した part.loom が schema に合っていません。 / The generated part.loom does not match the schema.",
-          target: `parts.${role}`,
+          target: { kind: "text", value: `parts.${role}` },
           suggestion: [parsed.error.issues.map((issue) => issue.message).join("; ")]
         })
       ]

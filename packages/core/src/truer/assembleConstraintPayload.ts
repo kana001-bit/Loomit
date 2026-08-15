@@ -148,7 +148,7 @@ export function assembleConstraintPayload(
             code: "PART_CONSTRAINT_INCREMENT_CONFLICT",
             message:
               "同名の増分が part 間で異なる値(式)を宣言しています。両側で同じツマミに見えて実は別物のため coupling を誤らせます。最初の宣言を採用しました。 / The same increment is declared with a different value (formula) across parts, which would misreport coupling (it looks shared but is not). Kept the first declaration.",
-            target: increment.name,
+            target: { kind: "text", value: increment.name },
             suggestion: [
               "同じ seam を共有する part は同一の .val(同一の増分宣言)を参照しているか確認してください。 / Check that parts sharing a seam reference the same .val (the same increment declarations)."
             ]

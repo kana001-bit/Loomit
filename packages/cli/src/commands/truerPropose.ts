@@ -146,7 +146,7 @@ export async function runTruerPropose(input: RunTruerProposeInput): Promise<True
         severity: "warning",
         code: "MATCH_REFERENCE_NEEDS_DXF",
         message: `補正側 "${input.followerRole}" に files.geometry(DXF)が無いため、Truer に直し方を提案させられません。 / Part "${input.followerRole}" has no files.geometry (DXF), so Truer cannot propose an adjustment.`,
-        target: input.followerRole,
+        target: { kind: "text", value: input.followerRole },
         suggestion: [
           `"${input.followerRole}" に files.geometry(DXF)を足してください。Truer は DXF の辺を補正します。 / Add files.geometry (DXF) for "${input.followerRole}"; Truer edits DXF edges.`
         ]
@@ -169,7 +169,7 @@ export async function runTruerPropose(input: RunTruerProposeInput): Promise<True
         severity: "warning",
         code: "MATCH_REFERENCE_NEEDS_DXF",
         message: `補正側 "${input.followerRole}" の files.geometry が指す DXF が見つかりません。 / The DXF referenced by files.geometry for "${input.followerRole}" does not exist.`,
-        target: followerDxf,
+        target: { kind: "text", value: followerDxf },
         suggestion: [`欠けている DXF を置くか、files.geometry を実在するパスに直してください。 / Add the DXF, or fix files.geometry.`]
       })
     );
@@ -185,7 +185,7 @@ export async function runTruerPropose(input: RunTruerProposeInput): Promise<True
         severity: "warning",
         code: "MATCH_REFERENCE_BLOCK_UNRESOLVED",
         message: `固定側 "${input.referenceRole}" の BLOCK 名を解決できませんでした。 / Could not resolve the DXF BLOCK name for reference part "${input.referenceRole}".`,
-        target: input.referenceRole,
+        target: { kind: "text", value: input.referenceRole },
         suggestion: [`"${input.referenceRole}" の files.piece(DXF BLOCK 名)か connector.path_ref を設定してください。 / Set files.piece or connector.path_ref for "${input.referenceRole}".`]
       })
     );
@@ -207,7 +207,7 @@ export async function runTruerPropose(input: RunTruerProposeInput): Promise<True
         severity: "warning",
         code: "MATCH_PROPOSAL_DIR_FAILED",
         message: `proposal の出力先ディレクトリを作成できませんでした: ${describeError(error)} / Could not create the proposal output directory.`,
-        target: proposalDir,
+        target: { kind: "text", value: proposalDir },
         suggestion: ["出力ディレクトリの権限を確認してください。 / Check permissions for the output directory."]
       })
     );
@@ -246,7 +246,7 @@ export async function runTruerPropose(input: RunTruerProposeInput): Promise<True
           message: notFound
             ? `Truer 実行ファイルが見つからず、直し方を提案できませんでした。 / Loomit could not find the Truer executable. (${runResult.message})`
             : `Truer を実行できませんでした。 / Loomit could not run Truer. (${runResult.message})`,
-          target: "truer",
+          target: { kind: "text", value: "truer" },
           suggestion: notFound
             ? ['"tru" を PATH に置くか、--tru <path> で実行ファイルを指定してください。 / Install Truer on PATH, or pass --tru <path>.']
             : ['Truer が "tru propose" を受け付けて動くか確認してください。 / Check that Truer runs and accepts "tru propose".']

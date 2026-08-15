@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createSeamlintGeometryRequest,
+  formatDiagnosticSubject,
   loadProject,
   resolveParts
 } from "../../src/index.js";
@@ -385,12 +386,12 @@ describe("createSeamlintGeometryRequest", () => {
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_PATH_REF_MISSING",
-        target: "body.armhole"
+        target: { kind: "text", value: "body.armhole" }
       }),
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_GEOMETRY_SOURCE_MISSING",
-        target: join(fixturesRoot, "valid-blouse/parts/sleeve/part.loom")
+        target: { kind: "text", value: join(fixturesRoot, "valid-blouse/parts/sleeve/part.loom") }
       })
     ]);
   });
@@ -426,7 +427,7 @@ describe("createSeamlintGeometryRequest", () => {
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_GEOMETRY_SOURCE_FILE_MISSING",
-        target: join(fixturesRoot, "valid-blouse/parts/body/missing-body.svg")
+        target: { kind: "text", value: join(fixturesRoot, "valid-blouse/parts/body/missing-body.svg") }
       })
     );
   });
@@ -512,12 +513,12 @@ describe("createSeamlintGeometryRequest", () => {
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_GATHER_DIRECTION_UNRESOLVED",
-        target: "body.armhole.gather-window/sleeve.armhole.gather-window"
+        target: { kind: "text", value: "body.armhole.gather-window/sleeve.armhole.gather-window" }
       }),
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_LEFT_UNCHECKED",
-        target: "body.armhole/sleeve.armhole"
+        target: { kind: "text", value: "body.armhole/sleeve.armhole" }
       })
     ]);
   });
@@ -600,12 +601,12 @@ describe("createSeamlintGeometryRequest", () => {
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_EASE_RATIO_UNRESOLVED",
-        target: "body.armhole.ease/sleeve.armhole.ease"
+        target: { kind: "text", value: "body.armhole.ease/sleeve.armhole.ease" }
       }),
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_LEFT_UNCHECKED",
-        target: "body.armhole/sleeve.armhole"
+        target: { kind: "text", value: "body.armhole/sleeve.armhole" }
       })
     ]);
   });
@@ -626,12 +627,12 @@ describe("createSeamlintGeometryRequest", () => {
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_RANGE_EASE_RATIO_MISMATCH",
-        target: "body.armhole.ease/sleeve.armhole.ease"
+        target: { kind: "text", value: "body.armhole.ease/sleeve.armhole.ease" }
       }),
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_LEFT_UNCHECKED",
-        target: "body.armhole/sleeve.armhole"
+        target: { kind: "text", value: "body.armhole/sleeve.armhole" }
       })
     ]);
   });
@@ -655,12 +656,12 @@ describe("createSeamlintGeometryRequest", () => {
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_RANGE_EASE_SUBRANGE_UNSUPPORTED",
-        target: "body.armhole/sleeve.armhole"
+        target: { kind: "text", value: "body.armhole/sleeve.armhole" }
       }),
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_LEFT_UNCHECKED",
-        target: "body.armhole/sleeve.armhole"
+        target: { kind: "text", value: "body.armhole/sleeve.armhole" }
       })
     ]);
   });
@@ -681,12 +682,12 @@ describe("createSeamlintGeometryRequest", () => {
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_RANGE_BEHAVIOR_MISMATCH",
-        target: "body.armhole/sleeve.armhole"
+        target: { kind: "text", value: "body.armhole/sleeve.armhole" }
       }),
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_LEFT_UNCHECKED",
-        target: "body.armhole/sleeve.armhole"
+        target: { kind: "text", value: "body.armhole/sleeve.armhole" }
       })
     ]);
   });
@@ -768,12 +769,12 @@ describe("createSeamlintGeometryRequest", () => {
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_RANGE_MATCH_MISSING",
-        target: "body.armhole/sleeve.armhole"
+        target: { kind: "text", value: "body.armhole/sleeve.armhole" }
       }),
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_LEFT_UNCHECKED",
-        target: "body.armhole/sleeve.armhole"
+        target: { kind: "text", value: "body.armhole/sleeve.armhole" }
       })
     ]);
   });
@@ -808,7 +809,7 @@ describe("createSeamlintGeometryRequest", () => {
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_SEAM_DEFERRED",
-        target: "armhole"
+        target: { kind: "text", value: "armhole" }
       })
     ]);
   });
@@ -1068,7 +1069,7 @@ describe("createSeamlintGeometryRequest", () => {
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_TYPE_MISMATCH",
-        target: "armhole"
+        target: { kind: "text", value: "armhole" }
       })
     );
   });
@@ -1108,7 +1109,11 @@ describe("createSeamlintGeometryRequest", () => {
 
     expect(result.request.checks).toEqual([]);
     expect(result.diagnostics).toContainEqual(
-      expect.objectContaining({ severity: "warning", code: "SEAMLINT_CONNECTOR_SEAM_DEFERRED", target: "armhole" })
+      expect.objectContaining({
+        severity: "warning",
+        code: "SEAMLINT_CONNECTOR_SEAM_DEFERRED",
+        target: { kind: "text", value: "armhole" }
+      })
     );
   });
 
@@ -1159,7 +1164,7 @@ describe("createSeamlintGeometryRequest", () => {
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_BAND_SEAM_REQUIRES_DXF",
-        target: "armhole"
+        target: { kind: "text", value: "armhole" }
       })
     );
   });
@@ -1196,7 +1201,7 @@ describe("createSeamlintGeometryRequest", () => {
       expect.objectContaining({
         severity: "error",
         code: "SEAMLINT_CONNECTOR_JOIN_TOO_MANY_SIDES",
-        target: "armhole"
+        target: { kind: "text", value: "armhole" }
       })
     );
     expect(result.diagnostics).not.toContainEqual(
@@ -1231,7 +1236,7 @@ describe("createSeamlintGeometryRequest", () => {
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_JOIN_SIDES_INCOMPLETE",
-        target: "armhole"
+        target: { kind: "text", value: "armhole" }
       })
     );
   });
@@ -1265,7 +1270,7 @@ describe("createSeamlintGeometryRequest", () => {
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_JOIN_OPEN",
-        target: "body.armhole"
+        target: { kind: "text", value: "body.armhole" }
       })
     ]);
   });
@@ -1362,7 +1367,7 @@ describe("createSeamlintGeometryRequest", () => {
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_PATH_REF_MISSING",
-        target: "sleeve.armhole"
+        target: { kind: "text", value: "sleeve.armhole" }
       })
     ]);
   });
@@ -1423,7 +1428,7 @@ describe("createSeamlintGeometryRequest", () => {
       expect.objectContaining({
         severity: "warning",
         code: "SEAMLINT_CONNECTOR_RANGE_ALLOWANCE_MISMATCH",
-        target: "body.armhole.gather-window/sleeve.armhole.gather-window"
+        target: { kind: "text", value: "body.armhole.gather-window/sleeve.armhole.gather-window" }
       }),
       expect.objectContaining({
         severity: "warning",
@@ -1490,7 +1495,11 @@ describe("createSeamlintGeometryRequest", () => {
     const bodySourceMissing = result.diagnostics.filter(
       (diagnostic) =>
         diagnostic.code === "SEAMLINT_GEOMETRY_SOURCE_MISSING" &&
-        diagnostic.target === join(fixturesRoot, "valid-blouse/parts/body/part.loom")
+        // target は構造になったので、指している先は表示形で突き合わせる(この emit 箇所はまだ
+        // パスを string で渡していて `{ kind: "text" }` に畳まれる。S3 で `{ kind: "file" }` になる)。
+        diagnostic.target !== undefined &&
+        formatDiagnosticSubject(diagnostic.target) ===
+          join(fixturesRoot, "valid-blouse/parts/body/part.loom")
     );
     expect(bodySourceMissing).toHaveLength(1);
   });

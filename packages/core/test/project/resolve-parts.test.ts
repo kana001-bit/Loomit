@@ -35,12 +35,12 @@ describe("resolveParts", () => {
       expect.objectContaining({
         severity: "error",
         code: "FILE_READ_FAILED",
-        target: join(projectRoot, "parts/body/part.loom")
+        target: { kind: "text", value: join(projectRoot, "parts/body/part.loom") }
       }),
       expect.objectContaining({
         severity: "error",
         code: "FILE_READ_FAILED",
-        target: join(projectRoot, "parts/sleeve/part.loom")
+        target: { kind: "text", value: join(projectRoot, "parts/sleeve/part.loom") }
       })
     ]);
   });

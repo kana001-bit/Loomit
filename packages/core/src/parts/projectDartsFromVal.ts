@@ -42,7 +42,7 @@ export async function projectDartsFromValFile(filePath: string): Promise<Valenti
           code: "PART_SOURCE_VAL_READ_FAILED",
           message:
             "source.val からダーツを読み取れませんでした。 / Could not read darts from source.val.",
-          target: filePath,
+          target: { kind: "text", value: filePath },
           suggestion: ["source.val の読み取り権限を確認してください。 / Check read permissions for source.val."]
         })
       ]
@@ -147,7 +147,7 @@ export function projectDartsFromValText(
             code: "PART_SOURCE_VAL_DART_UNSUPPORTED",
             message:
               "対応していない Valentina の dart path 形状を見つけたため、ダーツ射影をスキップしました。 / Found an unsupported Valentina dart path shape and skipped dart projection.",
-            target: `${options.filePath}#${drawName}/${pathTag.attrs.id ?? "path"}`,
+            target: { kind: "text", value: `${options.filePath}#${drawName}/${pathTag.attrs.id ?? "path"}` },
             suggestion: [
               "現状は 3 点 dart と、先頭終端が同一点の 5 点 dart を想定しています。 / The current projection expects 3-point darts or 5-point darts that repeat the first point at the end."
             ]

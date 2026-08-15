@@ -46,7 +46,7 @@ describe("findProjectRoot", () => {
         expect.objectContaining({
           severity: "error",
           code: "PROJECT_ROOT_ACCESS_FAILED",
-          target: projectFilePath
+          target: { kind: "text", value: projectFilePath }
         })
       ]
     });

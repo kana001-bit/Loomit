@@ -38,7 +38,7 @@ export async function projectNotchesFromValFile(
           code: "PART_SOURCE_VAL_READ_FAILED",
           message:
             "source.val から合印(notch)を読み取れませんでした。 / Could not read notches from source.val.",
-          target: filePath,
+          target: { kind: "text", value: filePath },
           suggestion: [
             "source.val の読み取り権限を確認してください。 / Check read permissions for source.val."
           ]
@@ -138,7 +138,7 @@ function projectSeamPathNotches(
               code: "PART_SOURCE_VAL_NOTCH_UNSUPPORTED",
               message:
                 "縫い線上の位置(0..1)を持たない passmark を見つけたため、合印射影をスキップしました。 / Found a passmark without a seam position (0..1) and skipped notch projection.",
-              target: `${options.filePath}#${drawName}/${seamName}/${nodeKey}`,
+              target: { kind: "text", value: `${options.filePath}#${drawName}/${seamName}/${nodeKey}` },
               suggestion: [
                 "passmark には position 属性で縫い線上の正規化位置(0..1)を与えてください。 / Give each passmark a normalized seam position (0..1) via the position attribute."
               ]
@@ -212,7 +212,7 @@ function projectDetailNotches(
             code: "PART_SOURCE_VAL_NOTCH_DUPLICATE_PIECE",
             message:
               "同じ名前の detail(型紙ピース)が複数見つかりました。piece 名は DXF BLOCK の identity として一意である必要があるため、最初の detail の合印だけを採用しました。 / Found more than one detail with the same name; piece names must be unique because they identify DXF blocks, so only the first detail's notches were kept.",
-            target: `${options.filePath}#${pieceName}`,
+            target: { kind: "text", value: `${options.filePath}#${pieceName}` },
             suggestion: [
               "各型紙ピースの detail 名を .val 全体で一意にしてください。 / Give every pattern piece a detail name that is unique across the .val."
             ]

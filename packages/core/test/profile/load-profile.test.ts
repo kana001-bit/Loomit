@@ -56,7 +56,7 @@ describe("loadProfileFile", () => {
           severity: "error",
           code: "PROFILE_SCHEMA_INVALID",
           message: "Profile file does not match the schema.",
-          target: filePath,
+          target: { kind: "text", value: filePath },
           suggestion: ["問題の場所: measurements.bust_cm / Problem path: measurements.bust_cm"]
         }
       ]

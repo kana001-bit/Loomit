@@ -3,11 +3,12 @@ import type { z, ZodIssue } from "zod";
 import type { RegisteredDiagnosticCode } from "../diagnostics/codes.js";
 import { createDiagnostic } from "../diagnostics/diagnostic.js";
 import type { LoadFileResult } from "../filesystem/loadFileResult.js";
+import type { DiagnosticSubject } from "../diagnostics/subject.js";
 
 interface ValidateSchemaOptions {
   readonly invalidCode: RegisteredDiagnosticCode;
   readonly invalidMessage: string;
-  readonly target: string;
+  readonly target: DiagnosticSubject;
 }
 
 export function validateSchema<T>(

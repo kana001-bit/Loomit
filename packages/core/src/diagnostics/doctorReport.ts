@@ -2,12 +2,14 @@ import type { CheckReport, CompatibilityResult } from "../compatibility/checkRep
 import type { Diagnostic } from "./diagnostic.js";
 import { getStatusForDiagnostics } from "./report.js";
 import type { ReportStatus } from "./report.js";
+import type { DiagnosticSubject } from "./subject.js";
 
 export interface DoctorFinding {
   readonly code: string;
   readonly title: string;
   readonly detail: string;
-  readonly target?: string;
+  // Diagnostic.target をそのまま持ち上げる。JSON には表示文字列でなく構造が載る。
+  readonly target?: DiagnosticSubject;
   readonly suggestion?: readonly string[];
   readonly source?: {
     readonly rule?: string;

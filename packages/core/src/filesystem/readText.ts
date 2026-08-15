@@ -19,7 +19,7 @@ export async function readText(filePath: string): Promise<LoadFileResult<string>
         describeFsError(error, {
           code: "FILE_READ_FAILED",
           message: "ファイルを読み込めませんでした。 / Could not read the file.",
-          target: filePath,
+          target: { kind: "text", value: filePath },
           suggestion: ["パスとアクセス権限を確認してください。 / Check the path and permissions."]
         })
       ]

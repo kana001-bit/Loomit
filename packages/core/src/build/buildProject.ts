@@ -63,7 +63,7 @@ export async function buildProject(
           code: "BUILD_OUTPUT_ESCAPES_ROOT",
           message:
             "ビルド出力ディレクトリが project root の外を指しています。 / The build output directory is outside the project root.",
-          target: outputDir,
+          target: { kind: "text", value: outputDir },
           suggestion: ["Set outputs.dir to a project-relative path such as ./output."]
         })
       ]
@@ -115,7 +115,7 @@ export async function buildProject(
           code: "BUILD_WRITE_FAILED",
           message:
             "Loomit のビルド出力を書き込めませんでした。 / Could not write Loomit build output.",
-          target: outputDir,
+          target: { kind: "text", value: outputDir },
           suggestion: ["Check output paths and filesystem permissions."]
         })
       ]
@@ -232,7 +232,7 @@ async function validateBuildInputs(
           code: "BUILD_INPUT_ESCAPES_PROJECT",
           message:
             "ビルド出力が参照する part ファイルが project root の外にあります。 / A part file referenced for build output is outside the project root.",
-          target: asset.sourcePath,
+          target: { kind: "text", value: asset.sourcePath },
           suggestion: ["Use a files path inside the project without \"..\" or an absolute path."]
         })
       );
@@ -246,7 +246,7 @@ async function validateBuildInputs(
           code: "BUILD_OUTPUT_PATH_ESCAPES_ROOT",
           message:
             "ビルド出力のパスが output ディレクトリの外を指しています。 / A build output path is outside the output directory.",
-          target: asset.outputPath,
+          target: { kind: "text", value: asset.outputPath },
           suggestion: ["Use a project role without path separators or \"..\"."]
         })
       );
@@ -263,7 +263,7 @@ async function validateBuildInputs(
           code: "BUILD_INPUT_UNREADABLE",
           message:
             "ビルド対象の part ファイルにアクセスできませんでした。 / A part file referenced for build output could not be accessed.",
-          target: asset.sourcePath,
+          target: { kind: "text", value: asset.sourcePath },
           suggestion: ["Check the file path and filesystem permissions."]
         })
       );
@@ -277,7 +277,7 @@ async function validateBuildInputs(
           code: "BUILD_INPUT_FILE_MISSING",
           message:
             "ビルド出力が参照する part ファイルが存在しません。 / A part file referenced for build output does not exist.",
-          target: asset.sourcePath,
+          target: { kind: "text", value: asset.sourcePath },
           suggestion: [`Add the ${asset.kind} file, or update part files.${asset.kind}.`]
         })
       );

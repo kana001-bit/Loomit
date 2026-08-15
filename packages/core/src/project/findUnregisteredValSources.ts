@@ -8,6 +8,7 @@ import { isCaseInsensitiveFileSystemAt } from "../filesystem/caseSensitivity.js"
 import { describeFsError, getErrno } from "../filesystem/fsError.js";
 import type { LoadFileResult } from "../filesystem/loadFileResult.js";
 import type { ResolvedProject } from "./resolveParts.js";
+import type { DiagnosticSubject } from "../diagnostics/subject.js";
 
 // 「まだ取り込まれていない .val」の正本定義。check(UNREGISTERED_VAL_SOURCE)と loom add の引数省略
 // (自動発見)がこの1実装を共有する。定義を分けると「check が add しろと案内した .val を、引数省略の
@@ -127,7 +128,7 @@ async function listValFiles(
         describeFsError(error, {
           code: "VAL_SOURCE_SCAN_FAILED",
           message: ".val の走査に失敗しました。 / Could not scan for .val files.",
-          target: directory,
+          target: { kind: "text", value: directory },
           suggestion: [
             "ディレクトリを読めるか確認してください。 / Check that the directory is readable."
           ]
@@ -196,7 +197,7 @@ async function readRegisteredSourceContents(
       }
     } catch (error) {
       if (getErrno(error) !== "ENOENT") {
-        warnings.push(describeReadFailure(error, absolute));
+        warnings.push(describeReadFailure(error, { kind: "text", value: absolute }));
       }
     }
   }
@@ -218,7 +219,7 @@ async function readDuplicateSource(
     return registeredByContent.get(content);
   } catch (error) {
     if (getErrno(error) !== "ENOENT") {
-      warnings.push(describeReadFailure(error, valPath));
+      warnings.push(describeReadFailure(error, { kind: "text", value: valPath }));
     }
 
     return undefined;
@@ -227,7 +228,7 @@ async function readDuplicateSource(
 
 // 内容読み失敗の warning。errno 分類(describeFsError)を使いつつ、走査自体は続行できるので
 // severity を warning に降格する(このファイルの残骸判定だけが省略された、という事実の通知)。
-function describeReadFailure(error: unknown, target: string): Diagnostic {
+function describeReadFailure(error: unknown, target: DiagnosticSubject): Diagnostic {
   return createDiagnostic({
     ...describeFsError(error, {
       code: "VAL_SOURCE_READ_FAILED",

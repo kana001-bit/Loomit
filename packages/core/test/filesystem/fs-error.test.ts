@@ -12,7 +12,7 @@ function fsError(code: string): Error {
 const context = {
   code: "PROJECT_CREATE_FAILED",
   message: "作成できませんでした。 / Could not create.",
-  target: "/projects/blouse"
+  target: { kind: "file", path: "projects/blouse" }
 } as const;
 
 describe("describeFsError", () => {

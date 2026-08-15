@@ -14,7 +14,7 @@ export async function loadProjectFile(filePath: string): Promise<LoadFileResult<
 
   const parseResult = parseYamlText(readResult.value, {
     invalidCode: "PROJECT_YAML_INVALID",
-    target: filePath
+    target: { kind: "text", value: filePath }
   });
 
   if (!parseResult.ok) {
@@ -25,6 +25,6 @@ export async function loadProjectFile(filePath: string): Promise<LoadFileResult<
     invalidCode: "PROJECT_SCHEMA_INVALID",
     invalidMessage:
       "プロジェクトファイルの形式が schema と一致しません。 / The project file does not match the schema.",
-    target: filePath
+    target: { kind: "text", value: filePath }
   });
 }

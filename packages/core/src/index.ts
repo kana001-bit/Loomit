@@ -158,6 +158,10 @@ export { createDiagnosticReport, getStatusForDiagnostics } from "./diagnostics/r
 export type { DiagnosticReport, ReportStatus } from "./diagnostics/report.js";
 export { createDoctorReport } from "./diagnostics/doctorReport.js";
 export type { DoctorFinding, DoctorReport } from "./diagnostics/doctorReport.js";
+// 診断が指す対象の構造と、その表示。**移行用の `toDiagnosticSubject` は出さない** — 移行が終われば
+// 消える道具を公開面に固定すると、削除が破壊的変更の手続きになる。
+export { combineDiagnosticSubjects, formatDiagnosticSubject } from "./diagnostics/subject.js";
+export type { DiagnosticSeamSide, DiagnosticSubject } from "./diagnostics/subject.js";
 
 // --- rule の注入点 ----------------------------------------------------------
 // docs/architecture.md:「rule は呼び出し側から注入できる(`runFit(project, profile, { rules })`)。

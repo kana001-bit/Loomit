@@ -18,7 +18,7 @@ export async function loadPrototypeNotesFile(
 
   const parseResult = parseYamlText(readResult.value, {
     invalidCode: "PROTOTYPE_NOTES_YAML_INVALID",
-    target: filePath
+    target: { kind: "text", value: filePath }
   });
 
   if (!parseResult.ok) {
@@ -29,6 +29,6 @@ export async function loadPrototypeNotesFile(
     invalidCode: "PROTOTYPE_NOTES_SCHEMA_INVALID",
     invalidMessage:
       "試作メモファイルの形式が schema と一致しません。/ The prototype notes file does not match the schema.",
-    target: filePath
+    target: { kind: "text", value: filePath }
   });
 }

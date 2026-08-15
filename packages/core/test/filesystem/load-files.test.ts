@@ -53,7 +53,7 @@ describe("YAML file loading", () => {
           severity: "error",
           code: "PROJECT_YAML_INVALID",
           message: "YAML の形式が正しくありません。 / The YAML syntax is invalid.",
-          target: join(fixturesRoot, "invalid-project-yaml/loomit.yml"),
+          target: { kind: "text", value: join(fixturesRoot, "invalid-project-yaml/loomit.yml") },
           suggestion: [
             "インデント、コロン、括弧の対応を確認してください。 / Check indentation, colons, and matching brackets."
           ]
@@ -73,7 +73,7 @@ describe("YAML file loading", () => {
         code: "PROJECT_SCHEMA_INVALID",
         message:
           "プロジェクトファイルの形式が schema と一致しません。 / The project file does not match the schema.",
-        target: join(fixturesRoot, "invalid-project-schema/loomit.yml"),
+        target: { kind: "text", value: join(fixturesRoot, "invalid-project-schema/loomit.yml") },
         suggestion: ["問題の場所: unexpected / Problem path: unexpected"]
       }
     ]);
@@ -90,7 +90,7 @@ describe("YAML file loading", () => {
         code: "PART_SCHEMA_INVALID",
         message:
           "パーツファイルの形式が schema と一致しません。 / The part file does not match the schema.",
-        target: join(fixturesRoot, "invalid-part-schema/part.loom"),
+        target: { kind: "text", value: join(fixturesRoot, "invalid-part-schema/part.loom") },
         suggestion: ["問題の場所: requires.body.armhole / Problem path: requires.body.armhole"]
       }
     ]);

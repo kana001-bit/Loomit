@@ -213,16 +213,49 @@ same way `createDiagnostic` taking `RegisteredDiagnostic` closes the code vocabu
 then a runtime check on the finished message is the cheaper guard — count the `" / "` separators over a
 function's whole refusal surface at once, rather than per message (`extend-join.test.ts` does this).
 
-`Diagnostic.target` should use a stable reference. Current formats:
+`Diagnostic.target` is **structured, not a string**. Pick the variant of `DiagnosticSubject`
+(`core/src/diagnostics/subject.ts`) that says what the diagnostic is about, and let the formatter render it:
 
-```text
-{role}.{connector-id}              # connector existence / length
-{connector-id}.{side}              # side / over-pair checks on a join
-{role}.requires.{path}             # requirement range checks
-{role}.{connector-id}.{property}   # resolved requirement target
+```ts
+{ kind: "file", path, fragment? }             // parts/sleeve/part.loom, fixture.val#bodice/hem/60
+{ kind: "part", role }                        // front
+{ kind: "connector", role, connectorId }      // sleeve.armhole
+{ kind: "join", joinId }                      // armhole — the seam itself, not tied to a part
+{ kind: "seam", from, to }                    // front.outseam/back.outseam (rangeId optional per side)
+{ kind: "field", path, within? }              // sleeve.armhole.length_mm, parts.front
+{ kind: "many", items }                       // several targets in one diagnostic
+{ kind: "text", value }                       // free-form, no place in the project structure
 ```
 
-A connector id is the shared rendezvous key, so one seam can join more than two parts under a single id (see `docs/glossary.md`). If another target format is needed, document it before introducing it.
+A connector id is the shared rendezvous key, so one seam can join more than two parts under a single id (see `docs/glossary.md`).
+
+Three rules:
+
+- **Do not reach for `text` to avoid choosing.** It means "this has no position in the project
+  structure" (a movement-test scenario name), not "I have not classified it yet". Anything that can be
+  said with another variant must use that variant — otherwise consumers are back to parsing strings.
+- **Do not build the display string yourself.** If you need the rendered form (for a `suggestion`, or for
+  a `from`/`to` field), derive it with `formatDiagnosticSubject`. Writing the same reference twice by hand
+  is how the two halves drift apart.
+- **Do not join several targets with `", "`.** Use `combineDiagnosticSubjects`: no subjects gives
+  `undefined` (the diagnostic simply has no target), one gives that subject, and only two or more give
+  `many` — whose `items` is typed as a two-or-more tuple so the other shapes cannot be built by hand.
+  A joined string cannot be split back apart, and one meaning must not have two shapes.
+
+`createDiagnostic` takes a structured target and nothing else — **there is no string escape hatch**, not
+even a transitional one. An anonymous `target?: DiagnosticSubject | string` on its input would still be
+part of a public signature, so removing it later would break calls that compile today; keeping the
+migration out of the public API matters more than the convenience.
+
+Sites not yet converted therefore write `{ kind: "text", value: … }` at the call site, which reads as
+"not classified yet" instead of looking like ordinary code. `diagnostic-text-targets.test.ts` pins the
+file-by-file list of those sites (134 as of 2026-08-13). The list may only shrink, and **a `text` target
+in a file that is not on it fails the test** — that is the part a type could not do, since any
+transitional entry point stays available to new code forever.
+
+**Do not stub `createDiagnostic` out with something that does not match the real one.** Mocks bypass the
+type checker, so a `vi.mock("@loomit/core", …)` whose `createDiagnostic` behaves differently lets a test
+build a diagnostic production could never produce. Nothing catches that but review.
 
 ## Report Compatibility
 
@@ -232,6 +265,18 @@ A connector id is the shared rendezvous key, so one seam can join more than two 
 - Do not reshape core reports only for CLI display convenience.
 - Keep display-only wording changes in formatters.
 - If removing a report field, record why in code comments or docs.
+
+What else counts as contract, decided 2026-08-13:
+
+- **`severity` is contract, per code.** Changing a code's severity is a breaking change: a consumer
+  filtering the JSON on severity silently stops seeing that diagnostic. Decide the severity when the code
+  is registered.
+- **Exit codes are contract.** `0` = ok or warning, `1` = error, `2` = usage error (bad arguments; `--help`
+  is `0`). All commands follow this. Warnings deliberately do not fail a build; if a stricter mode is ever
+  wanted, it belongs behind a flag rather than a change to what these three values mean.
+- **Order is contract only in that it is deterministic.** The same input must always produce the same
+  order, so reports diff cleanly. *Which* order is not contract — the sort rule may change, so
+  **write assertions that do not depend on ordering** (`toContainEqual`, or sort before comparing).
 
 ## Slice Completion
 
