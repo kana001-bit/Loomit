@@ -10,7 +10,7 @@ import {
   type ResolvedProject,
   type SeamlintGeometryCheckRequest,
   type SeamlintGeometryRequestReport
-} from "@loomit/core";
+} from "loomit-core";
 
 import { spawnResolvedProcess } from "./subprocess.js";
 

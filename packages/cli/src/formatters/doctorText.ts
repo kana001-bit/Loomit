@@ -1,5 +1,5 @@
-import { formatDiagnosticSubject } from "@loomit/core";
-import type { DoctorReport } from "@loomit/core";
+import { formatDiagnosticSubject } from "loomit-core";
+import type { DoctorReport } from "loomit-core";
 
 export function formatDoctorText(report: DoctorReport): string {
   const lines = [`Loomit doctor: ${report.status}`, report.summary];

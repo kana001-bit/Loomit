@@ -1,4 +1,4 @@
-import type { TestSuggestionReport } from "@loomit/core";
+import type { TestSuggestionReport } from "loomit-core";
 import { formatDiagnosticsText } from "./diagnosticsText.js";
 
 export function formatTestSuggestionsText(report: TestSuggestionReport): string {

@@ -1,4 +1,4 @@
-import type { PartDiffReport } from "@loomit/core";
+import type { PartDiffReport } from "loomit-core";
 
 import { describe, expect, it } from "vitest";
 

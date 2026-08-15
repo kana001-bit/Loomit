@@ -1,5 +1,5 @@
-import { formatDiagnosticSubject } from "@loomit/core";
-import type { Diagnostic, DiagnosticSubject } from "@loomit/core";
+import { formatDiagnosticSubject } from "loomit-core";
+import type { Diagnostic, DiagnosticSubject } from "loomit-core";
 
 export function formatDiagnosticsText(diagnostics: readonly Diagnostic[]): readonly string[] {
   return diagnostics.flatMap((diagnostic) => {

@@ -1,4 +1,4 @@
-import { createProject } from "@loomit/core";
+import { createProject } from "loomit-core";
 import { formatDiagnosticsText } from "../formatters/diagnosticsText.js";
 
 export interface InitCommandOptions {

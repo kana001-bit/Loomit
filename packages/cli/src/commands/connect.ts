@@ -1,7 +1,7 @@
 import { dirname, relative } from "node:path";
 
-import { connectBand, connectParts, extendJoin } from "@loomit/core";
-import type { ConnectedBand, ConnectedParts, ConnectedSide, ExtendedJoin } from "@loomit/core";
+import { connectBand, connectParts, extendJoin } from "loomit-core";
+import type { ConnectedBand, ConnectedParts, ConnectedSide, ExtendedJoin } from "loomit-core";
 import { formatDiagnosticsText } from "../formatters/diagnosticsText.js";
 
 export interface ConnectCommandOptions {

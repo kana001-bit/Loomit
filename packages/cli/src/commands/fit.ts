@@ -6,10 +6,10 @@ import {
   loadProject,
   resolveParts,
   runFit
-} from "@loomit/core";
+} from "loomit-core";
 import { formatFitJson } from "../formatters/fitJson.js";
 import { formatFitText } from "../formatters/fitText.js";
-import type { LoadedProject } from "@loomit/core";
+import type { LoadedProject } from "loomit-core";
 
 export type FitOutputFormat = "text" | "json";
 

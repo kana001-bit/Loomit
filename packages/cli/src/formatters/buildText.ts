@@ -1,4 +1,4 @@
-import type { BuildReport } from "@loomit/core";
+import type { BuildReport } from "loomit-core";
 import { formatDiagnosticsText } from "./diagnosticsText.js";
 
 export function formatBuildText(report: BuildReport): string {

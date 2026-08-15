@@ -7,7 +7,7 @@ import {
   type Diagnostic,
   type ReportStatus,
   type SeamlintGeometryCheckRequest
-} from "@loomit/core";
+} from "loomit-core";
 
 import { formatSeamlintRequestJson } from "../formatters/seamlintRequestJson.js";
 import { formatSeamlintRequestText } from "../formatters/seamlintRequestText.js";

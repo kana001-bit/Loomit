@@ -87,7 +87,7 @@ Diagnostics are structured data — bilingual (Japanese / English) for humans, a
 
 ## For Developers
 
-Loomit is a pnpm monorepo. `@loomit/core` holds the domain logic — schema validation, compatibility / fit / movement rules, semantic diff, and structured reports — with no dependency on the CLI. `@loomit/cli` is a thin adapter that turns core's diagnostics into text or JSON. It is written in TypeScript with Zod schemas and Vitest tests. See [Architecture](docs/architecture.md) for the boundaries and [Core Concepts](docs/core-concepts.md) for the domain model.
+Loomit is a pnpm monorepo. `loomit-core` holds the domain logic — schema validation, compatibility / fit / movement rules, semantic diff, and structured reports — with no dependency on the CLI. `loomit` is a thin adapter that turns core's diagnostics into text or JSON. It is written in TypeScript with Zod schemas and Vitest tests. See [Architecture](docs/architecture.md) for the boundaries and [Core Concepts](docs/core-concepts.md) for the domain model.
 
 ## How This Was Built
 

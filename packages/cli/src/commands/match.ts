@@ -7,7 +7,7 @@ import {
   resolveParts,
   type Diagnostic,
   type ReportStatus
-} from "@loomit/core";
+} from "loomit-core";
 
 import { formatMatchJson } from "../formatters/matchJson.js";
 import { formatMatchText } from "../formatters/matchText.js";

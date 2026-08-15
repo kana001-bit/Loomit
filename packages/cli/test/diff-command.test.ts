@@ -16,7 +16,7 @@ vi.mock("node:fs/promises", () => ({
   access: mocks.access
 }));
 
-vi.mock("@loomit/core", () => ({
+vi.mock("loomit-core", () => ({
   // 本体の createDiagnostic は入力をそのまま返す(型で code と target を絞るだけ)ので、恒等で写しになる。
   // **mock は型検査をすり抜ける**ため、ここで本体と違う振る舞いを書くと、production が決して作れない形の
   // 診断をテストが組み立ててしまう。本体の実装が変わったらここも合わせる。

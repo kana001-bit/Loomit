@@ -1,5 +1,5 @@
 {
-  "name": "loomit",
+  "name": "loomit-monorepo",
   "license": "MIT",
   "private": true,
   "packageManager": "pnpm@11.7.0",

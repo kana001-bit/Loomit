@@ -4,7 +4,7 @@ import {
   loadProject,
   resolveParts,
   runChecks
-} from "@loomit/core";
+} from "loomit-core";
 import { formatCheckJson } from "../formatters/checkJson.js";
 import { formatCheckText } from "../formatters/checkText.js";
 

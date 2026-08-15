@@ -8,10 +8,10 @@ import {
   loadProject,
   resolveParts,
   runChecks
-} from "@loomit/core";
+} from "loomit-core";
 import { formatBuildJson } from "../formatters/buildJson.js";
 import { formatBuildText } from "../formatters/buildText.js";
-import type { BuildReport, LoadedProject } from "@loomit/core";
+import type { BuildReport, LoadedProject } from "loomit-core";
 
 export type BuildOutputFormat = "text" | "json";
 

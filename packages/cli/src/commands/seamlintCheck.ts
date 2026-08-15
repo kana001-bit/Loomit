@@ -12,7 +12,7 @@ import {
   type Diagnostic,
   type ReportStatus,
   type SeamlintGeometryRequestReport
-} from "@loomit/core";
+} from "loomit-core";
 
 import { formatSeamlintCheckJson } from "../formatters/seamlintCheckJson.js";
 import { formatSeamlintCheckText } from "../formatters/seamlintCheckText.js";

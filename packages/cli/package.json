@@ -1,17 +1,32 @@
 {
-  "name": "@loomit/cli",
-  "version": "0.0.0",
-  "private": true,
+  "name": "loomit",
+  "version": "0.1.0",
   "type": "module",
   "bin": {
-    "loom": "./dist/main.js"
+    "loom": "dist/main.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@loomit/core": "workspace:*"
+    "loomit-core": "workspace:*"
+  },
+  "description": "Version control for sewing patterns: meaningful diffs of Valentina .val projects",
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kana001-bit/Loomit.git",
+    "directory": "packages/cli"
   }
 }

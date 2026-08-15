@@ -1,4 +1,4 @@
-import type { FitReport } from "@loomit/core";
+import type { FitReport } from "loomit-core";
 import { formatDiagnosticsText } from "./diagnosticsText.js";
 
 export function formatFitText(report: FitReport): string {

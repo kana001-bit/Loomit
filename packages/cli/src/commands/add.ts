@@ -15,7 +15,7 @@ import {
   loadProject,
   resolveParts,
   suggestJoinId
-} from "@loomit/core";
+} from "loomit-core";
 import type {
   AddedPart,
   AddPartConnectorInput,
@@ -23,7 +23,7 @@ import type {
   Diagnostic,
   ExistingJoin,
   UnregisteredValSource
-} from "@loomit/core";
+} from "loomit-core";
 import { formatDiagnosticsText } from "../formatters/diagnosticsText.js";
 import { createReadlinePrompter, EndOfInputError } from "../prompter.js";
 import type { Prompter } from "../prompter.js";
