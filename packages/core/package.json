@@ -1,7 +1,6 @@
 {
   "name": "@loomit/core",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "exports": {
     ".": {
@@ -12,10 +11,27 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
+  },
+  "description": "Domain logic for Loomit: part schema, semantic diff, compatibility rules, structured diagnostics",
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist",
+    "schema"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kana001-bit/Loomit.git",
+    "directory": "packages/core"
   }
 }
