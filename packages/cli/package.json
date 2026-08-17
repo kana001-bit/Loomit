@@ -1,6 +1,6 @@
 {
   "name": "loomit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "bin": {
     "loom": "dist/main.js"
@@ -28,5 +28,6 @@
     "type": "git",
     "url": "git+https://github.com/kana001-bit/Loomit.git",
     "directory": "packages/cli"
-  }
+  },
+  "license": "MIT"
 }
