@@ -240,17 +240,21 @@ function fingerprintValSource(source: string): ReadonlyMap<string, DraftingEleme
 
     for (const [owner, contents] of ownedContents) {
       // id 持ちの祖先を持たない分(draw 直下の `<calculation>` など)は draw に載せる。
-      const target =
-        parameters.get(owner) ??
-        setAndReturn(parameters, owner, { tag: "draw", attributes: new Map<string, string>() });
+      const target = parameters.get(owner) ?? {
+        tag: "draw",
+        attributes: new Map<string, string>()
+      };
 
       // 値は「件数 + 内容のダイジェスト」。生の連結だとレポートに数 KB の文字列が載るうえ、人が読んでも
       // 意味が取れない(位置は不安定なので「何番目がどう変わったか」を見せても行動につながらない)。
       // 変わったかどうかを漏れなく判定できれば足りるので、比較可能な短い値に畳む。
-      (target.attributes as Map<string, string>).set(
-        CONTENTS_ATTRIBUTE,
-        `${contents.length}:${digest(contents.join("|"))}`
-      );
+      parameters.set(owner, {
+        ...target,
+        attributes: new Map([
+          ...target.attributes,
+          [CONTENTS_ATTRIBUTE, `${contents.length}:${digest(contents.join("|"))}`]
+        ])
+      });
     }
   });
 

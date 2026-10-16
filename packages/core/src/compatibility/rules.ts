@@ -412,7 +412,8 @@ function rolesConnectedWithinSide(
   const seen = new Set<string>([start]);
   const queue: string[] = [start];
   while (queue.length > 0) {
-    const current = queue.shift() as string;
+    const current = queue.shift();
+    if (current === undefined) break;
     for (const neighbor of adjacency.get(current) ?? []) {
       if (!seen.has(neighbor)) {
         seen.add(neighbor);
