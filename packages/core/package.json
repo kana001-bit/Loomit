@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "yaml": "^2.9.0",
-    "zod": "^4.4.3"
+    "zod": "^4.6.6"
   },
   "description": "Domain logic for Loomit: part schema, semantic diff, compatibility rules, structured diagnostics",
   "engines": {
